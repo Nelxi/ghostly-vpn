@@ -38,7 +38,8 @@ class GhostlyApplication : Application() {
     private fun isMihomoProcess(): Boolean {
         val name = if (android.os.Build.VERSION.SDK_INT >= 28) Application.getProcessName()
         else runCatching { java.io.File("/proc/self/cmdline").readText().trim(Char(0)) }.getOrDefault("")
-        return name.endsWith(":mihomo")
+        // ":mihomo" (tunnel) and ":mihomoping" (latency tests) both run only the mihomo core.
+        return name.contains(":mihomo")
     }
 
     val platform by lazy { AndroidPlatform(this) }

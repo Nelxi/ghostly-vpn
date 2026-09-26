@@ -90,7 +90,19 @@ class GhostlyController(
     val design = app.ghostly.core.design.RemoteDesign(store, "GhostlyVPN/${platform.appVersion} (${platform.os})")
 
     /** Proxy groups (selectors) of the running mihomo core. */
-    val mihomoGroups = app.ghostly.core.mihomo.MihomoGroups(backend as? app.ghostly.core.mihomo.DualCoreBackend, scope) { _settings.value.pingUrl }
+    val mihomoGroups = app.ghostly.core.mihomo.MihomoGroups(
+        backend = backend as? app.ghostly.core.mihomo.DualCoreBackend,
+        scope = scope,
+        pingUrl = { _settings.value.pingUrl },
+        store = store,
+        profiles = profiles,
+        selectedId = _selected,
+        pings = _pings,
+        pinging = _pinging,
+        settings = _settings,
+        selectServer = { id -> select(id) },
+        pingServers = { list -> pingServers(list) },
+    )
 
     /** App self-update (our server first, GitHub mirror), verified by SHA-256. */
     val updater = app.ghostly.core.update.Updater(platform) { v -> v == dismissedUpdate }
@@ -131,6 +143,8 @@ class GhostlyController(
             updateSettings { it.copy(core = app.ghostly.core.model.CoreType.XRAY, coreXrayRestored = true) }
         }
         (backend as? app.ghostly.core.mihomo.DualCoreBackend)?.profileOf = ::profileOf
+        // After construction: refresh() uses properties declared further down.
+        scope.launch(Dispatchers.IO) { kotlinx.coroutines.delay(1_500); refreshWrongFormat() }
         app.ghostly.core.vpn.Probe.method = _settings.value.pingMethod
         // A kill switch left engaged by a crash must never keep the internet blocked.
         platform.killSwitch?.takeIf { it.engaged }?.let { ks -> scope.launch(Dispatchers.IO) { ks.release() } }
@@ -366,6 +380,20 @@ class GhostlyController(
     /** Profiles already reported as "Xray format only" on mihomo (once per run, not on every auto-refresh). */
     private val warnedXrayOnly = mutableSetOf<String>()
 
+    /**
+     * Subscriptions saved in the other core's format (Xray JSON while mihomo is chosen, Clash YAML
+     * while Xray is) are fetched again right away — not only after the first connect.
+     */
+    private fun refreshWrongFormat() {
+        val core = _settings.value.core
+        _profiles.value.filter { p ->
+            p.url != null && when (core) {
+                app.ghostly.core.model.CoreType.MIHOMO -> p.mihomo == null && p.servers.isNotEmpty() && p.servers.all { it.config != null }
+                app.ghostly.core.model.CoreType.XRAY -> p.mihomo != null
+            }
+        }.forEach { refresh(it.id) }
+    }
+
     fun refreshAll() = _profiles.value.filter { it.url != null }.forEach { refresh(it.id) }
 
     private fun refreshStale() {
@@ -396,6 +424,7 @@ class GhostlyController(
 
     fun select(serverId: String?) {
         val previous = _selected.value
+        server(serverId)?.let { mihomoGroups.rememberServer(it, profileOf(it.id)) }
         _selected.value = serverId
         saveUi()
         if (serverId != null && serverId != previous && backend.state.value is VpnState.Connected) {
@@ -477,10 +506,7 @@ class GhostlyController(
         kotlinx.coroutines.coroutineScope {
             direct.forEach { s ->
                 launch {
-                    val ms = gate.withPermit {
-                        if (method == app.ghostly.core.model.PingMethod.ICMP) platform.icmpPing(s.host!!, 2500)
-                        else platform.tcpPing(s.host!!, s.port, 2500)
-                    }
+                    val ms = gate.withPermit { probeDirect(s, method) }
                     _pings.update { it + (s.id to Ping(ms, now())) }
                     _pinging.update { it - s.id }
                 }
@@ -496,6 +522,25 @@ class GhostlyController(
         }
         _pinging.update { it - targets.map { s -> s.id }.toSet() }
         saveUi()
+    }
+
+    /**
+     * Up to three TCP/ICMP probes: a single lost packet shouldn't mark a working server dead.
+     * Stops after two answers; the best time wins, "no answer" only when all three failed.
+     */
+    private suspend fun probeDirect(s: Server, method: app.ghostly.core.model.PingMethod): Long {
+        var best = -1L
+        var answers = 0
+        for (attempt in 0 until 3) {
+            if (answers >= 2) break
+            val ms = if (method == app.ghostly.core.model.PingMethod.ICMP) platform.icmpPing(s.host!!, 2500)
+            else platform.tcpPing(s.host!!, s.port, 2500)
+            if (ms > 0) {
+                answers++
+                if (best < 0 || ms < best) best = ms
+            }
+        }
+        return best
     }
 
     // ------------------------------------------------------------------ connection
@@ -769,6 +814,7 @@ class GhostlyController(
         // Providers send another format to mihomo (Clash YAML with groups): fetch subscriptions again.
         if (before.core != after.core) {
             refreshAll()
+            warnedXrayOnly.clear()
             if (server(_selected.value) == null) {
                 _selected.value = allServers().firstOrNull()?.id
                 saveUi()

@@ -41,11 +41,14 @@ class MihomoVpnService : VpnService() {
     private var running = false
     private var serverName = ""
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    /** Bumped by every start: a pending self-kill only happens if no new start came in meanwhile. */
+    @Volatile private var generation = 0
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> scope.launch { stop() }
             ACTION_START -> {
+                generation++
                 serverName = intent.getStringExtra(EXTRA_NAME).orEmpty()
                 goForeground(getString(R.string.notif_connecting))
                 scope.launch { start(intent) }
@@ -132,9 +135,10 @@ class MihomoVpnService : VpnService() {
         running = false
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
+        val gen = generation
         scope.launch {
             delay(300)
-            android.os.Process.killProcess(android.os.Process.myPid())
+            if (gen == generation && !running) android.os.Process.killProcess(android.os.Process.myPid())
         }
     }
 

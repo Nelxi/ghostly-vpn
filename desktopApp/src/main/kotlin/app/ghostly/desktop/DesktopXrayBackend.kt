@@ -133,6 +133,7 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
             Thread {
                 p.inputStream.bufferedReader().forEachLine { line ->
                     synchronized(log) { log.addLast(line); while (log.size > 300) log.removeFirst() }
+                    coreLog.add(line)
                 }
             }.apply { isDaemon = true }.start()
 
@@ -386,6 +387,8 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
     }.getOrNull() ?: "Xray (не найдено)"
 
     val recentLog: List<String> get() = synchronized(log) { log.toList() }
+
+    override val coreLog = app.ghostly.core.vpn.CoreLog()
 
     companion object {
         val exeName = if (hostOs == HostOs.WINDOWS) "xray.exe" else "xray"

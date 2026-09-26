@@ -72,6 +72,9 @@ interface VpnBackend {
     /** Version string of the embedded core. */
     fun coreVersion(): String
 
+    /** What the core prints (the "Core log" screen); [CoreLog.NONE] when the platform can't read it. */
+    val coreLog: CoreLog get() = CoreLog.NONE
+
     /** Switch the running tunnel to [server] without reconnecting (mihomo selectors); false = reconnect instead. */
     suspend fun switchInPlace(server: Server): Boolean = false
 }

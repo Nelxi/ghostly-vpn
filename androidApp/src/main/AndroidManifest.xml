@@ -104,6 +104,12 @@
                 android:value="vpn" />
         </service>
 
+        <!-- Latency tests of Clash-profile servers without a tunnel: a throwaway mihomo core. -->
+        <service
+            android:name=".service.MihomoPingService"
+            android:exported="false"
+            android:process=":mihomoping" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.updates"

@@ -114,7 +114,7 @@ private fun GroupHeader(g: ProxyGroupInfo, open: Boolean, testing: Boolean, pad:
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(if (g.selectable) Icons.Rounded.SwapVert else Icons.Rounded.AutoAwesome, null, tint = c.accent, modifier = Modifier.size(12.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text(now, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    app.ghostly.ui.components.FlagText(now, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     g.delays[now]?.let { Text("  " + delayText(it), style = MaterialTheme.typography.labelSmall, color = delayColor(it)) }
                 }
             }
@@ -145,7 +145,7 @@ private fun MemberRow(name: String, g: ProxyGroupInfo, pad: Dp, onClick: () -> U
             else Box(Modifier.size(6.dp).clip(CircleShape).background(c.ink3.copy(alpha = 0.5f)))
         }
         Spacer(Modifier.width(10.dp))
-        Text(name, style = MaterialTheme.typography.bodyMedium, color = if (chosen) c.ink else c.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        app.ghostly.ui.components.FlagText(name, style = MaterialTheme.typography.bodyMedium, color = if (chosen) c.ink else c.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         if (nested) Text("группа", style = MaterialTheme.typography.labelSmall, color = c.ink3, modifier = Modifier.padding(horizontal = 6.dp))
         g.delays[name]?.let { Text(delayText(it), style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"), color = delayColor(it)) }
     }

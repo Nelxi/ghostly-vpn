@@ -70,6 +70,7 @@ class GhostlyVpnService : VpnService() {
 
     private suspend fun start() = lock.withLock {
         val request = AndroidVpn.request ?: restoreRequest()
+        if (request == null && handOffToMihomo()) return@withLock
         if (request == null) {
             AndroidVpn.mutableState.value = VpnState.Failed("Нет выбранного сервера")
             stopSelf()
@@ -142,7 +143,23 @@ class GhostlyVpnService : VpnService() {
     private fun restoreRequest(): TunnelRequest? {
         val controller = GhostlyApplication.instance.controller
         val server = controller.selectedServer() ?: return null
+        // A mihomo server is brought up by its own service (see handOffToMihomo).
+        if (app.ghostly.core.mihomo.MihomoConfigBuilder.wants(server, controller.profileOf(server.id), controller.settings.value)) return null
         return TunnelRequest(server, controller.settings.value).also { AndroidVpn.request = it }
+    }
+
+    /**
+     * Boot / always-on VPN start this (Xray) service, but the selected server runs on mihomo:
+     * let the controller connect through the dual-core backend and step aside.
+     */
+    private fun handOffToMihomo(): Boolean {
+        val controller = GhostlyApplication.instance.controller
+        val server = controller.selectedServer() ?: return false
+        if (!app.ghostly.core.mihomo.MihomoConfigBuilder.wants(server, controller.profileOf(server.id), controller.settings.value)) return false
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        stopSelf()
+        controller.scope.launch { controller.connect() }
+        return true
     }
 
     private suspend fun stop(userInitiated: Boolean) = lock.withLock {

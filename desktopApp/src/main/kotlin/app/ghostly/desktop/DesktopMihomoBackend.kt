@@ -121,6 +121,7 @@ class DesktopMihomoBackend(private val platform: DesktopPlatform, private val xr
             Thread {
                 p.inputStream.bufferedReader().forEachLine { line ->
                     synchronized(log) { log.addLast(line); while (log.size > 300) log.removeFirst() }
+                    coreLog.add(line)
                 }
             }.apply { isDaemon = true }.start()
 
@@ -247,13 +248,7 @@ class DesktopMihomoBackend(private val platform: DesktopPlatform, private val xr
         val controller = DesktopXrayBackend.freePort()
         val secret = randomSecret()
         val dir = File(home, "ping").apply { mkdirs() }
-        val cfg = buildJsonObject {
-            put("log-level", "silent")
-            put("external-controller", "127.0.0.1:$controller")
-            put("secret", secret)
-            put("proxies", JsonArray(proxies))
-            put("rules", JsonArray(listOf(JsonPrimitive("MATCH,DIRECT"))))
-        }
+        val cfg = app.ghostly.core.mihomo.MihomoProfiles.pingConfig(servers, controller, secret)
         val file = File(dir, "config.yaml").apply { writeText(JsonX.encodeToString(JsonObject.serializer(), cfg)) }
         val p = ProcessBuilder(exe.absolutePath, "-d", dir.absolutePath, "-f", file.absolutePath)
             .directory(dir).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start()
@@ -272,7 +267,7 @@ class DesktopMihomoBackend(private val platform: DesktopPlatform, private val xr
             val gate = Semaphore(12)
             kotlinx.coroutines.coroutineScope {
                 servers.forEach { s ->
-                    launch { gate.withPermit { onResult(s.id, client.delay(s.name, url, 6000)) } }
+                    launch { gate.withPermit { onResult(s.id, client.delayRetry(s.name, url, 6000)) } }
                 }
             }
         } finally {
@@ -282,6 +277,8 @@ class DesktopMihomoBackend(private val platform: DesktopPlatform, private val xr
     }
 
     val recentLog: List<String> get() = synchronized(log) { log.toList() }
+
+    override val coreLog = app.ghostly.core.vpn.CoreLog()
 
     private fun measure(port: Int, url: String): Long {
         val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port))

@@ -103,7 +103,7 @@ import app.ghostly.ui.components.ToggleRow
 import app.ghostly.ui.components.appear
 import app.ghostly.ui.theme.Ghost
 
-private enum class Page { MAIN, ROUTING, DNS, APPS, PROXY, ADVANCED, ABOUT }
+private enum class Page { MAIN, ROUTING, DNS, APPS, PROXY, ADVANCED, ABOUT, LOG }
 
 const val GITHUB_URL = "https://github.com/Nelxi/ghostly-vpn"
 
@@ -125,7 +125,8 @@ fun SettingsScreen(controller: GhostlyController, contentPadding: PaddingValues)
             Page.DNS -> DnsPage(controller, contentPadding, back)
             Page.APPS -> AppsPage(controller, contentPadding, back)
             Page.PROXY -> ProxyPage(controller, contentPadding, back)
-            Page.ADVANCED -> AdvancedPage(controller, contentPadding, back)
+            Page.ADVANCED -> AdvancedPage(controller, contentPadding, back) { page = Page.LOG }
+            Page.LOG -> PageScaffold("Журнал ядра", contentPadding, { page = Page.ADVANCED }) { CoreLogContent(controller) }
             Page.ABOUT -> AboutPage(controller, contentPadding, back)
         }
     }
@@ -588,7 +589,7 @@ private fun CredentialField(label: String, value: String, controller: GhostlyCon
 // ============================================================================ advanced
 
 @Composable
-private fun AdvancedPage(controller: GhostlyController, contentPadding: PaddingValues, back: () -> Unit) {
+private fun AdvancedPage(controller: GhostlyController, contentPadding: PaddingValues, back: () -> Unit, openLog: () -> Unit) {
     val s by controller.settings.collectAsState()
     val set = controller::updateSettings
     PageScaffold("Для продвинутых", contentPadding, back) {
@@ -635,6 +636,7 @@ private fun AdvancedPage(controller: GhostlyController, contentPadding: PaddingV
         SectionTitle("Журнал ядра")
         Group {
             Segmented(listOf("none" to "Выкл", "error" to "Ошибки", "warning" to "Важное", "info" to "Всё", "debug" to "Debug"), s.logLevel, { v -> set { it.copy(logLevel = v) } })
+            SettingRow("Открыть журнал", "Последние сообщения работающего ядра", Icons.Rounded.Code, onClick = openLog) { Chevron() }
         }
         SectionTitle("Сброс")
         Group {

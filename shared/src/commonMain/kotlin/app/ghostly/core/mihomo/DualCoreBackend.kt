@@ -56,6 +56,16 @@ class DualCoreBackend(
     override val state: StateFlow<VpnState> = active.flatMapLatest { it.state }.stateIn(scope, SharingStarted.Eagerly, VpnState.Idle)
     override val traffic: StateFlow<Traffic> = active.flatMapLatest { it.traffic }.stateIn(scope, SharingStarted.Eagerly, Traffic())
 
+    init {
+        // mihomo can come up on its own: its tunnel lives in another process and outlives an app
+        // restart, and the app reattaches to it — then it is the active core.
+        scope.launch {
+            mihomo.state.collect { s ->
+                if (s is VpnState.Connected && active.value !== mihomo && xray.state.value !is VpnState.Connected) active.value = mihomo
+            }
+        }
+    }
+
     override fun needsPermission(): Boolean = xray.needsPermission()
 
     override suspend fun requestPermission(): Boolean = xray.requestPermission()
@@ -95,6 +105,9 @@ class DualCoreBackend(
     override val directProbesBypassTunnel: Boolean get() = active.value.directProbesBypassTunnel
 
     override val appPort: Int? get() = active.value.appPort
+
+    /** The log of the core that runs (or last ran) the tunnel. */
+    override val coreLog: app.ghostly.core.vpn.CoreLog get() = active.value.coreLog
 
     override fun coreVersion(): String = "${xray.coreVersion()} · ${mihomo.coreVersion()}"
 

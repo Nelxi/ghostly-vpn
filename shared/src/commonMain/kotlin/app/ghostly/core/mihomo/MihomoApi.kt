@@ -118,6 +118,12 @@ class MihomoApi(val port: Int, private val secret: String) {
         JsonX.parseToJsonElement(r.bodyAsText()).jsonObject["delay"]?.jsonPrimitive?.longOrNull?.takeIf { it > 0 } ?: -1L
     }.getOrDefault(-1L)
 
+    /** [delay] with a second try when the first gets no answer: one lost handshake isn't a dead server. */
+    suspend fun delayRetry(name: String, url: String, timeoutMs: Int = 5000): Long {
+        val first = delay(name, url, timeoutMs)
+        return if (first > 0) first else delay(name, url, timeoutMs)
+    }
+
     /** Proxy names of a proxy-provider, in file order. */
     suspend fun providerProxies(provider: String): List<String> = runCatching {
         val r = client.get { endpoint("providers", "proxies", provider) }
@@ -150,6 +156,20 @@ class MihomoApi(val port: Int, private val secret: String) {
                 if (line.isBlank()) continue
                 val o = runCatching { JsonX.parseToJsonElement(line).jsonObject }.getOrNull() ?: continue
                 emit((o["up"]?.jsonPrimitive?.longOrNull ?: 0L) to (o["down"]?.jsonPrimitive?.longOrNull ?: 0L))
+            }
+        }
+    }
+
+    /** Log lines as the core emits them ("level: message"), filtered by [level] (debug/info/warning/error). */
+    fun logs(level: String): Flow<String> = flow {
+        client.prepareGet { endpoint("logs", query = mapOf("level" to level)) }.execute { r ->
+            val ch = r.bodyAsChannel()
+            while (true) {
+                val line = ch.readUTF8Line() ?: break
+                if (line.isBlank()) continue
+                val o = runCatching { JsonX.parseToJsonElement(line).jsonObject }.getOrNull() ?: continue
+                val type = o["type"]?.jsonPrimitive?.contentOrNull ?: "info"
+                emit("$type: ${o["payload"]?.jsonPrimitive?.contentOrNull.orEmpty()}")
             }
         }
     }
