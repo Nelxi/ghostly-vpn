@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.draw.innerShadow
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -169,6 +170,9 @@ fun GlassCard(
             ),
         )
     if (glow != null) m = m.background(Brush.radialGradient(listOf(glow.copy(alpha = 0.16f), Color.Transparent)))
+    // Soft inner depth: edges of the glass sink a little, and a thin light line catches the top edge.
+    m = m.innerShadow(shape, androidx.compose.ui.graphics.shadow.Shadow(radius = 18.dp, color = Color.Black.copy(alpha = 0.32f)))
+        .innerShadow(shape, androidx.compose.ui.graphics.shadow.Shadow(radius = 2.dp, color = Color.White.copy(alpha = 0.07f), offset = androidx.compose.ui.unit.DpOffset(0.dp, 1.dp)))
     val stageForCard = app.ghostly.ui.stage.LocalStage.current
     if (stageForCard != null) m = m.drawWithContent {
         drawContent()
@@ -187,7 +191,7 @@ fun GlassCard(
             ),
             shape,
         )
-    m = if (onClick != null) m.clickable(interactionSource = interaction, indication = null, onClick = onClick)
+    m = if (onClick != null) m.hoverSound().clickable(interactionSource = interaction, indication = null, onClick = onClick)
     else m.hoverable(interaction) // plain cards light up under the cursor too, like the site
     Column(m.padding(padding), content = content)
 }
@@ -199,8 +203,6 @@ fun GlassCard(
 fun Modifier.pressScale(interaction: MutableInteractionSource, pressed: Float = 0.94f, hover: Float = 1.04f): Modifier = composed {
     val isPressed by interaction.collectIsPressedAsState()
     val isHovered by interaction.collectIsHoveredAsState()
-    val hoverSound = LocalHoverSound.current
-    androidx.compose.runtime.LaunchedEffect(isHovered) { if (isHovered) hoverSound() }
     val scale by animateFloatAsState(
         when {
             isPressed -> pressed
@@ -331,9 +333,10 @@ fun Hairline(modifier: Modifier = Modifier) {
 fun Modifier.outerShadow(shape: Shape, weight: Float = 1f): Modifier = composed {
     val layers = remember(shape, weight) {
         listOf(
-            androidx.compose.ui.graphics.shadow.Shadow(radius = 4.dp, color = Color.Black.copy(alpha = (0.85f * weight).coerceAtMost(0.95f)), spread = 1.dp),
-            androidx.compose.ui.graphics.shadow.Shadow(radius = 16.dp, color = Color.Black.copy(alpha = (0.65f * weight).coerceAtMost(0.8f)), offset = androidx.compose.ui.unit.DpOffset(0.dp, 6.dp)),
-            androidx.compose.ui.graphics.shadow.Shadow(radius = 38.dp, color = Color.Black.copy(alpha = (0.7f * weight).coerceAtMost(0.85f)), spread = 2.dp, offset = androidx.compose.ui.unit.DpOffset(0.dp, 18.dp)),
+            // no hard rim: soft layers that fade out gradually
+            androidx.compose.ui.graphics.shadow.Shadow(radius = 10.dp, color = Color.Black.copy(alpha = (0.5f * weight).coerceAtMost(0.6f)), offset = androidx.compose.ui.unit.DpOffset(0.dp, 2.dp)),
+            androidx.compose.ui.graphics.shadow.Shadow(radius = 22.dp, color = Color.Black.copy(alpha = (0.45f * weight).coerceAtMost(0.55f)), offset = androidx.compose.ui.unit.DpOffset(0.dp, 8.dp)),
+            androidx.compose.ui.graphics.shadow.Shadow(radius = 44.dp, color = Color.Black.copy(alpha = (0.5f * weight).coerceAtMost(0.6f)), offset = androidx.compose.ui.unit.DpOffset(0.dp, 18.dp)),
         ).map { androidx.compose.ui.graphics.shadow.DropShadowPainter(shape, it) }
     }
     drawBehind {

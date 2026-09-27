@@ -1,5 +1,6 @@
 package app.ghostly.ui
 
+import app.ghostly.ui.components.hoverSound
 import app.ghostly.ui.components.outerShadow
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
@@ -198,7 +199,7 @@ private fun NavItem(icon: ImageVector, label: String, active: Boolean, tint: Col
         Modifier.fillMaxWidth().height(NAV_ITEM_H).clip(RoundedCornerShape(16.dp))
             .background(Color.White.copy(alpha = 0.04f * hoverBg))
             .pointerHoverIcon(PointerIcon.Hand)
-            .clickable(interaction, null, onClick = onClick)
+            .hoverSound().clickable(interaction, null, onClick = onClick)
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -232,7 +233,7 @@ private fun StatusChip(state: VpnState, onClick: () -> Unit) {
             .border(1.dp, color.copy(alpha = 0.28f), RoundedCornerShape(16.dp))
             .sheen(interaction, color, 0.16f)
             .pointerHoverIcon(PointerIcon.Hand)
-            .clickable(interaction, null, onClick = onClick)
+            .hoverSound().clickable(interaction, null, onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

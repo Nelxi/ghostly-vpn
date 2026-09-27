@@ -121,61 +121,50 @@ class DesktopPlatform : PlatformInfo {
         true
     }.getOrDefault(false)
 
-    // Several takes per action (like the site): the same action never sounds exactly the same twice.
-    private val clips: Map<app.ghostly.core.vpn.Haptic, List<javax.sound.sampled.Clip>> by lazy {
-        val files = mapOf(
-            app.ghostly.core.vpn.Haptic.CLICK to ("ui_click" to 3), app.ghostly.core.vpn.Haptic.HEAVY to ("ui_press" to 4),
-            app.ghostly.core.vpn.Haptic.SUCCESS to ("ui_success" to 4), app.ghostly.core.vpn.Haptic.ERROR to ("ui_error" to 2),
-        )
-        files.mapValues { (_, spec) ->
-            (0 until spec.second).mapNotNull { i ->
+    // Decoded once; every play opens its own Clip that closes itself at the end, so sounds overlap like
+    // on the site instead of cutting each other off. Several takes per action, picked at random.
+    private class Pcm(val format: javax.sound.sampled.AudioFormat, val bytes: ByteArray)
+
+    private val pcm: Map<String, List<Pcm>> by lazy {
+        mapOf("click" to 3, "press" to 4, "success" to 4, "error" to 2, "hover" to 5).mapValues { (name, n) ->
+            (0 until n).mapNotNull { i ->
                 runCatching {
-                    val res = DesktopPlatform::class.java.getResourceAsStream("/sounds/${spec.first}_$i.wav") ?: return@runCatching null
-                    val stream = javax.sound.sampled.AudioSystem.getAudioInputStream(java.io.BufferedInputStream(res))
-                    javax.sound.sampled.AudioSystem.getClip().apply { open(stream) }
+                    val res = DesktopPlatform::class.java.getResourceAsStream("/sounds/ui_${name}_$i.wav") ?: return@runCatching null
+                    javax.sound.sampled.AudioSystem.getAudioInputStream(java.io.BufferedInputStream(res)).use { Pcm(it.format, it.readAllBytes()) }
                 }.getOrNull()
             }
         }
     }
+    private val playing = java.util.concurrent.atomic.AtomicInteger()
 
-    private val hoverClips: List<javax.sound.sampled.Clip> by lazy {
-        (0 until 5).mapNotNull { i ->
-            runCatching {
-                val res = DesktopPlatform::class.java.getResourceAsStream("/sounds/ui_hover_$i.wav") ?: return@runCatching null
-                javax.sound.sampled.AudioSystem.getClip().apply {
-                    open(javax.sound.sampled.AudioSystem.getAudioInputStream(java.io.BufferedInputStream(res)))
-                }
-            }.getOrNull()
-        }
-    }
-
-    override fun playHover(volume: Float) {
+    private fun play(name: String, volume: Float) {
+        val take = pcm[name]?.randomOrNull() ?: return
+        if (volume <= 0.001f || playing.get() >= 12) return
         Thread {
             runCatching {
-                val clip = hoverClips.randomOrNull() ?: return@runCatching
+                val clip = javax.sound.sampled.AudioSystem.getClip()
+                clip.open(take.format, take.bytes, 0, take.bytes.size)
                 (clip.getControl(javax.sound.sampled.FloatControl.Type.MASTER_GAIN) as? javax.sound.sampled.FloatControl)?.let { g ->
-                    val db = if (volume <= 0.001f) g.minimum else (20f * kotlin.math.log10(volume.coerceIn(0.001f, 1f)))
-                    g.value = db.coerceIn(g.minimum, g.maximum)
+                    g.value = (20f * kotlin.math.log10(volume.coerceIn(0.001f, 1f))).coerceIn(g.minimum, g.maximum)
                 }
-                clip.stop(); clip.framePosition = 0; clip.start()
-            }
-        }.apply { isDaemon = true }.start()
-    }
-
-    override fun playSound(kind: app.ghostly.core.vpn.Haptic, volume: Float) {
-        Thread {
-            runCatching {
-                val clip = clips[kind]?.randomOrNull() ?: return@runCatching
-                (clip.getControl(javax.sound.sampled.FloatControl.Type.MASTER_GAIN) as? javax.sound.sampled.FloatControl)?.let { g ->
-                    val db = if (volume <= 0.001f) g.minimum else (20f * kotlin.math.log10(volume.coerceIn(0.001f, 1f)))
-                    g.value = db.coerceIn(g.minimum, g.maximum)
-                }
-                clip.stop()
-                clip.framePosition = 0
+                playing.incrementAndGet()
+                clip.addLineListener { e -> if (e.type == javax.sound.sampled.LineEvent.Type.STOP) { clip.close(); playing.decrementAndGet() } }
                 clip.start()
             }
         }.apply { isDaemon = true }.start()
     }
+
+    override fun playHover(volume: Float) = play("hover", volume)
+
+    override fun playSound(kind: app.ghostly.core.vpn.Haptic, volume: Float) = play(
+        when (kind) {
+            app.ghostly.core.vpn.Haptic.HEAVY -> "press"
+            app.ghostly.core.vpn.Haptic.SUCCESS -> "success"
+            app.ghostly.core.vpn.Haptic.ERROR -> "error"
+            else -> "click"
+        },
+        volume,
+    )
 
     /** Windows accent colour (Settings → Personalisation → Colours), the desktop's "Monet". */
     private val winAccent: Long? by lazy {

@@ -1,5 +1,6 @@
 package app.ghostly.ui.screens
 
+import app.ghostly.ui.components.hoverSound
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.fadeIn
@@ -305,7 +306,7 @@ private fun MainSettings(controller: GhostlyController, contentPadding: PaddingV
                         Box(
                             Modifier.size(26.dp).clip(CircleShape).background(col)
                                 .border(2.dp, if (s.accent == a && !s.monet) c.ink else Color.Transparent, CircleShape)
-                                .clickable { set { it.copy(accent = a, monet = false) } },
+                                .hoverSound().clickable { set { it.copy(accent = a, monet = false) } },
                             contentAlignment = Alignment.Center,
                         ) { if (s.accent == a && !s.monet) Icon(Icons.Rounded.Check, null, tint = Color.Black.copy(alpha = 0.7f), modifier = Modifier.size(15.dp)) }
                     }
@@ -460,7 +461,7 @@ private fun AppsPage(controller: GhostlyController, contentPadding: PaddingValue
                     Spacer(Modifier.width(10.dp))
                     Text("Системные", style = MaterialTheme.typography.labelMedium, color = c.ink3)
                     Spacer(Modifier.width(6.dp))
-                    Box(Modifier.clickable { showSystem = !showSystem }) { GhostSwitch(showSystem) }
+                    Box(Modifier.hoverSound().clickable { showSystem = !showSystem }) { GhostSwitch(showSystem) }
                 }
                 Spacer(Modifier.height(8.dp))
             }
@@ -474,7 +475,7 @@ private fun AppsPage(controller: GhostlyController, contentPadding: PaddingValue
             items(shown, key = { it.packageName }) { app ->
                 val checked = app.packageName in s.splitApps
                 Row(
-                    Modifier.fillMaxWidth().clickable {
+                    Modifier.fillMaxWidth().hoverSound().clickable {
                         controller.updateSettings { st -> st.copy(splitApps = if (checked) st.splitApps - app.packageName else st.splitApps + app.packageName) }
                     }.padding(horizontal = 22.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,

@@ -124,7 +124,7 @@ fun AccentButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifie
             .background(c.accent)
             .sheen(interaction, strength = 0.22f)
             .graphicsLayer { alpha = if (enabled) 1f else 0.45f }
-            .clickable(interaction, null, enabled = enabled, onClick = onClick)
+            .hoverSound().clickable(interaction, null, enabled = enabled, onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 15.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
@@ -147,7 +147,7 @@ fun SoftButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier,
             .background(bg)
             .sheen(interaction, strength = 0.1f)
             .border(1.dp, edge, RoundedCornerShape(20.dp))
-            .clickable(interaction, null, onClick = onClick)
+            .hoverSound().clickable(interaction, null, onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
@@ -180,7 +180,7 @@ fun IconBubble(icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modi
             .outerShadow(CircleShape, 0.6f).clip(CircleShape)
             .background(bg)
             .border(1.dp, edge, CircleShape)
-            .clickable(interaction, null, onClick = onClick),
+            .hoverSound().clickable(interaction, null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, null, tint = if (active || hovered) c.accent else tint, modifier = Modifier.size(size * 0.46f).graphicsLayer { rotationZ = tilt })
@@ -224,7 +224,7 @@ fun SettingRow(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(bg)
-            .then(if (onClick != null) Modifier.spotlight(c.accent, 180.dp).clickable(interaction, null) { feel(app.ghostly.core.vpn.Haptic.TICK); onClick() } else Modifier)
+            .then(if (onClick != null) Modifier.spotlight(c.accent, 180.dp).hoverSound().clickable(interaction, null) { feel(app.ghostly.core.vpn.Haptic.TICK); onClick() } else Modifier)
             .padding(vertical = 11.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -275,7 +275,7 @@ fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> 
             options.forEach { (value, label) ->
                 Box(
                     Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(12.dp))
-                        .clickable(remember { MutableInteractionSource() }, null) { if (value != selected) feel(app.ghostly.core.vpn.Haptic.CLICK); onSelect(value) },
+                        .hoverSound().clickable(remember { MutableInteractionSource() }, null) { if (value != selected) feel(app.ghostly.core.vpn.Haptic.CLICK); onSelect(value) },
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(label, style = MaterialTheme.typography.labelMedium, color = if (value == selected) c.ink else c.ink3, maxLines = 1)

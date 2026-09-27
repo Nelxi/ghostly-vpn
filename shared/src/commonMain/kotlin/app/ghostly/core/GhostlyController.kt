@@ -1084,7 +1084,10 @@ class GhostlyController(
     fun haptic(kind: app.ghostly.core.vpn.Haptic = app.ghostly.core.vpn.Haptic.CLICK) {
         val s = _settings.value
         if (s.haptics) platform.haptic(kind, s.hapticStrength)
-        if (s.sounds && kind != app.ghostly.core.vpn.Haptic.TICK) platform.playSound(kind, s.soundVolume)
+        if (s.sounds) {
+            if (kind == app.ghostly.core.vpn.Haptic.TICK) platform.playSound(app.ghostly.core.vpn.Haptic.CLICK, s.soundVolume * 0.6f)
+            else platform.playSound(kind, s.soundVolume)
+        }
     }
 
     fun markOnboarded() {

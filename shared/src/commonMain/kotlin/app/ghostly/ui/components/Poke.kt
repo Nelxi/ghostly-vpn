@@ -1,5 +1,6 @@
 package app.ghostly.ui.components
 
+import androidx.compose.ui.composed
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -48,6 +49,19 @@ val LocalHapticOf = staticCompositionLocalOf<(app.ghostly.core.vpn.Haptic) -> Un
 
 /** A quiet note when the cursor enters something clickable (desktop; the site's hover sound). */
 val LocalHoverSound = staticCompositionLocalOf<() -> Unit> { {} }
+
+/** Plays the hover note when the pointer enters this element. Put in front of every `clickable`. */
+fun Modifier.hoverSound(): Modifier = composed {
+    val sound = LocalHoverSound.current
+    pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) {
+                val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                if (e.type == androidx.compose.ui.input.pointer.PointerEventType.Enter) sound()
+            }
+        }
+    }
+}
 
 private class Particle(val start: Offset, val vx: Float, val heart: Boolean, val born: Long, val size: Float, val tint: Int)
 

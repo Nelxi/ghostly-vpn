@@ -189,7 +189,7 @@ fun AnnouncementCard(controller: GhostlyController, modifier: Modifier = Modifie
             }
             Icon(
                 Icons.Rounded.Close, null, tint = c.ink3,
-                modifier = Modifier.size(30.dp).clip(CircleShape).clickable { controller.design.dismiss(b.id) }.padding(6.dp),
+                modifier = Modifier.size(30.dp).clip(CircleShape).hoverSound().clickable { controller.design.dismiss(b.id) }.padding(6.dp),
             )
         }
     }

@@ -79,7 +79,7 @@ fun UpdateBanner(controller: GhostlyController, modifier: Modifier = Modifier, c
                 if (!busy) {
                     Icon(
                         Icons.Rounded.Close, "Скрыть", tint = c.ink3,
-                        modifier = Modifier.size(30.dp).clip(CircleShape).clickable { controller.dismissUpdate() }.padding(6.dp),
+                        modifier = Modifier.size(30.dp).clip(CircleShape).hoverSound().clickable { controller.dismissUpdate() }.padding(6.dp),
                     )
                 }
             }

@@ -1,5 +1,6 @@
 package app.ghostly.ui.screens
 
+import app.ghostly.ui.components.hoverSound
 import app.ghostly.ui.components.outerShadow
 import androidx.compose.ui.draw.clipToBounds
 
@@ -535,7 +536,7 @@ fun SubscriptionCard(profile: Profile, now: Long, controller: GhostlyController,
                 Box {
                     Row(
                         Modifier.outerShadow(RoundedCornerShape(12.dp), 0.5f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.06f))
-                            .clickable { open = true }.padding(start = 10.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                            .hoverSound().clickable { open = true }.padding(start = 10.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
@@ -620,7 +621,7 @@ fun SubscriptionCard(profile: Profile, now: Long, controller: GhostlyController,
                     val busy = label == "Обновить" && profile.id in refreshing
                     Row(
                         Modifier.weight(1f).outerShadow(RoundedCornerShape(12.dp), 0.5f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.06f))
-                            .clickable(enabled = !busy, onClick = onClick).padding(vertical = 9.dp),
+                            .hoverSound().clickable(enabled = !busy, onClick = onClick).padding(vertical = 9.dp),
                         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (busy) app.ghostly.ui.components.Spinner(c.accent, Modifier.size(14.dp))

@@ -1,5 +1,6 @@
 package app.ghostly.ui
 
+import app.ghostly.ui.components.hoverSound
 import androidx.compose.animation.AnimatedContent
 import app.ghostly.ui.screens.predictiveCard
 import androidx.compose.animation.AnimatedVisibility
@@ -220,7 +221,7 @@ fun GhostlyApp(controller: GhostlyController) {
                 Box(
                     Modifier.widthIn(max = 520.dp).clip(RoundedCornerShape(20.dp)).background(Color(0xF01A1328))
                         .border(1.dp, Ghost.colors.accent.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
-                        .clickable { toast = null }.padding(horizontal = 16.dp, vertical = 12.dp),
+                        .hoverSound().clickable { toast = null }.padding(horizontal = 16.dp, vertical = 12.dp),
                 ) { Text(last, style = MaterialTheme.typography.bodyMedium.copy(color = Ghost.colors.ink)) }
             }
         }
@@ -354,7 +355,7 @@ private fun BoxScope.PickerSheet(
         Box(
             Modifier.fillMaxSize().graphicsLayer { alpha = (1f - off / hidden).coerceIn(0f, 1f) }
                 .background(Color.Black.copy(alpha = 0.55f))
-                .clickable(remember { MutableInteractionSource() }, null, onClick = onClose),
+                .hoverSound().clickable(remember { MutableInteractionSource() }, null, onClick = onClose),
         )
         Column(
             Modifier.align(Alignment.BottomCenter).widthIn(max = 620.dp).fillMaxWidth()
@@ -363,7 +364,7 @@ private fun BoxScope.PickerSheet(
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                 .background(Color(0xFF110C1A))
                 // Taps on the panel itself must not fall through to the scrim.
-                .clickable(remember { MutableInteractionSource() }, null) {}
+                .hoverSound().clickable(remember { MutableInteractionSource() }, null) {}
                 .nestedScroll(connection),
         ) {
             // Handle and title drag the sheet directly.
@@ -410,7 +411,7 @@ private fun TabBar(selected: Tab, onSelect: (Tab) -> Unit, modifier: Modifier) {
             val pop by animateFloatAsState(if (active) 1f else 0f, Motion.bouncy())
             Row(
                 Modifier.width(w).height(48.dp).pressScale(interaction, 0.9f).clip(RoundedCornerShape(24.dp)).background(bg)
-                    .clickable(interaction, null) { onSelect(t) },
+                    .hoverSound().clickable(interaction, null) { onSelect(t) },
                 horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
             ) {
                 val iconFx = Modifier.graphicsLayer { val k = 1f + 0.08f * pop; scaleX = k; scaleY = k; rotationZ = if (t == Tab.SETTINGS) 60f * pop else -6f * pop }
@@ -510,7 +511,7 @@ private fun SourceTile(label: String, icon: ImageVector, modifier: Modifier, onC
             .background(Brush.verticalGradient(listOf(c.accent.copy(alpha = 0.14f), c.accent2.copy(alpha = 0.06f))))
             .border(1.dp, c.accent.copy(alpha = 0.22f), RoundedCornerShape(20.dp))
             .sheen(interaction, strength = 0.14f)
-            .clickable(interaction, null, onClick = onClick).padding(vertical = 18.dp),
+            .hoverSound().clickable(interaction, null, onClick = onClick).padding(vertical = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(icon, null, tint = c.accent, modifier = Modifier.size(26.dp))

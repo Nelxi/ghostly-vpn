@@ -175,7 +175,7 @@ fun ConnectOrb(
                 cameraDistance = 14f * density
             })
             .clip(CircleShape)
-            .clickable(interactionSource = interaction, indication = null, onClick = tap),
+            .hoverSound().clickable(interactionSource = interaction, indication = null, onClick = tap),
         contentAlignment = Alignment.Center,
     ) {
         Canvas(Modifier.fillMaxSize()) {

@@ -1,5 +1,6 @@
 package app.ghostly.ui.screens
 
+import app.ghostly.ui.components.hoverSound
 import app.ghostly.ui.components.outerShadow
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
@@ -316,10 +317,10 @@ private fun ProfileHeader(profile: Profile, collapsed: Boolean, refreshing: Bool
     ) {
         // The arrow folds the list; the rest of the header opens the subscription page.
         Icon(Icons.Rounded.ExpandMore, if (collapsed) "Развернуть" else "Свернуть", tint = c.ink3,
-            modifier = Modifier.size(34.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onToggle).padding(7.dp).rotate(arrow))
+            modifier = Modifier.size(34.dp).clip(RoundedCornerShape(12.dp)).hoverSound().clickable(onClick = onToggle).padding(7.dp).rotate(arrow))
         Column(
             Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).pointerHoverIcon(PointerIcon.Hand)
-                .clickable { nav.open(profile.id) }.padding(horizontal = 6.dp, vertical = 6.dp),
+                .hoverSound().clickable { nav.open(profile.id) }.padding(horizontal = 6.dp, vertical = 6.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 app.ghostly.ui.components.FlagText(profile.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
@@ -341,12 +342,12 @@ private fun ProfileHeader(profile: Profile, collapsed: Boolean, refreshing: Bool
             Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) {
                 if (refreshing) Spinner(c.accent, Modifier.size(18.dp))
                 else Icon(Icons.Rounded.Refresh, "Обновить", tint = c.ink3,
-                    modifier = Modifier.size(34.dp).clip(RoundedCornerShape(12.dp)).clickable { controller.refresh(profile.id, manual = true) }.padding(8.dp))
+                    modifier = Modifier.size(34.dp).clip(RoundedCornerShape(12.dp)).hoverSound().clickable { controller.refresh(profile.id, manual = true) }.padding(8.dp))
             }
         }
         Box {
             Icon(Icons.Rounded.MoreHoriz, null, tint = c.ink3,
-                modifier = Modifier.size(34.dp).clip(RoundedCornerShape(12.dp)).clickable { menu = true }.padding(7.dp))
+                modifier = Modifier.size(34.dp).clip(RoundedCornerShape(12.dp)).hoverSound().clickable { menu = true }.padding(7.dp))
             DropdownMenu(menu, { menu = false }) {
                 DropdownMenuItem(text = { Text("О подписке") }, leadingIcon = { Icon(Icons.Rounded.Info, null) },
                     onClick = { menu = false; nav.open(profile.id) })
@@ -379,7 +380,7 @@ private fun AddSubscriptionRow(onAdd: () -> Unit) {
         Modifier.fillMaxWidth().padding(horizontal = LocalListPad.current, vertical = 14.dp)
             .clip(RoundedCornerShape(16.dp)).border(1.dp, c.accent.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
             .background(c.accent.copy(alpha = 0.06f)).pointerHoverIcon(PointerIcon.Hand)
-            .clickable(onClick = onAdd).padding(vertical = 14.dp),
+            .hoverSound().clickable(onClick = onAdd).padding(vertical = 14.dp),
         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.Rounded.Add, null, tint = c.accent, modifier = Modifier.size(18.dp))
@@ -399,7 +400,7 @@ private fun BestRow(server: Server, ms: Long?, onClick: () -> Unit) {
             .background(Color.White.copy(alpha = 0.045f))
             .spotlight(c.accent, 180.dp)
             .border(1.dp, c.line, RoundedCornerShape(20.dp))
-            .clickable(interaction, null, onClick = onClick)
+            .hoverSound().clickable(interaction, null, onClick = onClick)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -451,7 +452,7 @@ private fun ServerRow(
                 )
             }
             .pointerHoverIcon(PointerIcon.Hand)
-            .clickable(interaction, null, onClick = onClick)
+            .hoverSound().clickable(interaction, null, onClick = onClick)
             .padding(start = 12.dp, end = 6.dp, top = 9.dp, bottom = 9.dp)
             .animateContentSize(),
         verticalAlignment = Alignment.CenterVertically,
@@ -477,17 +478,17 @@ private fun ServerRow(
             }
         }
         Spacer(Modifier.width(8.dp))
-        if (server.canPing) PingText(ping?.ms, loading, ping?.block, Modifier.clip(RoundedCornerShape(8.dp)).clickable { controller.ping(server.id) }.padding(horizontal = 6.dp, vertical = 4.dp))
+        if (server.canPing) PingText(ping?.ms, loading, ping?.block, Modifier.clip(RoundedCornerShape(8.dp)).hoverSound().clickable { controller.ping(server.id) }.padding(horizontal = 6.dp, vertical = 4.dp))
         if (favorite || showTools) {
             Icon(
                 if (favorite) Icons.Rounded.Star else Icons.Rounded.StarBorder, null,
                 tint = if (favorite) c.warn else c.ink3.copy(alpha = 0.6f),
-                modifier = Modifier.size(32.dp).clip(RoundedCornerShape(12.dp)).clickable { controller.toggleFavorite(server.id) }.padding(7.dp),
+                modifier = Modifier.size(32.dp).clip(RoundedCornerShape(12.dp)).hoverSound().clickable { controller.toggleFavorite(server.id) }.padding(7.dp),
             )
         } else Spacer(Modifier.width(32.dp))
         Box {
             Icon(Icons.Rounded.MoreHoriz, null, tint = c.ink3.copy(alpha = if (showTools) 1f else 0f),
-                modifier = Modifier.size(30.dp).clip(RoundedCornerShape(12.dp)).clickable { menu = true }.padding(6.dp))
+                modifier = Modifier.size(30.dp).clip(RoundedCornerShape(12.dp)).hoverSound().clickable { menu = true }.padding(6.dp))
             DropdownMenu(menu, { menu = false }) {
                 DropdownMenuItem(text = { Text("Проверить пинг") }, leadingIcon = { Icon(Icons.Rounded.NetworkPing, null) },
                     onClick = { menu = false; controller.ping(server.id) })

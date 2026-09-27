@@ -190,7 +190,7 @@ class AndroidPlatform(private val context: Context) : PlatformInfo {
 
     // Several takes per action (like the site): the same action never sounds exactly the same twice.
     private val sounds: Pair<android.media.SoundPool, Map<Haptic, List<Int>>> by lazy {
-        val pool = android.media.SoundPool.Builder().setMaxStreams(3).setAudioAttributes(
+        val pool = android.media.SoundPool.Builder().setMaxStreams(8).setAudioAttributes(
             android.media.AudioAttributes.Builder()
                 .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
                 .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)

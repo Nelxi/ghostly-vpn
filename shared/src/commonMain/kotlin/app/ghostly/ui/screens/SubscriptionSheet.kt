@@ -1,5 +1,6 @@
 package app.ghostly.ui.screens
 
+import app.ghostly.ui.components.hoverSound
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -189,7 +190,7 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
                     Text(
                         n.buttonText ?: "Открыть", style = MaterialTheme.typography.labelLarge, color = tone,
                         modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(tone.copy(alpha = 0.14f))
-                            .clickable { controller.platform.openUrl(url) }.padding(horizontal = 14.dp, vertical = 8.dp),
+                            .hoverSound().clickable { controller.platform.openUrl(url) }.padding(horizontal = 14.dp, vertical = 8.dp),
                     )
                 }
             }
@@ -224,7 +225,7 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
                 row.forEach { (icon, label, onClick) ->
                     Row(
                         Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.06f))
-                            .clickable(onClick = onClick).padding(vertical = 12.dp),
+                            .hoverSound().clickable(onClick = onClick).padding(vertical = 12.dp),
                         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (icon == Icons.Rounded.Refresh && busy) Spinner(c.accent, Modifier.size(16.dp))
@@ -249,7 +250,7 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
             Row(
                 Modifier.fillMaxWidth().padding(vertical = 2.dp).clip(RoundedCornerShape(16.dp))
                     .background(if (p.id == profile.id) c.accent.copy(alpha = 0.10f) else Color.Transparent)
-                    .clickable { shownId = p.id }.padding(horizontal = 12.dp, vertical = 10.dp),
+                    .hoverSound().clickable { shownId = p.id }.padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(Modifier.size(8.dp).clip(CircleShape).background(if (isActive) c.ok else c.ink3.copy(alpha = 0.4f)))
@@ -271,7 +272,7 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
         Spacer(Modifier.height(18.dp))
         Row(
             Modifier.align(Alignment.CenterHorizontally).clip(RoundedCornerShape(12.dp))
-                .clickable {
+                .hoverSound().clickable {
                     if (confirm) { controller.deleteProfile(profile.id); if (profile.id == profileId) onClose() else shownId = profileId }
                     else confirm = true
                 }.padding(horizontal = 14.dp, vertical = 8.dp),
