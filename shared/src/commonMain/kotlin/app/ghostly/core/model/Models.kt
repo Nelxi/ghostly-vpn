@@ -87,6 +87,12 @@ fun guessPool(name: String): String? {
 
 /** A latency result: millis, or a negative code. */
 @Serializable
-data class Ping(val ms: Long, val at: Long, val quick: Boolean = false) {
+data class Ping(
+    val ms: Long,
+    val at: Long,
+    val quick: Boolean = false,
+    /** Why a failed server doesn't answer, from the direct check (null = not checked). */
+    val block: app.ghostly.core.vpn.BlockVerdict? = null,
+) {
     val ok: Boolean get() = ms > 0
 }

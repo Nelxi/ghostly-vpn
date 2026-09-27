@@ -388,9 +388,13 @@ private fun ServerRow(
             val proto = server.protocolLabel()
             val meta = listOfNotNull(proto.takeUnless { t.title.contains(it, ignoreCase = true) }, server.transportLabel()).joinToString(" · ")
             if (meta.isNotEmpty()) Text(meta, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+            // Why it doesn't answer, from the direct check (IP / DPI / 16 KB).
+            ping?.block?.takeIf { !ping.ok && it != app.ghostly.core.vpn.BlockVerdict.REACHABLE && it != app.ghostly.core.vpn.BlockVerdict.OFFLINE }?.let {
+                Text(it.title, style = MaterialTheme.typography.bodySmall, color = c.bad, maxLines = 2)
+            }
         }
         Spacer(Modifier.width(8.dp))
-        if (!server.isAuto) PingText(ping?.ms, loading, Modifier.clip(RoundedCornerShape(8.dp)).clickable { controller.ping(server.id) }.padding(horizontal = 6.dp, vertical = 4.dp))
+        if (!server.isAuto) PingText(ping?.ms, loading, ping?.block, Modifier.clip(RoundedCornerShape(8.dp)).clickable { controller.ping(server.id) }.padding(horizontal = 6.dp, vertical = 4.dp))
         if (favorite || showTools) {
             Icon(
                 if (favorite) Icons.Rounded.Star else Icons.Rounded.StarBorder, null,
@@ -436,7 +440,7 @@ private fun ServerGlyph(server: Server) {
 
 /** Ping as coloured text with a dot — lighter than a pill in a long list. */
 @Composable
-private fun PingText(ms: Long?, loading: Boolean, modifier: Modifier = Modifier) {
+private fun PingText(ms: Long?, loading: Boolean, block: app.ghostly.core.vpn.BlockVerdict?, modifier: Modifier = Modifier) {
     val c = Ghost.colors
     val color by animateColorAsState(
         when {
@@ -455,7 +459,7 @@ private fun PingText(ms: Long?, loading: Boolean, modifier: Modifier = Modifier)
             when {
                 loading -> "···"
                 ms == null -> "—"
-                ms <= 0 -> "нет"
+                ms <= 0 -> block?.short ?: "нет"
                 else -> "$ms мс"
             },
             style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"), color = color,

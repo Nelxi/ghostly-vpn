@@ -121,6 +121,9 @@ class DesktopPlatform : PlatformInfo {
         true
     }.getOrDefault(false)
 
+    /** Direct sockets; the controller skips it while a TUN tunnel would catch them. */
+    override suspend fun blockCheck(target: app.ghostly.core.vpn.BlockTarget) = app.ghostly.core.vpn.JvmBlockCheck.run(target)
+
     override suspend fun tcpPing(host: String, port: Int, timeoutMs: Int): Long = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         runCatching {
             val addr = java.net.InetSocketAddress(host, port) // DNS outside the timer

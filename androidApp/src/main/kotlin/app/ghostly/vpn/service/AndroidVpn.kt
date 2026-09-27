@@ -47,6 +47,21 @@ object AndroidVpn : VpnBackend {
     @Volatile override var appPort: Int? = null
         internal set
 
+    /** Xray's log of the current/last run (the core writes it; our own lines are marked [app]). */
+    fun logFile(): File = File(app.filesDir, "xray/core.log")
+
+    internal fun log(line: String) {
+        runCatching {
+            val f = logFile()
+            f.parentFile?.mkdirs()
+            f.appendText(java.text.SimpleDateFormat("yyyy/MM/dd HH:mm:ss.SSS", java.util.Locale.US).format(java.util.Date()) + " [app] " + line + "\n")
+        }
+    }
+
+    override suspend fun coreLogs(): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        runCatching { logFile().takeIf { it.isFile }?.readText()?.takeLast(64_000)?.takeIf { it.isNotBlank() } }.getOrNull()
+    }
+
     /** Installed by the activity: launches the system VPN consent dialog. */
     @Volatile var permissionLauncher: ((CompletableDeferred<Boolean>) -> Unit)? = null
 

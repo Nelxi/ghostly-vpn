@@ -155,7 +155,7 @@ object MihomoConfigBuilder {
 
         val healthCheck = buildJsonObject {
             put("enable", true)
-            put("url", settings.pingUrl)
+            put("url", settings.mihomoPingUrl)
             put("interval", 600)
             put("lazy", true)
         }
@@ -177,7 +177,7 @@ object MihomoConfigBuilder {
                 put("name", AUTO_GROUP)
                 put("type", "url-test")
                 putJsonArray("use") { add(JsonPrimitive(LINKS_PROVIDER)) }
-                put("url", settings.pingUrl)
+                put("url", settings.mihomoPingUrl)
                 put("interval", 300)
                 put("tolerance", 50)
                 put("lazy", true)
@@ -186,7 +186,7 @@ object MihomoConfigBuilder {
                 put("name", FALLBACK_GROUP)
                 put("type", "fallback")
                 putJsonArray("use") { add(JsonPrimitive(LINKS_PROVIDER)) }
-                put("url", settings.pingUrl)
+                put("url", settings.mihomoPingUrl)
                 put("interval", 300)
                 put("lazy", true)
             })
@@ -219,9 +219,9 @@ object MihomoConfigBuilder {
         cfg["bind-address"] = JsonPrimitive("*")
         cfg["ipv6"] = JsonPrimitive(settings.ipv6)
         cfg["log-level"] = JsonPrimitive(
-            when (settings.logLevel) {
+            when (settings.mihomoLogLevel) {
                 "none" -> "silent"
-                "debug", "info", "warning", "error" -> settings.logLevel
+                "debug", "info", "warning", "error" -> settings.mihomoLogLevel
                 else -> "warning"
             },
         )

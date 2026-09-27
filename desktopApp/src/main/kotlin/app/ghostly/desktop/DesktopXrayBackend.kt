@@ -130,9 +130,10 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
                 return@withContext
             }
             process = p
+            synchronized(log) { log.clear() }
             Thread {
                 p.inputStream.bufferedReader().forEachLine { line ->
-                    synchronized(log) { log.addLast(line); while (log.size > 300) log.removeFirst() }
+                    synchronized(log) { log.addLast(line); while (log.size > 2000) log.removeFirst() }
                 }
             }.apply { isDaemon = true }.start()
 
@@ -386,6 +387,8 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
     }.getOrNull() ?: "Xray (не найдено)"
 
     val recentLog: List<String> get() = synchronized(log) { log.toList() }
+
+    override suspend fun coreLogs(): String? = synchronized(log) { log.toList() }.takeIf { it.isNotEmpty() }?.joinToString("\n")
 
     companion object {
         val exeName = if (hostOs == HostOs.WINDOWS) "xray.exe" else "xray"

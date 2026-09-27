@@ -74,6 +74,9 @@ interface VpnBackend {
 
     /** Switch the running tunnel to [server] without reconnecting (mihomo selectors); false = reconnect instead. */
     suspend fun switchInPlace(server: Server): Boolean = false
+
+    /** The core's log of the last run, newest lines last; null when there is none. */
+    suspend fun coreLogs(): String? = null
 }
 
 /** Things only the host platform knows. */
@@ -92,8 +95,14 @@ interface PlatformInfo {
     fun copyToClipboard(text: String)
     fun readClipboard(): String?
     fun share(text: String) = copyToClipboard(text)
-    /** Vibration of the given strength (no-op where there is no motor). */
-    fun haptic(kind: Haptic = Haptic.CLICK) {}
+    /** Vibration of the given kind; [strength] 0..1 is the user's slider (no-op where there is no motor). */
+    fun haptic(kind: Haptic = Haptic.CLICK, strength: Float = 0.6f) {}
+
+    /** The system's wallpaper accent (Android 12+ Monet), ARGB; null where there is none. */
+    fun systemAccent(): Long? = null
+
+    /** Direct check of why a server doesn't answer (IP / SNI / 16 KB block); null where unsupported. */
+    suspend fun blockCheck(target: BlockTarget): BlockVerdict? = null
 
     /** Release file name for this platform/ABI ("Ghostly-Android.apk", "Ghostly-Windows.exe"); null = no self-update. */
     val updateAsset: String? get() = null

@@ -67,12 +67,14 @@ internal fun LazyListScope.proxyGroups(
             Text("ГРУППЫ MIHOMO", style = MaterialTheme.typography.labelSmall, color = c.ink3)
         }
     }
-    groups.forEach { g ->
+    // Keys must be unique: several profiles (or one profile listing a group twice) can share a group
+    // name — that crashed the desktop list on switching to mihomo. Groups are opened/tested by name anyway.
+    groups.distinctBy { it.name }.forEach { g ->
         item(key = "mihomo:g:" + g.name) {
             GroupHeader(g, g.name in open, g.name in testing, pad, { onToggle(g.name) }, { onTest(g.name) })
         }
         if (g.name in open) {
-            items(g.members, key = { "mihomo:m:" + g.name + "\u0000" + it }) { m ->
+            items(g.members.distinct(), key = { "mihomo:m:" + g.name + "\u0000" + it }) { m ->
                 MemberRow(m, g, pad) { onSelect(g.name, m) }
             }
         }

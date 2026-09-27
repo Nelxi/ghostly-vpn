@@ -65,6 +65,10 @@ kotlin {
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
         }
+        // java.net code shared by Android and desktop (direct network checks).
+        val jvmCommonMain by creating { dependsOn(commonMain.get()) }
+        androidMain.get().dependsOn(jvmCommonMain)
+        jvmMain.get().dependsOn(jvmCommonMain)
     }
 }
 

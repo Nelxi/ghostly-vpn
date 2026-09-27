@@ -54,6 +54,9 @@ class GhostlyApplication : Application() {
     }
 }
 
+/** Up to here the slider uses the system primitives; above it, plain pulses (they can go much harder). */
+private const val PRIMITIVE_MAX = 0.7f
+
 class AndroidPlatform(private val context: Context) : PlatformInfo {
     override val os = "Android"
     override val osVersion: String = Build.VERSION.RELEASE
@@ -105,8 +108,9 @@ class AndroidPlatform(private val context: Context) : PlatformInfo {
     /** The visible activity's window, for system haptics (set by MainActivity). */
     @Volatile var hapticView: java.lang.ref.WeakReference<android.view.View>? = null
 
-    override fun haptic(kind: Haptic) {
-        if (vibrate(kind)) return
+    override fun haptic(kind: Haptic, strength: Float) {
+        if (strength <= 0f) return
+        if (vibrate(kind, strength.coerceIn(0f, 1f))) return
         val view = hapticView?.get() ?: return
         val run = Runnable {
             @Suppress("DEPRECATION")
@@ -121,15 +125,16 @@ class AndroidPlatform(private val context: Context) : PlatformInfo {
     }
 
     /**
-     * Linear motors (Nothing, Pixel, Samsung flagships) get composed system primitives — crisp and
-     * strong; others a pulse of a set amplitude. Tagged as hardware feedback, which the ROM's
-     * "touch feedback" setting doesn't mute (the plain EFFECT_CLICK of 0.2.4 was felt on almost no phone).
+     * Linear motors (Nothing, Pixel, Samsung flagships) get composed system primitives — crisp; others a
+     * pulse of a set amplitude. Tagged as hardware feedback, which the ROM's "touch feedback" setting
+     * doesn't mute. The primitives top out at what the ROM tuned them to (very soft on Nothing), so the
+     * upper part of the strength slider switches to plain pulses: longer and at full amplitude.
      */
-    private fun vibrate(kind: Haptic): Boolean {
+    private fun vibrate(kind: Haptic, strength: Float): Boolean {
         val v = vibrator ?: return false
         if (!v.hasVibrator()) return false
         return runCatching {
-            val e = effect(v, kind)
+            val e = effect(v, kind, strength)
             if (Build.VERSION.SDK_INT >= 33) {
                 v.vibrate(e, android.os.VibrationAttributes.createForUsage(android.os.VibrationAttributes.USAGE_HARDWARE_FEEDBACK))
             } else {
@@ -139,32 +144,47 @@ class AndroidPlatform(private val context: Context) : PlatformInfo {
         }.isSuccess
     }
 
-    private fun effect(v: Vibrator, kind: Haptic): VibrationEffect {
-        if (Build.VERSION.SDK_INT >= 30) {
+    private fun effect(v: Vibrator, kind: Haptic, strength: Float): VibrationEffect {
+        if (Build.VERSION.SDK_INT >= 30 && strength <= PRIMITIVE_MAX) {
             fun has(vararg p: Int) = v.areAllPrimitivesSupported(*p)
             val thud = if (Build.VERSION.SDK_INT >= 31 && has(VibrationEffect.Composition.PRIMITIVE_THUD)) VibrationEffect.Composition.PRIMITIVE_THUD else VibrationEffect.Composition.PRIMITIVE_CLICK
             if (has(VibrationEffect.Composition.PRIMITIVE_CLICK, VibrationEffect.Composition.PRIMITIVE_TICK)) {
+                // 0 → a whisper, PRIMITIVE_MAX → the primitives at full scale.
+                val k = (0.15f + strength / PRIMITIVE_MAX * 0.85f).coerceIn(0.05f, 1f)
+                val click = VibrationEffect.Composition.PRIMITIVE_CLICK
                 val comp = VibrationEffect.startComposition()
                 when (kind) {
-                    Haptic.TICK -> comp.addPrimitive(VibrationEffect.Composition.PRIMITIVE_TICK, 1f)
-                    Haptic.CLICK -> comp.addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 1f)
-                    Haptic.HEAVY -> comp.addPrimitive(thud, 1f).addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 1f, 20)
-                    Haptic.SUCCESS -> comp.addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 0.7f).addPrimitive(thud, 1f, 70)
-                    Haptic.ERROR -> comp.addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 1f).addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 1f, 60).addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, 1f, 60)
+                    Haptic.TICK -> comp.addPrimitive(VibrationEffect.Composition.PRIMITIVE_TICK, k)
+                    Haptic.CLICK -> comp.addPrimitive(click, k)
+                    Haptic.HEAVY -> comp.addPrimitive(thud, k).addPrimitive(click, k, 20)
+                    Haptic.SUCCESS -> comp.addPrimitive(click, 0.7f * k).addPrimitive(thud, k, 70)
+                    Haptic.ERROR -> comp.addPrimitive(click, k).addPrimitive(click, k, 60).addPrimitive(click, k, 60)
                 }
                 return comp.compose()
             }
         }
         val amp = v.hasAmplitudeControl()
-        fun pulse(ms: Long, a: Int) = VibrationEffect.createOneShot(ms, if (amp) a else VibrationEffect.DEFAULT_AMPLITUDE)
+        // Longer and harder pulses as the slider goes up; without amplitude control only the length changes.
+        val len = 0.6f + strength * 1.6f
+        fun ms(base: Int) = (base * len).toLong().coerceAtLeast(4)
+        fun a(base: Int) = if (amp) (base * (0.35f + 0.65f * strength)).toInt().coerceIn(1, 255) else VibrationEffect.DEFAULT_AMPLITUDE
+        fun pulse(base: Int, amplitude: Int) = VibrationEffect.createOneShot(ms(base), a(amplitude))
         return when (kind) {
-            Haptic.TICK -> pulse(12, 160)
-            Haptic.CLICK -> pulse(22, 255)
-            Haptic.HEAVY -> pulse(45, 255)
-            Haptic.SUCCESS -> VibrationEffect.createWaveform(longArrayOf(0, 20, 70, 40), if (amp) intArrayOf(0, 180, 0, 255) else intArrayOf(0, 255, 0, 255), -1)
-            Haptic.ERROR -> VibrationEffect.createWaveform(longArrayOf(0, 25, 50, 25, 50, 25), if (amp) intArrayOf(0, 255, 0, 255, 0, 255) else intArrayOf(0, 255, 0, 255, 0, 255), -1)
+            Haptic.TICK -> pulse(12, 200)
+            Haptic.CLICK -> pulse(20, 255)
+            Haptic.HEAVY -> pulse(40, 255)
+            Haptic.SUCCESS -> VibrationEffect.createWaveform(longArrayOf(0, ms(20), 70, ms(40)), if (amp) intArrayOf(0, a(180), 0, a(255)) else intArrayOf(0, 255, 0, 255), -1)
+            Haptic.ERROR -> VibrationEffect.createWaveform(longArrayOf(0, ms(25), 50, ms(25), 50, ms(25)), if (amp) intArrayOf(0, a(255), 0, a(255), 0, a(255)) else intArrayOf(0, 255, 0, 255, 0, 255), -1)
         }
     }
+
+    /** Material You: the wallpaper's primary accent, a light tone that reads on the dark UI. */
+    override fun systemAccent(): Long? =
+        if (Build.VERSION.SDK_INT >= 31) runCatching { context.getColor(android.R.color.system_accent1_200).toLong() and 0xFFFFFFFFL }.getOrNull()
+        else null
+
+    /** The app is excluded from its own tunnel, so these sockets go straight to the network. */
+    override suspend fun blockCheck(target: app.ghostly.core.vpn.BlockTarget) = app.ghostly.core.vpn.JvmBlockCheck.run(target)
 
     override fun lanAddress(): String? = runCatching {
         // Real Wi-Fi/Ethernet address: skip loopback, down and virtual adapters (our own TUN too).

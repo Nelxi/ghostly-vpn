@@ -80,6 +80,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import app.ghostly.core.GhostlyController
@@ -104,7 +105,7 @@ import app.ghostly.ui.components.ToggleRow
 import app.ghostly.ui.components.appear
 import app.ghostly.ui.theme.Ghost
 
-private enum class Page { MAIN, ROUTING, DNS, APPS, PROXY, ADVANCED, ABOUT }
+private enum class Page { MAIN, ROUTING, DNS, APPS, PROXY, ADVANCED, ABOUT, LOGS }
 
 const val GITHUB_URL = "https://github.com/Nelxi/ghostly-vpn"
 
@@ -148,8 +149,9 @@ fun SettingsScreen(controller: GhostlyController, contentPadding: PaddingValues)
             Page.DNS -> DnsPage(controller, contentPadding, back)
             Page.APPS -> AppsPage(controller, contentPadding, back)
             Page.PROXY -> ProxyPage(controller, contentPadding, back)
-            Page.ADVANCED -> AdvancedPage(controller, contentPadding, back)
+            Page.ADVANCED -> AdvancedPage(controller, contentPadding, back) { page = it }
             Page.ABOUT -> AboutPage(controller, contentPadding, back)
+            Page.LOGS -> LogsPage(controller, contentPadding) { page = Page.ADVANCED }
         }
     }}
 }
@@ -206,10 +208,10 @@ private fun MainSettings(controller: GhostlyController, contentPadding: PaddingV
                 },
                 style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
             )
-            SettingRow("Способ пинга", s.pingMethod.title, Icons.Rounded.Speed)
+            SettingRow("Способ пинга", "${s.pingMethodOf(s.core).title} · для ${coreName(s.core)}", Icons.Rounded.Speed)
             Segmented(
                 listOf(PingMethod.PROXY_GET to "GET", PingMethod.PROXY_HEAD to "HEAD", PingMethod.TCP to "TCP", PingMethod.ICMP to "ICMP"),
-                s.pingMethod, { v -> set { it.copy(pingMethod = v) } },
+                s.pingMethodOf(s.core), { v -> set { it.withPing(it.core, method = v) } },
             )
             Spacer(Modifier.height(8.dp))
             SettingRow("Маршрутизация", when (s.routingMode) {
@@ -292,16 +294,20 @@ private fun MainSettings(controller: GhostlyController, contentPadding: PaddingV
 
         SectionTitle("Внешний вид")
         Group {
-            SettingRow("Акцент", null, Icons.Rounded.Palette) {
+            val monetAccent = remember { controller.platform.systemAccent() }
+            if (monetAccent != null) {
+                ToggleRow("Цвета системы", "Акцент берётся из обоев (Material You)", s.monet, Icons.Rounded.Palette) { v -> set { it.copy(monet = v) } }
+            }
+            SettingRow("Акцент", if (s.monet && monetAccent != null) "Сейчас из обоев — выбор ниже вернёт свой" else null, Icons.Rounded.Palette) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ThemeAccent.entries.forEach { a ->
                         val col = Color(a.argb.toInt())
                         Box(
                             Modifier.size(26.dp).clip(CircleShape).background(col)
-                                .border(2.dp, if (s.accent == a) c.ink else Color.Transparent, CircleShape)
-                                .clickable { set { it.copy(accent = a) } },
+                                .border(2.dp, if (s.accent == a && !s.monet) c.ink else Color.Transparent, CircleShape)
+                                .clickable { set { it.copy(accent = a, monet = false) } },
                             contentAlignment = Alignment.Center,
-                        ) { if (s.accent == a) Icon(Icons.Rounded.Check, null, tint = Color.Black.copy(alpha = 0.7f), modifier = Modifier.size(15.dp)) }
+                        ) { if (s.accent == a && !s.monet) Icon(Icons.Rounded.Check, null, tint = Color.Black.copy(alpha = 0.7f), modifier = Modifier.size(15.dp)) }
                     }
                 }
             }
@@ -317,7 +323,8 @@ private fun MainSettings(controller: GhostlyController, contentPadding: PaddingV
                 }
             }
             if (!controller.platform.isDesktop) {
-                ToggleRow("Вибрация", "Лёгкий отклик на нажатия", s.haptics, Icons.Rounded.Vibration) { v -> set { it.copy(haptics = v) } }
+                ToggleRow("Вибрация", "Отклик на нажатия", s.haptics, Icons.Rounded.Vibration) { v -> set { it.copy(haptics = v) } }
+                if (s.haptics) HapticStrength(controller, s.hapticStrength) { v -> set { it.copy(hapticStrength = v) } }
             }
         }
 
@@ -615,7 +622,7 @@ private fun CredentialField(label: String, value: String, controller: GhostlyCon
 // ============================================================================ advanced
 
 @Composable
-private fun AdvancedPage(controller: GhostlyController, contentPadding: PaddingValues, back: () -> Unit) {
+private fun AdvancedPage(controller: GhostlyController, contentPadding: PaddingValues, back: () -> Unit, open: (Page) -> Unit) {
     val s by controller.settings.collectAsState()
     val set = controller::updateSettings
     PageScaffold("Для продвинутых", contentPadding, back) {
@@ -631,15 +638,26 @@ private fun AdvancedPage(controller: GhostlyController, contentPadding: PaddingV
             Segmented(listOf(1280 to "1280", 1400 to "1400", 1500 to "1500", 9000 to "9000"), s.mtu, { v -> set { it.copy(mtu = v) } })
             Spacer(Modifier.height(6.dp))
         }
-        SectionTitle("Пинг")
+        // Ping and the log are set per core; the switch picks which core's settings are shown.
+        var core by remember { mutableStateOf(s.core) }
+        SectionTitle("Настройки ядра")
         Group {
-            SettingRow("Способ", s.pingMethod.title, Icons.Rounded.Speed)
+            Segmented(listOf(CoreType.XRAY to "Xray", CoreType.MIHOMO to "mihomo"), core, { core = it })
+            Text(
+                "Пинг и журнал настраиваются отдельно для каждого ядра." + if (core != s.core) " Сейчас используется ${coreName(s.core)}." else "",
+                style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
+            )
+        }
+        val method = s.pingMethodOf(core)
+        SectionTitle("Пинг · ${coreName(core)}")
+        Group {
+            SettingRow("Способ", method.title, Icons.Rounded.Speed)
             Segmented(
                 listOf(PingMethod.PROXY_GET to "GET", PingMethod.PROXY_HEAD to "HEAD", PingMethod.TCP to "TCP", PingMethod.ICMP to "ICMP"),
-                s.pingMethod, { v -> set { it.copy(pingMethod = v) } },
+                method, { v -> set { it.withPing(core, method = v) } },
             )
             Text(
-                when (s.pingMethod) {
+                when (method) {
                     PingMethod.PROXY_GET -> "Запрос через сервер к адресу проверки — настоящая задержка туннеля."
                     PingMethod.PROXY_HEAD -> "То же через сервер, но запрос HEAD — без тела ответа, чуть быстрее."
                     PingMethod.TCP -> "Только соединение с сервером: быстро, но не проверяет, что туннель работает. UDP-серверы проверяются через ядро."
@@ -648,20 +666,29 @@ private fun AdvancedPage(controller: GhostlyController, contentPadding: PaddingV
                 style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
             )
         }
-        if (s.pingMethod == PingMethod.PROXY_GET || s.pingMethod == PingMethod.PROXY_HEAD) SectionTitle("Адрес проверки")
-        if (s.pingMethod == PingMethod.PROXY_GET || s.pingMethod == PingMethod.PROXY_HEAD) Group {
+        if (method == PingMethod.PROXY_GET || method == PingMethod.PROXY_HEAD) SectionTitle("Адрес проверки")
+        if (method == PingMethod.PROXY_GET || method == PingMethod.PROXY_HEAD) Group {
             Segmented(
                 listOf(
                     "https://www.gstatic.com/generate_204" to "Google",
                     "https://cp.cloudflare.com/generate_204" to "Cloudflare",
                     "https://www.apple.com/library/test/success.html" to "Apple",
                 ),
-                s.pingUrl, { v -> set { it.copy(pingUrl = v) } },
+                s.pingUrlOf(core), { v -> set { it.withPing(core, url = v) } },
             )
         }
-        SectionTitle("Журнал ядра")
+        SectionTitle("Проверка блокировок")
         Group {
-            Segmented(listOf("none" to "Выкл", "error" to "Ошибки", "warning" to "Важное", "info" to "Всё", "debug" to "Debug"), s.logLevel, { v -> set { it.copy(logLevel = v) } })
+            ToggleRow(
+                "Проверять недоступные серверы",
+                "Если сервер не пингуется, Ghostly стучится к нему напрямую и пишет причину: блок IP, обрыв TLS (DPI) или заморозка ТСПУ после ~16 КБ",
+                s.blockCheck, Icons.Rounded.Shield,
+            ) { v -> set { it.copy(blockCheck = v) } }
+        }
+        SectionTitle("Журнал · ${coreName(core)}")
+        Group {
+            Segmented(listOf("none" to "Выкл", "error" to "Ошибки", "warning" to "Важное", "info" to "Всё", "debug" to "Debug"), s.logLevelOf(core), { v -> set { it.withLogLevel(core, v) } })
+            SettingRow("Открыть журнал", "Что ядро писало при последнем запуске — посмотреть, скопировать, отправить", Icons.Rounded.Code, onClick = { open(Page.LOGS) }) { Chevron() }
         }
         SectionTitle("Сброс")
         Group {
@@ -699,8 +726,8 @@ private fun AboutPage(controller: GhostlyController, contentPadding: PaddingValu
         Group {
             SettingRow("Ядро", controller.backend.coreVersion(), Icons.Rounded.Speed)
             SettingRow(
-                "Логи mihomo", "Скопировать журнал последнего запуска ядра", Icons.Rounded.ContentCopy,
-                onClick = { controller.haptic(); controller.copyMihomoLogs() },
+                "Журнал ядра", "Скопировать журнал последнего запуска для поддержки", Icons.Rounded.ContentCopy,
+                onClick = { controller.haptic(); controller.exportLogs(controller.settings.value.core, share = false) },
             ) { Chevron() }
             if (controller.platform.updateAsset != null) {
                 val last by controller.updater.lastCheck.collectAsState()
@@ -718,6 +745,115 @@ private fun AboutPage(controller: GhostlyController, contentPadding: PaddingValu
     }
 }
 
+
+private fun coreName(core: CoreType) = if (core == CoreType.MIHOMO) "mihomo" else "Xray"
+
+// ============================================================================ haptics
+
+/** Strength of the vibration: motors differ a lot, so the user tunes it; lifting the finger plays a sample. */
+@Composable
+private fun HapticStrength(controller: GhostlyController, value: Float, onChange: (Float) -> Unit) {
+    val c = Ghost.colors
+    var v by remember(value) { mutableStateOf(value) }
+    Column(Modifier.padding(start = 6.dp, end = 6.dp, bottom = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Сила", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            Text(
+                when {
+                    v < 0.25f -> "едва заметно"
+                    v < 0.5f -> "мягко"
+                    v <= 0.7f -> "как в системе"
+                    v < 0.9f -> "ощутимо"
+                    else -> "максимум"
+                },
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        androidx.compose.material3.Slider(
+            value = v,
+            onValueChange = { v = it },
+            onValueChangeFinished = {
+                onChange(v)
+                controller.platform.haptic(app.ghostly.core.vpn.Haptic.HEAVY, v)
+            },
+            colors = androidx.compose.material3.SliderDefaults.colors(
+                thumbColor = c.accent, activeTrackColor = c.accent, inactiveTrackColor = c.ink3.copy(alpha = 0.25f),
+            ),
+        )
+        Text("Если отклик почти не чувствуется, двигай вправо: верхняя часть шкалы включает сильные импульсы", style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+// ============================================================================ logs
+
+/** The core's log of the last run: coloured by level, refreshed live, copy / share for support. */
+@Composable
+private fun LogsPage(controller: GhostlyController, contentPadding: PaddingValues, back: () -> Unit) {
+    val c = Ghost.colors
+    val s by controller.settings.collectAsState()
+    var core by remember { mutableStateOf(s.core) }
+    var onlyErrors by remember { mutableStateOf(false) }
+    var text by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(core) {
+        text = null
+        while (true) {
+            text = controller.coreLogs(core) ?: ""
+            kotlinx.coroutines.delay(2000)
+        }
+    }
+    PageScaffold("Журнал ядра", contentPadding, back) {
+        Group {
+            Segmented(listOf(CoreType.XRAY to "Xray", CoreType.MIHOMO to "mihomo"), core, { core = it })
+            ToggleRow("Только ошибки и предупреждения", null, onlyErrors, Icons.Rounded.Block) { onlyErrors = it }
+            SettingRow("Скопировать", "С версией приложения и устройства — для поддержки", Icons.Rounded.ContentCopy, onClick = { controller.haptic(); controller.exportLogs(core, share = false) }) { Chevron() }
+            if (!controller.platform.isDesktop) {
+                SettingRow("Отправить", "В Telegram или куда удобно", Icons.Rounded.Language, onClick = { controller.haptic(); controller.exportLogs(core, share = true) }) { Chevron() }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        val lines = text?.lines()?.filter { it.isNotBlank() }.orEmpty()
+            .let { all -> if (onlyErrors) all.filter { logLevel(it) >= 2 } else all }
+            .takeLast(400)
+        Group {
+            when {
+                text == null -> Text("Загружаю…", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(8.dp))
+                lines.isEmpty() -> Text(
+                    if (s.logLevelOf(core) == "none") "Журнал выключен — выбери уровень в «Для продвинутых»."
+                    else "Пусто. Подключись на ядре ${coreName(core)}, и здесь появятся его сообщения.",
+                    style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(8.dp),
+                )
+                else -> androidx.compose.foundation.text.selection.SelectionContainer {
+                    Column(Modifier.padding(vertical = 6.dp)) {
+                        lines.forEach { line ->
+                            Text(
+                                line,
+                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 14.sp),
+                                color = when (logLevel(line)) {
+                                    3 -> c.bad
+                                    2 -> c.warn
+                                    0 -> c.ink3
+                                    else -> c.ink2
+                                },
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 0 debug · 1 info · 2 warning · 3 error — Xray writes [Warning], mihomo level=warning / WRN. */
+private fun logLevel(line: String): Int {
+    val l = line.lowercase()
+    return when {
+        "[error]" in l || "level=error" in l || " err " in l || "failed" in l || "fatal" in l || "panic" in l -> 3
+        "[warning]" in l || "level=warning" in l || " wrn " in l || "[warn" in l -> 2
+        "[debug]" in l || "level=debug" in l || " dbg " in l -> 0
+        else -> 1
+    }
+}
 
 /**
  * The screen under the finger during a predictive back gesture: shrinks, slides right, gets rounded

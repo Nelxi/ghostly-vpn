@@ -64,13 +64,17 @@ object XrayConfigBuilder {
     const val DNS_OUT = "dns-out"
     private const val FRAGMENT = "fragment"
 
-    fun build(server: Server, settings: AppSettings, ingress: Ingress): JsonObject {
+    /** [errorLog]: a file for the core's log (Android, where the core has no stdout to read). */
+    fun build(server: Server, settings: AppSettings, ingress: Ingress, errorLog: String? = null): JsonObject {
         val base = server.config ?: template(server, settings)
         val cfg = base.toMutableMap()
         cfg.remove("remarks")
         cfg.remove("meta")
 
-        cfg["log"] = buildJsonObject { put("loglevel", settings.logLevel) }
+        cfg["log"] = buildJsonObject {
+            put("loglevel", settings.logLevel)
+            if (errorLog != null) { put("error", errorLog); put("access", "none") }
+        }
         cfg["inbounds"] = inbounds(ingress, settings)
 
         var outbounds = (cfg["outbounds"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.map { stripMeta(it) }

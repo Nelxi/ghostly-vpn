@@ -79,6 +79,10 @@ class GhostlyVpnService : VpnService() {
         serverName = request.server.name
         shutdownCore()
 
+        // A fresh log per run: the core appends to it, support gets only this attempt.
+        runCatching { AndroidVpn.logFile().apply { parentFile?.mkdirs() }.writeText("") }
+        AndroidVpn.log("start · ${request.server.name} · ${request.server.protocol}/${request.server.transport ?: "tcp"}/${request.server.security ?: "none"}")
+
         try {
             AndroidVpn.ensureCore()
             val settings = request.settings
@@ -112,7 +116,7 @@ class GhostlyVpnService : VpnService() {
                 proxy = if (settings.localProxy) XrayConfigBuilder.localProxy(settings) else null,
                 appPort = appPort,
             )
-            val config = XrayConfigBuilder.build(request.server, settings, ingress)
+            val config = XrayConfigBuilder.build(request.server, settings, ingress, AndroidVpn.logFile().absolutePath)
             serviceTags = (config["outbounds"] as? kotlinx.serialization.json.JsonArray).orEmpty()
                 .mapNotNull { it as? JsonObject }
                 .filter { (it["protocol"] as? kotlinx.serialization.json.JsonPrimitive)?.content in setOf("freedom", "blackhole", "dns") }
@@ -131,6 +135,7 @@ class GhostlyVpnService : VpnService() {
             startStats()
         } catch (e: Throwable) {
             Log.e(TAG, "start failed", e)
+            AndroidVpn.log("start failed: ${e.message ?: e::class.simpleName}")
             shutdownCore()
             AndroidVpn.mutableState.value = VpnState.Failed(humanError(e))
             ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
@@ -224,6 +229,7 @@ class GhostlyVpnService : VpnService() {
         override fun shutdown(): Long = 0
         override fun onEmitStatus(code: Long, message: String?): Long {
             Log.i(TAG, "core: $message")
+            if (!message.isNullOrBlank()) AndroidVpn.log("core: $message")
             return 0
         }
     }

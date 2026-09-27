@@ -121,12 +121,34 @@ data class AppSettings(
     val autoCheckUpdates: Boolean = true,
     /** Download and install a found update by itself (desktop: silent + relaunch; Android: opens the installer). */
     val autoInstallUpdates: Boolean = true,
+    // Ping and log settings are kept per core: [pingUrl]/[pingMethod]/[logLevel] are Xray's.
     val pingUrl: String = "https://www.gstatic.com/generate_204",
     val pingMethod: PingMethod = PingMethod.PROXY_GET,
     val logLevel: String = "warning",
+    val mihomoPingUrl: String = "https://www.gstatic.com/generate_204",
+    val mihomoPingMethod: PingMethod = PingMethod.PROXY_GET,
+    val mihomoLogLevel: String = "warning",
+    /** A server that doesn't answer the ping gets a direct check: is its IP blocked, or does the TSPU cut it at ~16 KB. */
+    val blockCheck: Boolean = true,
     // --- look & feel
     val accent: ThemeAccent = ThemeAccent.GHOST,
     val haptics: Boolean = true,
+    /** 0..1: how strong the vibration is (motors differ a lot between phones). */
+    val hapticStrength: Float = 0.6f,
+    /** Android 12+: take the accent from the wallpaper (Material You / Monet) instead of [accent]. */
+    val monet: Boolean = false,
     val reduceMotion: Boolean = false,
     val language: String = "system",
-)
+) {
+
+    fun pingMethodOf(core: CoreType) = if (core == CoreType.MIHOMO) mihomoPingMethod else pingMethod
+    fun pingUrlOf(core: CoreType) = if (core == CoreType.MIHOMO) mihomoPingUrl else pingUrl
+    fun logLevelOf(core: CoreType) = if (core == CoreType.MIHOMO) mihomoLogLevel else logLevel
+
+    fun withPing(core: CoreType, method: PingMethod? = null, url: String? = null) =
+        if (core == CoreType.MIHOMO) copy(mihomoPingMethod = method ?: mihomoPingMethod, mihomoPingUrl = url ?: mihomoPingUrl)
+        else copy(pingMethod = method ?: pingMethod, pingUrl = url ?: pingUrl)
+
+    fun withLogLevel(core: CoreType, level: String) =
+        if (core == CoreType.MIHOMO) copy(mihomoLogLevel = level) else copy(logLevel = level)
+}

@@ -94,19 +94,30 @@ class GhostlyController(
     val design = app.ghostly.core.design.RemoteDesign(store, "GhostlyVPN/${platform.appVersion} (${platform.os})")
 
     /** Proxy groups (selectors) of the running mihomo core. */
-    val mihomoGroups = app.ghostly.core.mihomo.MihomoGroups(backend as? app.ghostly.core.mihomo.DualCoreBackend, scope) { _settings.value.pingUrl }
+    val mihomoGroups = app.ghostly.core.mihomo.MihomoGroups(backend as? app.ghostly.core.mihomo.DualCoreBackend, scope) { _settings.value.mihomoPingUrl }
 
     /** App self-update (our server first, GitHub mirror), verified by SHA-256. */
     val updater = app.ghostly.core.update.Updater(platform) { v -> v == dismissedUpdate }
 
-    /** Copies the mihomo core's log of the last run to the clipboard (for a support message). */
-    fun copyMihomoLogs() {
+    /** The log of the last run of [core] (Xray or mihomo), newest lines last; null when empty. */
+    suspend fun coreLogs(core: app.ghostly.core.model.CoreType): String? =
+        (backend as? app.ghostly.core.mihomo.DualCoreBackend)?.coreLogs(core) ?: backend.coreLogs()
+
+    /** Copies (or shares) the core's log for a support message, headed with what support asks first. */
+    fun exportLogs(core: app.ghostly.core.model.CoreType, share: Boolean) {
         scope.launch(Dispatchers.IO) {
-            val logs = (backend as? app.ghostly.core.mihomo.DualCoreBackend)?.mihomo?.coreLogs()
-            if (logs == null) _events.emit("Журнал пуст — сначала попробуй подключиться с ядром mihomo")
+            val name = if (core == app.ghostly.core.model.CoreType.MIHOMO) "mihomo" else "Xray"
+            val logs = coreLogs(core)
+            if (logs == null) {
+                _events.emit("Журнал $name пуст — сначала попробуй подключиться на этом ядре")
+                return@launch
+            }
+            val head = "Ghostly ${platform.appVersion} · ${platform.os} ${platform.osVersion} · ${platform.deviceModel}\n" +
+                "Ядро: $name · ${backend.coreVersion()}\n\n"
+            if (share) platform.share(head + logs)
             else {
-                platform.copyToClipboard(logs)
-                _events.emit("Журнал mihomo скопирован — вставь его в чат поддержки")
+                platform.copyToClipboard(head + logs)
+                _events.emit("Журнал $name скопирован — вставь его в чат поддержки")
             }
         }
     }
@@ -148,7 +159,7 @@ class GhostlyController(
         }
         (backend as? app.ghostly.core.mihomo.DualCoreBackend)?.profileOf = ::profileOf
         (backend as? app.ghostly.core.mihomo.DualCoreBackend)?.picksOf = { id -> _mihomoPicks.value[id] ?: emptyMap() }
-        app.ghostly.core.vpn.Probe.method = _settings.value.pingMethod
+        app.ghostly.core.vpn.Probe.method = _settings.value.let { it.pingMethodOf(it.core) }
         // A kill switch left engaged by a crash must never keep the internet blocked.
         platform.killSwitch?.takeIf { it.engaged }?.let { ks -> scope.launch(Dispatchers.IO) { ks.release() } }
         // Local proxy credentials: ghostly_xxxxxx + a random password, generated once.
@@ -592,7 +603,7 @@ class GhostlyController(
         val targets = servers.filter { !it.isAuto && it.id !in _pinging.value }
         if (targets.isEmpty()) return null
         _pinging.update { it + targets.map { s -> s.id } }
-        val method = _settings.value.pingMethod
+        val method = _settings.value.let { it.pingMethodOf(it.core) }
         if (method == app.ghostly.core.model.PingMethod.TCP || method == app.ghostly.core.model.PingMethod.ICMP) {
             return scope.launch(Dispatchers.IO) { pingDirect(targets, method) }
         }
@@ -609,13 +620,36 @@ class GhostlyController(
                 }
             }.awaitAll()
             runCatching {
-                backend.pingMany(targets, _settings.value.pingUrl) { id, ms ->
-                    _pings.update { it + (id to Ping(ms, now())) }
-                    _pinging.update { it - id }
-                }
+                backend.pingMany(targets, _settings.value.let { it.pingUrlOf(it.core) }) { id, ms -> pinged(id, ms) }
             }
             _pinging.update { it - targets.map { s -> s.id }.toSet() }
             saveUi()
+        }
+    }
+
+    private val blockChecking = MutableStateFlow<Set<String>>(emptySet())
+
+    /**
+     * A final ping result. A server that doesn't answer gets a direct check (outside the tunnel): is
+     * its IP blocked, is TLS cut by SNI, or does the TSPU freeze it after ~16 KB — shown instead of «нет».
+     * Skipped while connected through the tunnel on platforms where the app's sockets would go into it.
+     */
+    private fun pinged(id: String, ms: Long) {
+        _pings.update { it + (id to Ping(ms, now())) }
+        _pinging.update { it - id }
+        if (ms > 0 || !_settings.value.blockCheck) return
+        val target = server(id)?.let { app.ghostly.core.vpn.BlockCheck.target(it) } ?: return
+        if (backend.state.value is VpnState.Connected && !backend.directProbesBypassTunnel) return
+        var fresh = false
+        blockChecking.update { fresh = id !in it; it + id }
+        if (!fresh) return
+        scope.launch(Dispatchers.IO) {
+            try {
+                val verdict = platform.blockCheck(target) ?: return@launch
+                _pings.update { m -> m[id]?.takeIf { !it.ok }?.let { m + (id to it.copy(block = verdict)) } ?: m }
+            } finally {
+                blockChecking.update { it - id }
+            }
         }
     }
 
@@ -636,16 +670,12 @@ class GhostlyController(
                         if (method == app.ghostly.core.model.PingMethod.ICMP) platform.icmpPing(s.host!!, 2500)
                         else platform.tcpPing(s.host!!, s.port, 2500)
                     }
-                    _pings.update { it + (s.id to Ping(ms, now())) }
-                    _pinging.update { it - s.id }
+                    pinged(s.id, ms)
                 }
             }
             if (viaCore.isNotEmpty()) launch {
                 runCatching {
-                    backend.pingMany(viaCore, _settings.value.pingUrl) { id, ms ->
-                        _pings.update { it + (id to Ping(ms, now())) }
-                        _pinging.update { it - id }
-                    }
+                    backend.pingMany(viaCore, _settings.value.let { it.pingUrlOf(it.core) }) { id, ms -> pinged(id, ms) }
                 }
             }
         }
@@ -778,7 +808,7 @@ class GhostlyController(
                 val s = _settings.value
                 val cur = selectedServer()
                 if (s.smartGuard && cur != null) {
-                    val ms = runCatching { backend.healthCheck(s.pingUrl) }.getOrDefault(-1L)
+                    val ms = runCatching { backend.healthCheck(s.pingUrlOf(s.core)) }.getOrDefault(-1L)
                     if (ms > 0) {
                         fails = 0
                         _pings.update { it + (cur.id to Ping(ms, now())) }
@@ -918,7 +948,7 @@ class GhostlyController(
         val after = transform(before)
         if (after == before) return
         _settings.value = after
-        app.ghostly.core.vpn.Probe.method = after.pingMethod
+        app.ghostly.core.vpn.Probe.method = after.pingMethodOf(after.core)
         store.save(SETTINGS, AppSettings.serializer(), after)
         if (before.startOnBoot != after.startOnBoot) runCatching { platform.setStartOnBoot(after.startOnBoot) }
         // Providers send another format to mihomo (Clash YAML with groups): fetch subscriptions again.
@@ -938,10 +968,13 @@ class GhostlyController(
     private fun tunnelAffecting(s: AppSettings) = s.copy(
         accent = AppSettings().accent, haptics = true, reduceMotion = false, language = "",
         autoUpdateSubs = true, autoConnect = false, startOnBoot = false, pingUrl = "",
+        hapticStrength = 0f, monet = false, blockCheck = false,
+        pingMethod = app.ghostly.core.model.PingMethod.PROXY_GET, mihomoPingMethod = app.ghostly.core.model.PingMethod.PROXY_GET,
     )
 
     fun haptic(kind: app.ghostly.core.vpn.Haptic = app.ghostly.core.vpn.Haptic.CLICK) {
-        if (_settings.value.haptics) platform.haptic(kind)
+        val s = _settings.value
+        if (s.haptics) platform.haptic(kind, s.hapticStrength)
     }
 
     fun markOnboarded() {
