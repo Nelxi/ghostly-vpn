@@ -64,6 +64,12 @@ object XrayConfigBuilder {
     const val DIRECT = "direct"
     const val BLOCK = "block"
     const val DNS_OUT = "dns-out"
+
+    /** Ghostly's server domains with their addresses (see [dns]). */
+    val OWN_HOSTS = mapOf(
+        "srv.ghostlinknex.online" to "78.17.1.122",
+        "de.ghostlinknex.online" to "179.254.127.78",
+    )
     private const val FRAGMENT = "fragment"
 
     /** [errorLog]: a file for the core's log (Android, where the core has no stdout to read). */
@@ -350,6 +356,11 @@ object XrayConfigBuilder {
             src["servers"] = JsonArray(keep + JsonPrimitive(chosen ?: "https://1.1.1.1/dns-query") + JsonPrimitive("8.8.8.8"))
         }
         src["queryStrategy"] = JsonPrimitive(if (settings.ipv6) "UseIP" else "UseIPv4")
+        // Ghostly's own servers resolve without any DNS: the TSPU answering NXDOMAIN for our domains (or the
+        // ISP resolver being spoofed) must not stop the connect. The provider's own hosts win.
+        val hosts = (src["hosts"] as? JsonObject)?.toMutableMap() ?: mutableMapOf()
+        OWN_HOSTS.forEach { (host, ip) -> if (host !in hosts) hosts[host] = JsonPrimitive(ip) }
+        src["hosts"] = JsonObject(hosts)
         return JsonObject(src)
     }
 
