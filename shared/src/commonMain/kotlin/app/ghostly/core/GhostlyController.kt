@@ -196,7 +196,7 @@ class GhostlyController(
                 if (s.autoCheckUpdates) {
                     val offer = runCatching { updater.check() }.getOrNull()
                     // Hands-off updates: fetch, verify SHA-256, install (desktop relaunches and reconnects).
-                    if (offer != null && s.autoInstallUpdates && platform.canAutoInstall()) {
+                    if (offer != null && s.autoInstallUpdates && platform.canAutoInstall() && !updater.gaveUp(offer.version)) {
                         _events.emit("Вышла Ghostly ${offer.version} — скачиваю и ставлю сама ♡")
                         runCatching { updater.install(offer) }
                     }

@@ -1,5 +1,7 @@
 package app.ghostly.ui.components
 
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.draw.drawBehind
@@ -330,19 +332,29 @@ fun Hairline(modifier: Modifier = Modifier) {
  * the platform's blurred DropShadowPainter and the shape itself is cut out of it (ClipOp.Difference).
  * Three layers: a dense rim at the edge, a soft mid shadow, a wide heavy tail below.
  */
-fun Modifier.outerShadow(shape: Shape, weight: Float = 1f): Modifier = composed {
-    val layers = remember(shape, weight) {
-        listOf(
-            // no hard rim: soft layers that fade out gradually
-            androidx.compose.ui.graphics.shadow.Shadow(radius = 10.dp, color = Color.Black.copy(alpha = (0.5f * weight).coerceAtMost(0.6f)), offset = androidx.compose.ui.unit.DpOffset(0.dp, 2.dp)),
-            androidx.compose.ui.graphics.shadow.Shadow(radius = 22.dp, color = Color.Black.copy(alpha = (0.45f * weight).coerceAtMost(0.55f)), offset = androidx.compose.ui.unit.DpOffset(0.dp, 8.dp)),
-            androidx.compose.ui.graphics.shadow.Shadow(radius = 44.dp, color = Color.Black.copy(alpha = (0.5f * weight).coerceAtMost(0.6f)), offset = androidx.compose.ui.unit.DpOffset(0.dp, 18.dp)),
-        ).map { androidx.compose.ui.graphics.shadow.DropShadowPainter(shape, it) }
+fun Modifier.outerShadow(shape: Shape, weight: Float = 1f): Modifier = drawBehind {
+    // Blur-free soft shadow: each layer is the shape grown step by step with a falling alpha, so the sum
+    // fades smoothly like a gaussian. Pure geometry, no cached blur bitmaps: stable on every device
+    // (the blurred painter flickered on Android while it re-rendered its cache).
+    val cut = androidx.compose.ui.graphics.Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawBehind)) }
+    clipPath(cut, androidx.compose.ui.graphics.ClipOp.Difference) {
+        softLayer(shape, radius = 10.dp.toPx(), dy = 2.dp.toPx(), alpha = 0.5f * weight)
+        softLayer(shape, radius = 22.dp.toPx(), dy = 8.dp.toPx(), alpha = 0.45f * weight)
+        softLayer(shape, radius = 44.dp.toPx(), dy = 18.dp.toPx(), alpha = 0.5f * weight)
     }
-    drawBehind {
-        val cut = androidx.compose.ui.graphics.Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawBehind)) }
-        clipPath(cut, androidx.compose.ui.graphics.ClipOp.Difference) {
-            layers.forEach { with(it) { draw(size) } }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.softLayer(shape: Shape, radius: Float, dy: Float, alpha: Float) {
+    val steps = 14
+    for (i in steps downTo 1) {
+        val k = i.toFloat() / steps
+        val grow = radius * k
+        // bell-ish falloff: dense near the edge, a long faint tail
+        val a = (alpha.coerceAtMost(0.95f) * (1f - k) * (1f - k) * 2.2f / steps).coerceIn(0f, 1f)
+        if (a <= 0.001f) continue
+        val outline = shape.createOutline(Size(size.width + grow * 2, size.height + grow * 2), layoutDirection, this)
+        translate(-grow, -grow + dy * k) {
+            drawOutline(outline, Color.Black.copy(alpha = a))
         }
     }
 }

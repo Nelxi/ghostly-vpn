@@ -34,6 +34,7 @@ class GhostlyApplication : Application() {
         }
         AndroidVpn.init(this)
         app.ghostly.vpn.service.AndroidMihomo.init(this)
+        platform.preloadSounds()
     }
 
     private fun isMihomoProcess(): Boolean {
@@ -192,7 +193,9 @@ class AndroidPlatform(private val context: Context) : PlatformInfo {
     private val sounds: Pair<android.media.SoundPool, Map<Haptic, List<Int>>> by lazy {
         val pool = android.media.SoundPool.Builder().setMaxStreams(8).setAudioAttributes(
             android.media.AudioAttributes.Builder()
-                .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                // USAGE_GAME plays on the media stream: the "notification/system" stream the sonification
+                // usage went to is silent or very low on many phones, so the sounds were never heard.
+                .setUsage(android.media.AudioAttributes.USAGE_GAME)
                 .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build(),
         ).build()
@@ -204,6 +207,9 @@ class AndroidPlatform(private val context: Context) : PlatformInfo {
             Haptic.ERROR to load(R.raw.ui_error_0, R.raw.ui_error_1),
         )
     }
+
+    /** SoundPool loads asynchronously: load at start so the first taps aren't silent. */
+    fun preloadSounds() { Thread { runCatching { sounds } }.apply { isDaemon = true }.start() }
 
     override fun playSound(kind: Haptic, volume: Float) {
         val (pool, ids) = sounds

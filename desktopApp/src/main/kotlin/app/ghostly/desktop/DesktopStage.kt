@@ -297,7 +297,7 @@ class DesktopStage(dataDir: String) : StageSource {
             }
             // Dark wins over light: a raised baseline, and only real aggression pulls the stage bright.
             val darkTarget = (0.25f + s.calm() * 0.6f + (1f - s.treble()) * 0.35f + slow - aggrAvg * 0.45f).coerceIn(0f, 1f)
-            dark = ema(dark, if (s.active()) darkTarget else 0.45f, 5f)
+            dark = ema(dark, if (s.active()) darkTarget else 0f, 5f)  // silence: fade back to the plain look, never a jump
             // Calm songs move calmly: the bass swells slowly and kicks barely jolt the stage.
             bassOut = ema(bassOut, s.bass(), 0.05f + 0.55f * dark)
             beatOut = s.beat() * (1f - 0.7f * dark)

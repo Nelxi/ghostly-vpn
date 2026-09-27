@@ -54,7 +54,7 @@ data class StageAudio(
 ) {
     /** Darkness that may touch the UI: only while music is actually analysed. In silence (or on phones,
      *  where there is no audio analysis) the look stays exactly as without the stage. */
-    val mood: Float get() = if (active) darkness else 0f
+    val mood: Float get() = darkness  // producers fade darkness to 0 in silence, so there is nothing to gate
 }
 
 data class LyricLine(val timeMs: Long, val text: String)

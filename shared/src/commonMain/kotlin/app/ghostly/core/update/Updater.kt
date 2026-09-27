@@ -105,6 +105,12 @@ class Updater(private val platform: PlatformInfo, private val isDismissed: (Stri
         _offer.value = null
     }
 
+    /** Failed downloads/verifications per version, this run: auto-updates give up after two. */
+    private val failures = HashMap<String, Int>()
+
+    /** True when [version] already failed twice: the background updater stops retrying it (no 98% -> 1% loop). */
+    fun gaveUp(version: String): Boolean = (failures[version] ?: 0) >= 2
+
     suspend fun install(offer: UpdateOffer) {
         if (_step.value is UpdateStep.Downloading || _step.value is UpdateStep.Verifying) return
         _step.value = UpdateStep.Downloading(0f)
@@ -116,6 +122,7 @@ class Updater(private val platform: PlatformInfo, private val isDismissed: (Stri
                 _step.value = if (p >= 1f) UpdateStep.Verifying else UpdateStep.Downloading(p)
             }
         } catch (e: Exception) {
+            failures[offer.version] = (failures[offer.version] ?: 0) + 1
             _step.value = UpdateStep.Failed(e.message ?: "Не удалось скачать обновление")
             return
         }

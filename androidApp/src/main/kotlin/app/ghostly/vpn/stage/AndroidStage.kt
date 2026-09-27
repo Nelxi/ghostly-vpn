@@ -183,10 +183,9 @@ class AndroidStage(private val context: Context) : StageSource {
             val playing = _track.value?.playing == true
             energy += ((if (playing) 0.35f else 0f) - energy) * (1f - exp(-dt / 1.5f))
             val breath = energy * (0.75f + 0.25f * kotlin.math.sin(ms / 900.0).toFloat())
-            _audio.value = StageAudio(
-                active = false, bass = breath * 0.5f, melody = breath, vocal = lineVoice(ms), energy = breath,
-                calm = 1f - breath, darkness = 0f, tempo = 0.4f,
-            )
+            // No audio analysis on phones: the stage may not repaint the app (no fake "breathing" of the
+            // aurora or glass); only the ghost's mouth follows the synced lines.
+            _audio.value = StageAudio(active = false, vocal = lineVoice(ms), darkness = 0f, tempo = 0.4f)
             delay(if (playing) 16 else 250)
         }
     }
