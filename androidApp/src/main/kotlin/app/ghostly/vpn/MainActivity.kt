@@ -33,9 +33,6 @@ class MainActivity : ComponentActivity() {
 
     private val notificationsPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
-    /** Stage: Visualizer on the output mix needs RECORD_AUDIO (nothing is recorded). */
-    private val audioPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
@@ -56,8 +53,6 @@ class MainActivity : ComponentActivity() {
             pendingScan = onResult
             qrScan.launch(Intent(this, QrScanActivity::class.java))
         }
-
-        app.platform.stage.requestAudioPermission = { audioPermission.launch(android.Manifest.permission.RECORD_AUDIO) }
 
         setContent { GhostlyApp(app.controller) }
         app.platform.hapticView = java.lang.ref.WeakReference(window.decorView)

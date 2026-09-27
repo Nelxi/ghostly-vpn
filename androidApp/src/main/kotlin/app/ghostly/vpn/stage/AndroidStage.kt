@@ -1,19 +1,15 @@
 package app.ghostly.vpn.stage
 
-import android.Manifest
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.media.MediaMetadata
-import android.media.audiofx.Visualizer
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.SystemClock
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
-import androidx.core.content.ContextCompat
 import app.ghostly.core.stage.LyricLine
 import app.ghostly.core.stage.Lyrics
 import app.ghostly.core.stage.NowPlaying
@@ -34,9 +30,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.exp
-import kotlin.math.hypot
 import kotlin.math.max
-import kotlin.math.sqrt
 
 /**
  * Needed only so Android lets us read the media sessions of other apps (which track plays where);
@@ -49,9 +43,7 @@ class GhostlyMediaListener : NotificationListenerService()
  * - now playing from the system media sessions (needs "notification access" for Ghostly); Android
  *   reports the position with its update time and speed, so the clock is exact without polling tricks;
  * - the same lrclib.net lines as on Windows ([Lyrics]);
- * - audio from the global output mix through [Visualizer] (needs the microphone permission — Android's
- *   rule for analysing output; nothing is recorded). Without it the ghost still sings, the stage just
- *   doesn't pulse.
+ * - no audio analysis (that would need the microphone permission): the mouth follows the synced lines.
  */
 class AndroidStage(private val context: Context) : StageSource {
 
@@ -65,9 +57,6 @@ class AndroidStage(private val context: Context) : StageSource {
     private val _setup = MutableStateFlow<String?>(null)
     override val setupNeeded: StateFlow<String?> = _setup.asStateFlow()
     override val whereLabel = "на телефоне"
-
-    /** Set by MainActivity: asks for the microphone permission (Visualizer on the output mix). */
-    @Volatile var requestAudioPermission: (() -> Unit)? = null
 
     @Volatile private var controller: MediaController? = null
 
@@ -89,31 +78,31 @@ class AndroidStage(private val context: Context) : StageSource {
     override fun stop() {
         jobs.forEach { it.cancel() }
         jobs = emptyList()
-        releaseVisualizer()
         controller = null
         _audio.value = StageAudio()
     }
 
     override fun requestSetup() {
         when {
+            // Android 13+ greys the switch out for apps installed outside a store ("restricted setting");
+            // the second tap opens App info, where the ⋮ menu has "Allow restricted settings".
             !hasListenerAccess() -> context.startActivity(
-                Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                (if (setupTaps++ % 2 == 0) Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                else Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", context.packageName, null)))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             )
-            !hasAudioPermission() -> requestAudioPermission?.invoke()
         }
     }
+
+    private var setupTaps = 0
 
     private fun hasListenerAccess(): Boolean =
         (Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners") ?: "")
             .contains(ComponentName(context, GhostlyMediaListener::class.java).flattenToString())
 
-    private fun hasAudioPermission() =
-        ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-
     private fun updateSetup() {
         _setup.value = when {
-            !hasListenerAccess() -> "Разрешите Ghostly доступ к уведомлениям — так он видит, какой трек играет (сами уведомления не читаются)"
-            !hasAudioPermission() -> "Разрешите «Микрофон» — Android так называет доступ к анализу звука, который играет. Ничего не записывается"
+            !hasListenerAccess() -> "Разрешите Ghostly доступ к уведомлениям — так он видит, какой трек играет (сами уведомления не читаются). Если переключатель серый: нажмите ещё раз → ⋮ → «Разрешить ограниченные настройки»"
             else -> null
         }
     }
@@ -147,7 +136,6 @@ class AndroidStage(private val context: Context) : StageSource {
                     _track.value = _track.value?.copy(playing = playing, durationMs = dur)
                 }
             }
-            if (hasAudioPermission() && visualizer == null) startVisualizer()
             delay(if (c != null) 700 else 2500)
         }
     }
@@ -177,116 +165,29 @@ class AndroidStage(private val context: Context) : StageSource {
         try { if (c.responseCode in 200..299) c.inputStream.bufferedReader().readText() else null } finally { c.disconnect() }
     }.getOrNull()
 
-    // ------------------------------------------------------------------ audio
+    // ------------------------------------------------------------------ motion
 
-    private var visualizer: Visualizer? = null
-    /** Latest raw bands from the FFT callback: bass, low-mid (melody), vocal, treble, overall. */
-    private val raw = FloatArray(5)
-    @Volatile private var rawAt = 0L
-
-    private fun startVisualizer() {
-        runCatching {
-            val v = Visualizer(0)
-            v.captureSize = Visualizer.getCaptureSizeRange()[1].coerceAtMost(1024)
-            v.setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
-                override fun onWaveFormDataCapture(vis: Visualizer?, waveform: ByteArray?, samplingRate: Int) {}
-                override fun onFftDataCapture(vis: Visualizer?, fft: ByteArray?, samplingRate: Int) {
-                    if (fft != null) bands(fft, samplingRate / 1000f)
-                }
-            }, Visualizer.getMaxCaptureRate(), false, true)
-            v.enabled = true
-            visualizer = v
-        }.onFailure { visualizer = null }
-    }
-
-    private fun releaseVisualizer() {
-        runCatching { visualizer?.enabled = false; visualizer?.release() }
-        visualizer = null
-    }
-
-    private fun bands(fft: ByteArray, sampleRate: Float) {
-        val n = fft.size / 2
-        val hzPerBin = sampleRate / fft.size
-        var bass = 0f; var low = 0f; var voc = 0f; var tre = 0f; var all = 0f
-        for (k in 1 until n) {
-            val m = hypot(fft[2 * k].toFloat(), fft[2 * k + 1].toFloat())
-            val f = k * hzPerBin
-            all += m
-            when {
-                f < 160f -> bass += m
-                f < 1000f -> low += m
-                f < 3400f -> voc += m
-                else -> tre += m
-            }
-        }
-        synchronized(raw) { raw[0] = bass; raw[1] = low; raw[2] = voc; raw[3] = tre; raw[4] = all }
-        rawAt = SystemClock.elapsedRealtime()
-    }
-
-    /** Levels normalised by a slowly decaying peak (phones play at any volume), then the same mood layer as on Windows. */
+    /**
+     * No audio analysis on Android: it needs the microphone permission, and a VPN app asking for the
+     * microphone is exactly what Play Protect flags. The ghost moves from what the session and the
+     * lines tell us: the mouth follows the synced lines, the stage breathes gently while music plays.
+     */
     private suspend fun analyse() {
-        val peak = FloatArray(5) { 1f }
-        var bassOut = 0f; var beat = 0f; var bassAvg = 0f
-        var shortE = 0f; var longE = 0f; var dark = 0.35f; var tempo = 0.4f; var aggrAvg = 0f
-        var drop = 0f; var build = 0f; var lastDrop = 0L
-        val beats = ArrayDeque<Long>()
-        var bpm = 0f; var lastBeatAt = 0L
+        var energy = 0f
         var last = System.nanoTime()
         while (kotlinx.coroutines.currentCoroutineContext().isActive) {
             val now = System.nanoTime()
             val dt = ((now - last) / 1e9f).coerceIn(0.001f, 0.2f)
             last = now
-            fun ema(cur: Float, target: Float, tau: Float) = cur + (target - cur) * (1f - exp(-dt / tau))
             val ms = SystemClock.elapsedRealtime()
-            val active = visualizer != null && ms - rawAt < 500 && _track.value?.playing == true
-            val v = FloatArray(5)
-            synchronized(raw) { for (i in 0..4) v[i] = raw[i] }
-            for (i in 0..4) {
-                peak[i] = max(peak[i] * (1f - dt / 8f), v[i]).coerceAtLeast(1f)
-                v[i] = if (active) sqrt((v[i] / peak[i]).coerceIn(0f, 1f)) else 0f
-            }
-            val (b, mel, voc, tre, e) = v.toList()
-
-            // Beat: bass jumping clearly above its own recent average.
-            bassAvg = ema(bassAvg, b, 0.4f)
-            if (active && b > bassAvg * 1.35f + 0.08f && ms - lastBeatAt > 280) {
-                beat = 1f
-                if (lastBeatAt > 0) { beats.addLast(ms - lastBeatAt); if (beats.size > 12) beats.removeFirst() }
-                lastBeatAt = ms
-            }
-            beat = max(0f, beat - dt * 4f)
-            if (beats.size >= 4) {
-                val med = beats.sorted()[beats.size / 2].coerceIn(300, 1500)
-                bpm = 60000f / med
-            }
-            val beatPhase = if (bpm > 0 && lastBeatAt > 0) (((ms - lastBeatAt) * bpm / 60000f) % 1f) else 0f
-
-            shortE = ema(shortE, e, 0.25f)
-            longE = ema(longE, e, 7f)
-            val rising = ((shortE - longE) * 3f).coerceIn(0f, 1f) * (0.5f + 0.5f * tre)
-            build = ema(build, rising, 1.2f)
-            if (active && shortE > 0.42f && shortE > longE * 1.8f + 0.08f && b > 0.45f && ms - lastDrop > 9000) {
-                drop = 1f; lastDrop = ms; build = 0f
-            }
-            drop = max(0f, drop - dt / 3.2f)
-
-            val aggression = (tre * 0.6f + e * 0.4f).coerceIn(0f, 1f)
-            aggrAvg = ema(aggrAvg, aggression, 6f)
-            val calm = (1f - e).coerceIn(0f, 1f)
-            val slow = if (bpm in 1f..95f) 0.35f else 0f
-            val darkTarget = (0.25f + calm * 0.6f + (1f - tre) * 0.35f + slow - aggrAvg * 0.45f).coerceIn(0f, 1f)
-            dark = ema(dark, if (active) darkTarget else 0.45f, 5f)
-            bassOut = ema(bassOut, b, 0.05f + 0.55f * dark)
-            tempo = ema(tempo, if (bpm > 0) ((bpm - 70f) / 100f).coerceIn(0f, 1f) else 0.4f, 3f)
-
-            // No audio access: the lines still say when someone sings — move the mouth to them.
-            val vocal = if (active) voc else lineVoice(ms)
+            val playing = _track.value?.playing == true
+            energy += ((if (playing) 0.35f else 0f) - energy) * (1f - exp(-dt / 1.5f))
+            val breath = energy * (0.75f + 0.25f * kotlin.math.sin(ms / 900.0).toFloat())
             _audio.value = StageAudio(
-                active = active, bass = bassOut, melody = mel, vocal = vocal, treble = tre, energy = e,
-                beat = beat * (1f - 0.7f * dark), bpm = bpm, beatPhase = beatPhase, aggression = aggression,
-                calm = calm, darkness = dark, tempo = tempo, drop = drop, build = build.coerceIn(0f, 1f),
+                active = false, bass = breath * 0.5f, melody = breath, vocal = lineVoice(ms), energy = breath,
+                calm = 1f - breath, darkness = 0.45f, tempo = 0.4f,
             )
-            delay(if (active || _track.value?.playing == true) 16 else 250)
+            delay(if (playing) 16 else 250)
         }
     }
 
