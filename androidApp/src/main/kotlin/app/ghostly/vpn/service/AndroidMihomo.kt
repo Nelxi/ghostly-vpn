@@ -113,6 +113,7 @@ object AndroidMihomo : MihomoCore {
             val intent = Intent(app, MihomoVpnService::class.java)
                 .setAction(MihomoVpnService.ACTION_START)
                 .putExtra(MihomoVpnService.EXTRA_NAME, server.name)
+                .putExtra(MihomoVpnService.EXTRA_SUBSCRIPTION, profile?.name)
                 .putExtra(MihomoVpnService.EXTRA_CONTROLLER, controller)
                 .putExtra(MihomoVpnService.EXTRA_SECRET, secret)
                 .putExtra(MihomoVpnService.EXTRA_MTU, settings.mtu)
@@ -122,7 +123,7 @@ object AndroidMihomo : MihomoCore {
             ContextCompat.startForegroundService(app, intent)
             Unit
         } catch (e: Exception) {
-            mutableState.value = VpnState.Failed("mihomo: ${e.message ?: "не удалось подготовить конфиг"}")
+            mutableState.value = VpnState.Failed("Mihomo: ${e.message ?: "не удалось подготовить конфиг"}")
         }
     }
 
@@ -158,7 +159,7 @@ object AndroidMihomo : MihomoCore {
             }
             MihomoVpnService.STATE_FAILED -> {
                 stopLocal()
-                mutableState.value = VpnState.Failed(intent.getStringExtra(MihomoVpnService.EXTRA_MESSAGE) ?: "mihomo не запустился")
+                mutableState.value = VpnState.Failed(intent.getStringExtra(MihomoVpnService.EXTRA_MESSAGE) ?: "Mihomo не запустился")
             }
             MihomoVpnService.STATE_IDLE -> {
                 stopLocal()
@@ -278,7 +279,7 @@ object AndroidMihomo : MihomoCore {
         return (1..24).map { "abcdefghijkmnpqrstuvwxyz23456789"[rnd.nextInt(32)] }.joinToString("")
     }
 
-    override fun coreVersion(): String = version?.let { "mihomo $it" } ?: "mihomo (Prizrak-Core)"
+    override fun coreVersion(): String = version?.let { "Mihomo $it" } ?: "Mihomo (Prizrak-Core)"
 
     private fun freePort(): Int = java.net.ServerSocket(0).use { it.localPort }
 }

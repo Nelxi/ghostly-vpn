@@ -78,6 +78,31 @@ class ParserTest {
     }
 
     @Test
+    fun remnawaveAnnounceHeader() {
+        val note = "👤 kimberly\n⌛ Осталось: 3"
+        val parsed = SubscriptionParser.parse(reality, mapOf("announce" to "base64:" + Base64.encode(note.encodeToByteArray())), "p")
+        assertEquals(note, parsed.announce)
+        assertEquals("plain note", SubscriptionParser.parse(reality, mapOf("announce" to "plain note"), "p").announce)
+        assertEquals(null, SubscriptionParser.parse(reality, mapOf("announce" to "  "), "p").announce)
+    }
+
+    @Test
+    fun happRenewAndInfoHeaders() {
+        val parsed = SubscriptionParser.parse(reality, mapOf(
+            "sub-expire-button-link" to "https://t.me/wisp_bot",
+            "sub-info-text" to "Скидка 20%",
+            "sub-info-color" to "Green",
+            "sub-info-button-text" to "Купить",
+            "sub-info-button-link" to "https://example.com/pay",
+        ), "p")
+        assertEquals("https://t.me/wisp_bot", parsed.renewUrl)
+        assertEquals(app.ghostly.core.model.ProviderNotice("Скидка 20%", "green", "Купить", "https://example.com/pay"), parsed.notice)
+        val none = SubscriptionParser.parse(reality, mapOf("sub-info-color" to "red"), "p")
+        assertEquals(null, none.notice)
+        assertEquals(null, none.renewUrl)
+    }
+
+    @Test
     fun xrayJsonSubscriptionKeepsProviderRouting() {
         val cfg = """
             [{"remarks":"Auto","outbounds":[{"tag":"a","protocol":"vless","settings":{"vnext":[{"address":"h","port":1,"users":[{"id":"x"}]}]}},
@@ -104,6 +129,17 @@ class ParserTest {
 
         val global = XrayConfigBuilder.build(parsed.servers[0], AppSettings(routingMode = RoutingMode.GLOBAL), Ingress.TunFd(1500))
         assertTrue(global["routing"]!!.jsonObject["rules"]!!.jsonArray.none { it.toString().contains("geoip:ru") })
+        // A balancer is pinged through its first real proxy, even when "direct" is listed first.
+        assertTrue(parsed.servers[0].canPing)
+        val directFirst = SubscriptionParser.serverFromConfig(
+            JsonX.parseToJsonElement(cfg).jsonArray[0].jsonObject.let { c ->
+                val obs = c["outbounds"]!!.jsonArray
+                JsonObject(c + ("outbounds" to JsonArray(listOf(obs.last()) + obs.dropLast(1))))
+            },
+            "p:x",
+        )!!
+        val ping = XrayConfigBuilder.buildPing(directFirst) as JsonObject
+        assertEquals("a", ping["outbounds"]!!.jsonArray[0].jsonObject["tag"]!!.jsonPrimitive.content)
     }
 
     @Test

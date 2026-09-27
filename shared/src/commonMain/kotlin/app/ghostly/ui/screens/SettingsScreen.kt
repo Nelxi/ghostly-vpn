@@ -129,12 +129,12 @@ fun SettingsScreen(controller: GhostlyController, contentPadding: PaddingValues)
     androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
     // Where back leads, fully drawn beneath; the page on top turns into an opaque card that shrinks and slides off.
     if (peek > 0f && page != Page.MAIN) {
-        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().graphicsLayer { alpha = 0.55f + 0.45f * peek }) {
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().graphicsLayer { alpha = 0.8f + 0.2f * peek }) {
             MainSettings(controller, contentPadding) {}
         }
     }
     AnimatedContent(
-        modifier = Modifier.fillMaxSize().predictiveCard(peek, app.ghostly.ui.theme.Ghost.colors.bgRaised),
+        modifier = Modifier.fillMaxSize().predictiveCard(peek, peekBrush()),
         targetState = page,
         transitionSpec = {
             val forward = targetState != Page.MAIN
@@ -200,7 +200,7 @@ private fun MainSettings(controller: GhostlyController, contentPadding: PaddingV
         SectionTitle("Подключение")
         Group {
             SettingRow("Ядро", null, Icons.Rounded.Memory)
-            Segmented(listOf(CoreType.XRAY to "Xray", CoreType.MIHOMO to "mihomo"), s.core, { v -> set { it.copy(core = v) } })
+            Segmented(listOf(CoreType.XRAY to "Xray", CoreType.MIHOMO to "Mihomo"), s.core, { v -> set { it.copy(core = v) } })
             Text(
                 when (s.core) {
                     CoreType.XRAY -> "Рекомендуется. Одна кнопка «Авто», белые списки и умное переключение серверов. Подписки в формате Clash на этом ядре скрыты."
@@ -858,9 +858,10 @@ private fun logLevel(line: String): Int {
 /**
  * The screen under the finger during a predictive back gesture: shrinks, slides right, gets rounded
  * corners, a shadow and an opaque background (screens are transparent over the aurora, so without it
- * the destination beneath couldn't be seen).
+ * the destination beneath couldn't be seen). The background is [peekBrush], a still copy of the
+ * aurora's tint, so the card doesn't turn into a black slab.
  */
-internal fun Modifier.predictiveCard(p: Float, bg: androidx.compose.ui.graphics.Color): Modifier = if (p <= 0f) this else this
+internal fun Modifier.predictiveCard(p: Float, bg: androidx.compose.ui.graphics.Brush): Modifier = if (p <= 0f) this else this
     .graphicsLayer {
         val k = 1f - 0.14f * p
         scaleX = k; scaleY = k
@@ -870,3 +871,16 @@ internal fun Modifier.predictiveCard(p: Float, bg: androidx.compose.ui.graphics.
         clip = true
     }
     .background(bg)
+
+/** Opaque stand-in for the aurora: violet glow on top, the base colour in the middle, a faint glow below. */
+@Composable
+internal fun peekBrush(): androidx.compose.ui.graphics.Brush {
+    val c = app.ghostly.ui.theme.Ghost.colors
+    return androidx.compose.ui.graphics.Brush.verticalGradient(
+        listOf(
+            androidx.compose.ui.graphics.lerp(c.bgRaised, c.accent2, 0.30f),
+            androidx.compose.ui.graphics.lerp(c.bgRaised, c.accent2, 0.12f),
+            androidx.compose.ui.graphics.lerp(c.bgRaised, c.accent2, 0.18f),
+        ),
+    )
+}

@@ -49,15 +49,32 @@ class GhostlyTileService : TileService() {
         }
     }
 
+    /**
+     * Off: "Ghostly". On: the subscription in use as the label, like Prizrak-Box, with the server
+     * (Xray) or the core (Mihomo, where selectors decide the route) underneath.
+     */
     private fun render(state: VpnState) {
         val tile = qsTile ?: return
+        val controller = GhostlyApplication.instance.controller
         tile.state = when (state) {
             is VpnState.Connected -> Tile.STATE_ACTIVE
             else -> Tile.STATE_INACTIVE
         }
+        val server = (state as? VpnState.Connected)?.let { controller.server(it.serverId) }
+        val profile = server?.let { s -> controller.profiles.value.firstOrNull { p -> p.servers.any { it.id == s.id } } }
+        val mihomo = controller.settings.value.core == app.ghostly.core.model.CoreType.MIHOMO
+        tile.label = when {
+            state !is VpnState.Connected -> getString(R.string.app_name)
+            profile?.url != null -> profile.name
+            else -> server?.name ?: getString(R.string.app_name)
+        }
         if (Build.VERSION.SDK_INT >= 29) {
             tile.subtitle = when (state) {
-                is VpnState.Connected -> getString(R.string.tile_on)
+                is VpnState.Connected -> when {
+                    mihomo -> "Mihomo"
+                    profile?.url != null && server != null -> server.name
+                    else -> getString(R.string.tile_on)
+                }
                 VpnState.Connecting -> getString(R.string.notif_connecting)
                 else -> getString(R.string.tile_off)
             }

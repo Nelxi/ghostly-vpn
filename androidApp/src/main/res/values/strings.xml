@@ -3,6 +3,7 @@
     <string name="notif_channel">VPN-подключение</string>
     <string name="notif_connecting">Подключаюсь…</string>
     <string name="notif_disconnect">Отключить</string>
+    <string name="notif_connected">Подключено</string>
     <string name="tile_off">Выключен</string>
     <string name="tile_on">Защищено</string>
 </resources>

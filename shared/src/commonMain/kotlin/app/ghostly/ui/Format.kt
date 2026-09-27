@@ -38,6 +38,35 @@ object Format {
         return "$hours ${plural(hours, "час", "часа", "часов")}"
     }
 
+    /** "обновлена 5 мин назад" — when a subscription was last fetched. */
+    fun updatedAgo(atMs: Long, nowMs: Long): String {
+        if (atMs <= 0) return "ещё не обновлялась"
+        val min = (nowMs - atMs).coerceAtLeast(0) / 60_000
+        return when {
+            min < 1 -> "обновлена только что"
+            min < 60 -> "обновлена $min мин назад"
+            min < 24 * 60 -> "обновлена ${min / 60} ч назад"
+            else -> (min / (24 * 60)).let { d -> "обновлена $d ${plural(d, "день", "дня", "дней")} назад" }
+        }
+    }
+
+    /** "12 октября 2026" for a unix-seconds moment in the given UTC offset. */
+    fun date(epochSec: Long, offsetMin: Int): String {
+        // Days since 1970-01-01 → civil date (H. Hinnant's days_from_civil, inverted).
+        val z = (epochSec + offsetMin * 60L).floorDiv(86_400L) + 719_468
+        val era = z.floorDiv(146_097L)
+        val doe = z - era * 146_097
+        val yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365
+        val doy = doe - (365 * yoe + yoe / 4 - yoe / 100)
+        val mp = (5 * doy + 2) / 153
+        val d = doy - (153 * mp + 2) / 5 + 1
+        val m = if (mp < 10) mp + 3 else mp - 9
+        val y = yoe + era * 400 + if (m <= 2) 1 else 0
+        return "$d ${MONTHS[(m - 1).toInt()]} $y"
+    }
+
+    private val MONTHS = listOf("января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря")
+
     fun plural(n: Long, one: String, few: String, many: String): String {
         val m10 = n % 10
         val m100 = n % 100

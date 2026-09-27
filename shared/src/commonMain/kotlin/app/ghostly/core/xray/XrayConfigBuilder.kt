@@ -59,6 +59,8 @@ sealed interface Ingress {
 object XrayConfigBuilder {
 
     const val PROXY = "proxy"
+    /** Outbounds that reach a remote server; freedom/blackhole/dns ones can't be measured. */
+    private val PING_PROTOCOLS = setOf("vless", "vmess", "trojan", "shadowsocks", "hysteria", "socks", "http", "wireguard")
     const val DIRECT = "direct"
     const val BLOCK = "block"
     const val DNS_OUT = "dns-out"
@@ -107,7 +109,9 @@ object XrayConfigBuilder {
             server.config != null -> {
                 // A balancer config is measured through its main proxy — an estimate, but better than "нет".
                 val all = (server.config["outbounds"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
-                val main = all.firstOrNull { tag(it) == PROXY } ?: all.firstOrNull() ?: return null
+                val main = all.firstOrNull { tag(it) == PROXY }
+                    ?: all.firstOrNull { it["protocol"]?.jsonPrimitive?.contentOrNull in PING_PROTOCOLS }
+                    ?: all.firstOrNull() ?: return null
                 listOf(main) + all.filter { it !== main }
             }
             else -> return null

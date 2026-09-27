@@ -106,7 +106,7 @@ class GhostlyController(
     /** Copies (or shares) the core's log for a support message, headed with what support asks first. */
     fun exportLogs(core: app.ghostly.core.model.CoreType, share: Boolean) {
         scope.launch(Dispatchers.IO) {
-            val name = if (core == app.ghostly.core.model.CoreType.MIHOMO) "mihomo" else "Xray"
+            val name = if (core == app.ghostly.core.model.CoreType.MIHOMO) "Mihomo" else "Xray"
             val logs = coreLogs(core)
             if (logs == null) {
                 _events.emit("Журнал $name пуст — сначала попробуй подключиться на этом ядре")
@@ -239,7 +239,7 @@ class GhostlyController(
     fun import(raw: String, onDone: (Boolean) -> Unit = {}) {
         scope.launch(Dispatchers.IO) {
             val ok = runCatching { importInternal(raw.trim()) }
-                .onFailure { _events.emit("Не получилось добавить: ${it.message ?: it::class.simpleName}") }
+                .onFailure { _events.emit("Не получилось добавить: ${app.ghostly.core.sub.FetchErrors.describe(it)}") }
                 .getOrDefault(false)
             onDone(ok)
         }
@@ -269,6 +269,9 @@ class GhostlyController(
                     info = parsed.info,
                     supportUrl = parsed.supportUrl,
                     webPageUrl = parsed.webPageUrl,
+                    announce = parsed.announce,
+                    renewUrl = parsed.renewUrl,
+                    notice = parsed.notice,
                     updateIntervalHours = parsed.updateIntervalHours ?: 12,
                     updatedAt = now(),
                     servers = parsed.servers,
@@ -278,7 +281,7 @@ class GhostlyController(
                 saveProfiles()
                 if (server(_selected.value) == null) select(profile.servers.first().id)
                 markOnboarded()
-                _events.emit("Подписка «${profile.name}» добавлена · ${profile.servers.size} серверов")
+                _events.emit("Подписка «${profile.name}» добавлена · ${serverCount(profile.servers.size)}")
                 pingAll(profile.id)
                 return true
             } finally {
@@ -293,11 +296,11 @@ class GhostlyController(
                 _events.emit("В профиле нет серверов")
                 return false
             }
-            _profiles.update { it + Profile(id = id, name = parsed.title ?: "Профиль mihomo", servers = parsed.servers, mihomo = parsed.mihomo, updatedAt = now()) }
+            _profiles.update { it + Profile(id = id, name = parsed.title ?: "Профиль Mihomo", servers = parsed.servers, mihomo = parsed.mihomo, updatedAt = now()) }
             saveProfiles()
             if (server(_selected.value) == null) select(parsed.servers.first().id)
             markOnboarded()
-            _events.emit("Профиль mihomo добавлен · ${parsed.servers.size} серверов")
+            _events.emit("Профиль Mihomo добавлен · ${serverCount(parsed.servers.size)}")
             return true
         }
 
@@ -357,7 +360,8 @@ class GhostlyController(
 
     // ------------------------------------------------------------------ profiles
 
-    fun refresh(profileId: String) {
+    /** [manual]: the user pressed "Обновить" and waits for an answer, so success is reported too. */
+    fun refresh(profileId: String, manual: Boolean = false) {
         val profile = _profiles.value.firstOrNull { it.id == profileId } ?: return
         val url = profile.url ?: return
         if (profileId in _refreshing.value) return
@@ -372,6 +376,10 @@ class GhostlyController(
                             info = parsed.info ?: it.info,
                             supportUrl = parsed.supportUrl ?: it.supportUrl,
                             webPageUrl = parsed.webPageUrl ?: it.webPageUrl,
+                            // The note follows the provider: gone from the headers means gone here too.
+                            announce = parsed.announce,
+                            renewUrl = parsed.renewUrl,
+                            notice = parsed.notice,
                             updateIntervalHours = parsed.updateIntervalHours ?: it.updateIntervalHours,
                             updatedAt = now(),
                             servers = parsed.servers,
@@ -381,16 +389,29 @@ class GhostlyController(
                 }
                 saveProfiles()
                 if (_settings.value.core == app.ghostly.core.model.CoreType.MIHOMO && parsed.mihomo == null && parsed.servers.all { it.config != null } && warnedXrayOnly.add(profileId)) {
-                    _events.emit("«${profile.name}»: провайдер отдаёт только формат Xray — на ядре mihomo эта подписка не показывается")
+                    _events.emit("«${profile.name}»: провайдер отдаёт только формат Xray — на ядре Mihomo эта подписка не показывается")
                 }
                 // Selection is id-based (profile id + index), so it survives; fall back if the server vanished.
                 if (server(_selected.value) == null) parsed.servers.firstOrNull()?.let { select(it.id) }
+                if (manual) _events.emit("Подписка «${parsed.title ?: profile.name}» обновлена · ${serverCount(parsed.servers.size)}")
             } catch (e: Exception) {
-                _events.emit("«${profile.name}»: ${e.message ?: "ошибка обновления"}")
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                _events.emit("Не удалось обновить «${profile.name}»: ${app.ghostly.core.sub.FetchErrors.describe(e)}")
             } finally {
                 _refreshing.update { it - profileId }
             }
         }
+    }
+
+    private fun serverCount(n: Int): String {
+        val m10 = n % 10
+        val m100 = n % 100
+        val word = when {
+            m10 == 1 && m100 != 11 -> "сервер"
+            m10 in 2..4 && m100 !in 12..14 -> "сервера"
+            else -> "серверов"
+        }
+        return "$n $word"
     }
 
     /** Profiles already reported as "Xray format only" on mihomo (once per run, not on every auto-refresh). */
@@ -424,8 +445,26 @@ class GhostlyController(
 
     // ------------------------------------------------------------------ selection
 
+    /** Last server picked in each subscription, so switching back to it lands where the user left. */
+    private val lastInProfile = mutableMapOf<String, String>()
+
+    /**
+     * Make [profileId] the active subscription: its last picked server, else its «Авто», else its
+     * first server. Used by the subscription switcher on Home.
+     */
+    fun switchProfile(profileId: String) {
+        val profile = visibleProfiles().firstOrNull { it.id == profileId } ?: return
+        if (profile.servers.any { it.id == _selected.value }) return
+        val target = lastInProfile[profileId]?.takeIf { id -> profile.servers.any { it.id == id } }
+            ?: profile.servers.firstOrNull { it.isAuto }?.id
+            ?: profile.servers.firstOrNull()?.id
+            ?: return
+        select(target)
+    }
+
     fun select(serverId: String?) {
         val previous = _selected.value
+        previous?.let { id -> profileOf(id)?.let { lastInProfile[it.id] = id } }
         _selected.value = serverId
         if (serverId != null && _settings.value.core == app.ghostly.core.model.CoreType.MIHOMO) {
             // Picking a server is also a selector choice — remember it, so reconnects keep it.
@@ -466,8 +505,16 @@ class GhostlyController(
      * The user picked [member] in selector [group] (from the list, running core or not). The choice is
      * saved, applied to the running core when there is one, and the selected server follows it.
      */
-    fun pickGroup(group: String, member: String) {
-        val profile = groupOwner(group) ?: return
+    fun pickGroup(group: String, member: String, profileId: String? = null) {
+        val profile = profileId?.let { id -> visibleProfiles().firstOrNull { it.id == id } } ?: groupOwner(group) ?: return
+        if (activeProfile()?.id != profile.id) {
+            // A selector of another subscription: that subscription becomes the active one
+            // (reconnecting onto it when connected), with this choice kept.
+            val s = profile.servers.firstOrNull { it.name == member }
+            if (s != null) select(s.id) else switchProfile(profile.id)
+            rememberPicks(profile, mapOf(group to member))
+            return
+        }
         rememberPicks(profile, mapOf(group to member))
         // The row on the Home screen follows the pick when it names a server of the profile.
         profile.servers.firstOrNull { it.name == member }?.let { s ->
@@ -477,9 +524,17 @@ class GhostlyController(
         mihomoGroups.select(group, member)
     }
 
+    /** The subscription the core runs: the one holding the selected server, else the first. */
+    private fun activeOf(list: List<Profile>, selected: String?): Profile? =
+        list.firstOrNull { p -> p.servers.any { it.id == selected } } ?: list.firstOrNull()
+
+    /** The active subscription (see [activeOf]); its selectors are the ones drawn and applied. */
+    fun activeProfile(): Profile? = activeOf(visibleProfiles(), _selected.value)
+
     /** The visible profile a selector belongs to: by its groups for Clash profiles, the link profile otherwise. */
     private fun groupOwner(group: String): Profile? {
-        val visible = visibleProfiles()
+        // Same group names ("Авто", "Выбор") can exist in several subscriptions: the active one wins.
+        val visible = visibleProfiles().let { all -> listOfNotNull(activeProfile()) + all.filter { it.id != activeProfile()?.id } }
         visible.firstOrNull { p -> p.mihomo?.let { group in app.ghostly.core.mihomo.MihomoProfiles.groups(it).keys } == true }?.let { return it }
         val links = visible.filter { it.mihomo == null && it.servers.any { s -> s.link != null && s.config == null } }
         return links.firstOrNull { p -> p.servers.any { it.id == _selected.value } } ?: links.firstOrNull()
@@ -489,12 +544,20 @@ class GhostlyController(
      * Selector groups drawn before the core runs (and while it starts): the same groups the running
      * core would report, built from the profiles, with saved choices as `now` and TCP pings as delays.
      */
+    /** Selectors of every subscription (profile id → groups), so each one shows its own before it is active. */
+    val staticMihomoGroupsByProfile: StateFlow<Map<String, List<app.ghostly.core.mihomo.ProxyGroupInfo>>> by lazy {
+        kotlinx.coroutines.flow.combine(profiles, _mihomoPicks, _selected, _pings, _settings) { list, picks, selected, pings, s ->
+            if (s.core != app.ghostly.core.model.CoreType.MIHOMO) emptyMap()
+            else list.associate { p -> p.id to staticGroups(p, picks[p.id] ?: emptyMap(), selected, pings) }.filterValues { it.isNotEmpty() }
+        }.stateIn(scope, kotlinx.coroutines.flow.SharingStarted.Eagerly, emptyMap())
+    }
+
     val staticMihomoGroups: StateFlow<List<app.ghostly.core.mihomo.ProxyGroupInfo>> by lazy {
         kotlinx.coroutines.flow.combine(profiles, _mihomoPicks, _selected, _pings, _settings) { list, picks, selected, pings, s ->
+            // Only the active subscription runs on the core, so only its selectors are shown:
+            // two Clash subscriptions must not glue their groups into one list.
             if (s.core != app.ghostly.core.model.CoreType.MIHOMO) emptyList()
-            else buildList {
-                list.forEach { p -> addAll(staticGroups(p, picks[p.id] ?: emptyMap(), selected, pings)) }
-            }
+            else activeOf(list, selected)?.let { p -> staticGroups(p, picks[p.id] ?: emptyMap(), selected, pings) }.orEmpty()
         }.stateIn(scope, kotlinx.coroutines.flow.SharingStarted.Eagerly, emptyList())
     }
 
@@ -566,23 +629,30 @@ class GhostlyController(
     }
 
     private val _groupsPinging = MutableStateFlow<Set<String>>(emptySet())
-    /** Selector groups being tested before the core runs (the live core reports its own, see [MihomoGroups.testing]). */
+    /**
+     * Selector groups being tested before the core runs, as [groupTestKey]s (the live core reports its
+     * own, see [MihomoGroups.testing]).
+     */
     val groupsPinging: StateFlow<Set<String>> = _groupsPinging.asStateFlow()
+
+    fun groupTestKey(profileId: String, group: String) = "$profileId\u0000$group"
 
     /**
      * The ping button of a selector group. With the core running it asks the core to test the group;
      * without it the group's servers (through nested groups too) are pinged like any other server —
      * on Android that briefly loads a ping-only core, so the delays are real ones, not handshakes.
      */
-    fun testGroup(group: String) {
-        if (mihomoGroups.groups.value.isNotEmpty()) {
+    fun testGroup(group: String, profileId: String? = null) {
+        val profile = profileId?.let { id -> visibleProfiles().firstOrNull { it.id == id } } ?: groupOwner(group) ?: return
+        // The running core only knows the active subscription's groups.
+        if (mihomoGroups.groups.value.isNotEmpty() && activeProfile()?.id == profile.id) {
             mihomoGroups.test(group)
             return
         }
-        if (group in _groupsPinging.value) return
-        val profile = groupOwner(group) ?: return
+        val key = groupTestKey(profile.id, group)
+        if (key in _groupsPinging.value) return
         val defs = profile.mihomo?.let { app.ghostly.core.mihomo.MihomoProfiles.groups(it) }.orEmpty()
-        val listed = staticMihomoGroups.value.associate { it.name to it.members }
+        val listed = staticMihomoGroupsByProfile.value[profile.id].orEmpty().associate { it.name to it.members }
         val names = HashSet<String>()
         val seen = HashSet<String>()
         fun walk(g: String) {
@@ -591,8 +661,8 @@ class GhostlyController(
         }
         walk(group)
         val job = pingServers(profile.servers.filter { it.name in names }) ?: return
-        _groupsPinging.update { it + group }
-        job.invokeOnCompletion { _groupsPinging.update { it - group } }
+        _groupsPinging.update { it + key }
+        job.invokeOnCompletion { _groupsPinging.update { it - key } }
     }
 
     /**
@@ -600,7 +670,7 @@ class GhostlyController(
      * then the real round-trip through the core, batched by the backend.
      */
     private fun pingServers(servers: List<Server>): kotlinx.coroutines.Job? {
-        val targets = servers.filter { !it.isAuto && it.id !in _pinging.value }
+        val targets = servers.filter { it.canPing && it.id !in _pinging.value }
         if (targets.isEmpty()) return null
         _pinging.update { it + targets.map { s -> s.id } }
         val method = _settings.value.let { it.pingMethodOf(it.core) }

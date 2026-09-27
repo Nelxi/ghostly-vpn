@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to create (e.g. v0.2.5)"
+        description: "Release tag to create (e.g. v0.2.5; a tag with -beta becomes a pre-release)"
         required: true
 
 permissions:
@@ -64,7 +64,7 @@ jobs:
           cd out && sha256sum * > SHA256-Android.txt && cd ..
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-              --title "Ghostly ${TAG#v}" --generate-notes
+              --title "Ghostly ${TAG#v}" --generate-notes $([[ "$TAG" == *-beta* ]] && echo --prerelease)
           gh release upload "$TAG" out/* --clobber --repo "$GITHUB_REPOSITORY"
 
   windows:

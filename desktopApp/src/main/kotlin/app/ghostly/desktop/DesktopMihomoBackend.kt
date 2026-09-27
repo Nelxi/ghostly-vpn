@@ -83,7 +83,7 @@ class DesktopMihomoBackend(private val platform: DesktopPlatform, private val xr
             stopBlocking()
             _state.value = VpnState.Connecting
             if (!exe.isFile) {
-                _state.value = VpnState.Failed("Не найдено ядро mihomo (${exe.absolutePath})")
+                _state.value = VpnState.Failed("Не найдено ядро Mihomo (${exe.absolutePath})")
                 return@withContext
             }
             val tun = settings.desktopMode == DesktopMode.TUN
@@ -117,7 +117,7 @@ class DesktopMihomoBackend(private val platform: DesktopPlatform, private val xr
                     .redirectErrorStream(true)
                     .start()
             } catch (e: Exception) {
-                _state.value = VpnState.Failed("Не удалось запустить mihomo: ${e.message}")
+                _state.value = VpnState.Failed("Не удалось запустить Mihomo: ${e.message}")
                 return@withContext
             }
             process = p
@@ -140,7 +140,7 @@ class DesktopMihomoBackend(private val platform: DesktopPlatform, private val xr
                 if (p.isAlive) p.destroyForcibly()
                 client.close()
                 val tail = synchronized(log) { log.takeLast(4).joinToString("\n") }
-                _state.value = VpnState.Failed(tail.ifBlank { "mihomo не запустился" }.take(300))
+                _state.value = VpnState.Failed(tail.ifBlank { "Mihomo не запустился" }.take(300))
                 process = null
                 return@withContext
             }
@@ -206,7 +206,7 @@ class DesktopMihomoBackend(private val platform: DesktopPlatform, private val xr
                 if (!p.isAlive) {
                     val tail = synchronized(log) { log.takeLast(3).joinToString("\n") }
                     stopBlocking()
-                    _state.value = VpnState.Failed("mihomo остановился" + if (tail.isNotBlank()) ":\n$tail" else "")
+                    _state.value = VpnState.Failed("Mihomo остановился" + if (tail.isNotBlank()) ":\n$tail" else "")
                     break
                 }
             }
@@ -226,7 +226,7 @@ class DesktopMihomoBackend(private val platform: DesktopPlatform, private val xr
 
     override fun coreVersion(): String = coreVersionCache ?: runCatching {
         exec(exe.absolutePath, "-v").lineSequence().firstOrNull()?.trim()?.takeIf { it.isNotEmpty() }
-    }.getOrNull()?.also { coreVersionCache = it } ?: "mihomo (не найдено)"
+    }.getOrNull()?.also { coreVersionCache = it } ?: "Mihomo (не найдено)"
 
     override val directProbesBypassTunnel: Boolean get() = !tunMode
 

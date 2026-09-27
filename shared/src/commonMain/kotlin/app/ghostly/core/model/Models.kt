@@ -13,6 +13,12 @@ data class Profile(
     val info: SubscriptionInfo? = null,
     val supportUrl: String? = null,
     val webPageUrl: String? = null,
+    /** Provider's note for the user (Remnawave/Happ `announce` header): shown with the subscription. */
+    val announce: String? = null,
+    /** Where "Продлить" leads: Happ's `sub-expire-button-link` (a bot, a payment page). */
+    val renewUrl: String? = null,
+    /** Happ's info block (`sub-info-text`, `-color`, `-button-text`, `-button-link`). */
+    val notice: ProviderNotice? = null,
     /** Update interval the provider asked for (`profile-update-interval`), hours. */
     val updateIntervalHours: Int = 12,
     val updatedAt: Long = 0,
@@ -20,6 +26,10 @@ data class Profile(
     /** Whole Clash/mihomo config (YAML subscription, kept as JSON): runs on mihomo with its groups and rules. */
     val mihomo: JsonObject? = null,
 )
+
+/** The provider's info block with an optional button (Happ `sub-info-*` headers). */
+@Serializable
+data class ProviderNotice(val text: String, val color: String? = null, val buttonText: String? = null, val buttonUrl: String? = null)
 
 /** `subscription-userinfo` header: bytes and a unix-seconds expiry (0 = unlimited). */
 @Serializable
@@ -73,6 +83,8 @@ data class Server(
     val mihomo: JsonObject? = null,
 ) {
     val isAuto: Boolean get() = protocol == "balancer" || protocol == MIHOMO_PROFILE
+    /** A balancer is measured through its main proxy; a whole mihomo profile has no single endpoint. */
+    val canPing: Boolean get() = protocol != MIHOMO_PROFILE
     val isWhitelist: Boolean get() = pool == "wl"
 }
 

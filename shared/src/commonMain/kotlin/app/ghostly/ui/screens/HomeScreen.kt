@@ -38,6 +38,14 @@ import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.NetworkPing
 import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Payments
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Public
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.UnfoldMore
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material.icons.rounded.SupportAgent
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material3.Icon
@@ -175,7 +183,7 @@ fun HomeScreen(controller: GhostlyController, onPickServer: () -> Unit, contentP
             }
         }
         ServerCard(m, onPickServer, Modifier.appear(2))
-        if (m.profile?.info != null) {
+        if (m.profile != null && (m.profile.url != null || m.profile.info != null)) {
             Spacer(Modifier.height(12.dp))
             SubscriptionCard(m.profile, m.now, controller, Modifier.appear(3))
         }
@@ -227,7 +235,7 @@ fun HomeDesktop(controller: GhostlyController, onAdd: () -> Unit) {
             }
             Spacer(Modifier.height(14.dp))
             Box(Modifier.widthIn(max = 760.dp).fillMaxWidth()) {
-                if (m.profile?.info != null) SubscriptionCard(m.profile, m.now, controller, Modifier.appear(3))
+                if (m.profile != null && (m.profile.url != null || m.profile.info != null)) SubscriptionCard(m.profile, m.now, controller, Modifier.appear(3))
             }
             Spacer(Modifier.height(10.dp))
         }
@@ -274,7 +282,7 @@ private fun ReadyCard(m: HomeModel, controller: GhostlyController) {
                     )
                 }
             }
-            if (server != null && !server.isAuto) {
+            if (server != null && server.canPing) {
                 Spacer(Modifier.width(10.dp))
                 PingPill(m.ping, m.pinging)
             }
@@ -448,7 +456,7 @@ fun ServerCard(m: HomeModel, onClick: () -> Unit, modifier: Modifier = Modifier)
                     }
                 }
             }
-            if (server != null && !server.isAuto) PingPill(m.ping, m.pinging)
+            if (server != null && server.canPing) PingPill(m.ping, m.pinging)
             Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = c.ink3)
         }
     }
@@ -472,14 +480,70 @@ fun ServerAvatar(server: Server?, size: Dp) {
     }
 }
 
+/**
+ * The active subscription at a glance: name (and a switcher when there are several), time and
+ * traffic left, the provider's note (`announce`), and its actions — refresh, the provider's page,
+ * support — right on the card instead of buried in the server list.
+ */
 @Composable
 fun SubscriptionCard(profile: Profile, now: Long, controller: GhostlyController, modifier: Modifier = Modifier) {
     val c = Ghost.colors
-    val info = profile.info ?: return
-    GlassCard(modifier.fillMaxWidth(), onClick = profile.webPageUrl?.let { url -> { controller.platform.openUrl(url) } }) {
+    val info = profile.info
+    val refreshing by controller.refreshing.collectAsState()
+    val profiles by controller.profiles.collectAsState()
+    val subs = profiles.subscriptions()
+    val nav = LocalSubscriptionNav.current
+    // The card itself opens the subscription page; its buttons act right here.
+    GlassCard(modifier.fillMaxWidth(), padding = 16.dp, onClick = { nav.open(profile.id) }) {
+        // Name + when it was fetched; the switcher when there is more than one subscription.
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Подписка", style = MaterialTheme.typography.labelSmall, color = c.ink3)
+                app.ghostly.ui.components.FlagText(profile.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (profile.url != null) Text(Format.updatedAgo(profile.updatedAt, now), style = MaterialTheme.typography.bodySmall, color = c.ink3, maxLines = 1)
+            }
+            run {
+                var open by remember { mutableStateOf(false) }
+                Box {
+                    Row(
+                        Modifier.clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.06f))
+                            .clickable { open = true }.padding(start = 10.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            if (subs.size > 1) "${subs.indexOfFirst { it.id == profile.id } + 1} из ${subs.size}" else "Подписки",
+                            style = MaterialTheme.typography.labelMedium, color = c.ink2,
+                        )
+                        Icon(Icons.Rounded.UnfoldMore, "Сменить подписку", tint = c.ink3, modifier = Modifier.size(18.dp))
+                    }
+                    androidx.compose.material3.DropdownMenu(open, { open = false }) {
+                        subs.forEach { p ->
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        app.ghostly.ui.components.FlagText(p.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        val sub = p.info?.let { i -> if (i.unlimitedTime) "бессрочно" else Format.expiryPhrase(i.expire, now).lowercase() }
+                                            ?: "${p.servers.size} ${Format.plural(p.servers.size.toLong(), "сервер", "сервера", "серверов")}"
+                                        Text(sub, style = MaterialTheme.typography.bodySmall, color = c.ink3)
+                                    }
+                                },
+                                trailingIcon = { if (p.id == profile.id) Icon(Icons.Rounded.CheckCircle, null, tint = c.accent) },
+                                onClick = { open = false; controller.haptic(); controller.switchProfile(p.id) },
+                            )
+                        }
+                        androidx.compose.material3.HorizontalDivider(color = c.line)
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("Добавить подписку", color = c.accent) },
+                            leadingIcon = { Icon(Icons.Rounded.Add, null, tint = c.accent) },
+                            onClick = { open = false; nav.add() },
+                        )
+                    }
+                }
+            }
+        }
+
+        if (info != null) {
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     if (info.unlimitedTime) "Бессрочно" else Format.expiryPhrase(info.expire, now),
                     style = MaterialTheme.typography.titleMedium,
@@ -489,26 +553,54 @@ fun SubscriptionCard(profile: Profile, now: Long, controller: GhostlyController,
                         info.expire * 1000 - now < 3 * 86_400_000L -> c.warn
                         else -> c.ink
                     },
+                    modifier = Modifier.weight(1f),
+                )
+                if (info.pools.isEmpty()) Text(
+                    if (info.unlimitedTraffic) "${Format.bytes(info.used)} · ∞" else "${Format.bytes(info.used)} из ${Format.bytes(info.total)}",
+                    style = MaterialTheme.typography.labelMedium, color = c.ink2,
                 )
             }
-            if (info.pools.isEmpty()) Text(
-                if (info.unlimitedTraffic) "${Format.bytes(info.used)} · ∞" else "${Format.bytes(info.used)} из ${Format.bytes(info.total)}",
-                style = MaterialTheme.typography.labelMedium, color = c.ink2,
-            )
+            if (info.pools.isNotEmpty()) {
+                info.pools.forEach { p ->
+                    Spacer(Modifier.height(12.dp))
+                    PoolBar(p)
+                }
+                if (info.cycleEnd > 0) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("Трафик обновится через ${Format.remaining(info.cycleEnd, now)}", style = MaterialTheme.typography.bodySmall)
+                }
+            } else if (!info.unlimitedTraffic) {
+                Spacer(Modifier.height(10.dp))
+                val frac = info.used.toFloat() / info.total.toFloat()
+                GlowBar(frac, if (frac > 0.9f) c.bad else if (frac > 0.7f) c.warn else c.accent)
+            }
         }
-        if (info.pools.isNotEmpty()) {
-            info.pools.forEach { p ->
-                Spacer(Modifier.height(12.dp))
-                PoolBar(p)
-            }
-            if (info.cycleEnd > 0) {
-                Spacer(Modifier.height(8.dp))
-                Text("Трафик обновится через ${Format.remaining(info.cycleEnd, now)}", style = MaterialTheme.typography.bodySmall)
-            }
-        } else if (!info.unlimitedTraffic) {
+
+        // The provider's note lives on the subscription page (a tap on this card).
+
+        val actions = buildList<Triple<ImageVector, String, () -> Unit>> {
+            if (profile.url != null) add(Triple(Icons.Rounded.Refresh, "Обновить") { controller.haptic(); controller.refresh(profile.id, manual = true) })
+            // Support is the button at the top of the screen; here: the provider's page and renewing.
+            profile.webPageUrl?.let { url -> add(Triple(Icons.Rounded.Public, "Подписка") { controller.platform.openUrl(url) }) }
+            profile.renewLink()?.let { url -> add(Triple(Icons.Rounded.Payments, "Продлить") { controller.platform.openUrl(url) }) }
+        }
+        if (actions.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
-            val frac = info.used.toFloat() / info.total.toFloat()
-            GlowBar(frac, if (frac > 0.9f) c.bad else if (frac > 0.7f) c.warn else c.accent)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                actions.forEach { (icon, label, onClick) ->
+                    val busy = label == "Обновить" && profile.id in refreshing
+                    Row(
+                        Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.06f))
+                            .clickable(enabled = !busy, onClick = onClick).padding(vertical = 9.dp),
+                        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (busy) app.ghostly.ui.components.Spinner(c.accent, Modifier.size(14.dp))
+                        else Icon(icon, null, tint = c.accent, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(label, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                    }
+                }
+            }
         }
     }
 }

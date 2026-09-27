@@ -1,7 +1,6 @@
 package app.ghostly.vpn.service
 
 import android.app.Notification
-import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
@@ -13,7 +12,6 @@ import android.net.NetworkRequest
 import android.net.VpnService
 import android.os.Build
 import android.util.Log
-import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import app.ghostly.core.model.SplitMode
 import app.ghostly.vpn.MainActivity
@@ -24,6 +22,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -40,6 +39,9 @@ class MihomoVpnService : VpnService() {
     private val lock = Mutex()
     private var running = false
     private var serverName = ""
+    private var subscriptionName: String? = null
+    private var connectedAt: Long? = null
+    private var statsJob: kotlinx.coroutines.Job? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var logcatJob: kotlinx.coroutines.Job? = null
 
@@ -74,6 +76,8 @@ class MihomoVpnService : VpnService() {
             ACTION_STOP -> scope.launch { stop() }
             ACTION_START -> {
                 serverName = intent.getStringExtra(EXTRA_NAME).orEmpty()
+                subscriptionName = intent.getStringExtra(EXTRA_SUBSCRIPTION)
+                connectedAt = null
                 goForeground(getString(R.string.notif_connecting))
                 scope.launch { start(intent) }
             }
@@ -165,11 +169,13 @@ class MihomoVpnService : VpnService() {
             watchNetwork()
             log("tun up (fd=$fd, stack=system, split=$split), own package inside the tunnel; reporting connected")
             report(STATE_CONNECTED)
-            updateNotification("mihomo")
+            connectedAt = System.currentTimeMillis()
+            updateNotification()
+            if (controller > 0 && secret != null) startStats(controller, secret)
         } catch (e: Throwable) {
             Log.e(TAG, "start failed", e)
             log("start failed: " + Log.getStackTraceString(e))
-            report(STATE_FAILED, e.message?.takeIf { it.isNotBlank() }?.let { "mihomo: $it" } ?: "mihomo не запустился")
+            report(STATE_FAILED, e.message?.takeIf { it.isNotBlank() }?.let { "Mihomo: $it" } ?: "Mihomo не запустился")
             shutdown()
         }
     }
@@ -220,6 +226,9 @@ class MihomoVpnService : VpnService() {
     /** Stop the core and end the process: the next start loads a fresh one. */
     private fun shutdown() {
         log("shutdown")
+        statsJob?.cancel()
+        statsJob = null
+        connectedAt = null
         networkCallback?.let { runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(it) } }
         networkCallback = null
         if (running) {
@@ -280,41 +289,52 @@ class MihomoVpnService : VpnService() {
 
     // ------------------------------------------------------------------ notification
 
-    private fun goForeground(text: String) {
-        val nm = getSystemService(NotificationManager::class.java)
-        if (nm.getNotificationChannel(CHANNEL) == null) {
-            nm.createNotificationChannel(
-                NotificationChannel(CHANNEL, getString(R.string.notif_channel), NotificationManager.IMPORTANCE_LOW).apply { setShowBadge(false) },
-            )
-        }
+    private fun goForeground(status: String) {
+        VpnNotification.ensureChannel(this)
         ServiceCompat.startForeground(
-            this, NOTIFICATION_ID, notification(text),
+            this, NOTIFICATION_ID, notification(status = status),
             if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0,
         )
     }
 
-    private fun updateNotification(text: String) {
-        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(text))
+    /** Live speed for the notification, read from the core's own controller (the app reads it separately). */
+    private fun startStats(port: Int, secret: String) {
+        statsJob?.cancel()
+        statsJob = scope.launch {
+            var upTotal = 0L
+            var downTotal = 0L
+            val api = app.ghostly.core.mihomo.MihomoApi(port, secret)
+            try {
+                while (isActive && running) {
+                    runCatching {
+                        api.traffic().collect { (up, down) ->
+                            upTotal += up
+                            downTotal += down
+                            if (running) updateNotification(VpnNotification.Stats(up, down, upTotal, downTotal))
+                        }
+                    }
+                    delay(1000)
+                }
+            } finally {
+                api.close()
+            }
+        }
     }
 
-    private fun notification(text: String): Notification {
+    private fun updateNotification(stats: VpnNotification.Stats? = null) {
+        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(stats))
+    }
+
+    private fun notification(stats: VpnNotification.Stats? = null, status: String? = null): Notification {
         val stop = PendingIntent.getService(
             this, 2, Intent(this, MihomoVpnService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        return NotificationCompat.Builder(this, CHANNEL)
-            .setSmallIcon(R.drawable.ic_ghost)
-            .setColor(0xFFA88DFF.toInt())
-            .setContentTitle(serverName.ifEmpty { getString(R.string.app_name) })
-            .setContentText(text)
-            .setContentIntent(openAppIntent())
-            .addAction(0, getString(R.string.notif_disconnect), stop)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setSilent(true)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .build()
+        return VpnNotification.build(
+            this, VpnNotification.Core.MIHOMO, serverName, subscriptionName,
+            connectedAt = if (status == null) connectedAt else null,
+            stats = stats, open = openAppIntent(), stop = stop, status = status,
+        )
     }
 
     private fun openAppIntent(): PendingIntent = PendingIntent.getActivity(
@@ -329,6 +349,7 @@ class MihomoVpnService : VpnService() {
         const val ACTION_PING = "app.ghostly.vpn.MIHOMO_PING"
         const val ACTION_PING_DONE = "app.ghostly.vpn.MIHOMO_PING_DONE"
         const val EXTRA_NAME = "name"
+        const val EXTRA_SUBSCRIPTION = "subscription"
         const val EXTRA_CONTROLLER = "controller"
         const val EXTRA_SECRET = "secret"
         const val EXTRA_MTU = "mtu"
@@ -341,7 +362,6 @@ class MihomoVpnService : VpnService() {
         const val STATE_FAILED = "failed"
         const val STATE_IDLE = "idle"
         private const val TAG = "GhostlyMihomo"
-        private const val CHANNEL = "vpn"
         private const val NOTIFICATION_ID = 8
         private const val TUN_GATEWAY = "172.19.0.1"
         private const val TUN_DNS = "172.19.0.2"

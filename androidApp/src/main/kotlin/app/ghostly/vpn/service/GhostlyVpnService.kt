@@ -1,7 +1,6 @@
 package app.ghostly.vpn.service
 
 import android.app.Notification
-import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
@@ -14,7 +13,6 @@ import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.util.Log
-import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import app.ghostly.core.JsonX
 import app.ghostly.core.model.SplitMode
@@ -52,6 +50,8 @@ class GhostlyVpnService : VpnService() {
     private var core: CoreController? = null
     private var statsJob: Job? = null
     private var serverName: String = ""
+    private var subscriptionName: String? = null
+    private var connectedAt: Long? = null
     /** Outbounds that are not the tunnel (freedom/blackhole/dns): excluded from the speed meter. */
     private var serviceTags: Set<String> = emptySet()
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
@@ -77,6 +77,10 @@ class GhostlyVpnService : VpnService() {
         }
         AndroidVpn.mutableState.value = VpnState.Connecting
         serverName = request.server.name
+        subscriptionName = runCatching {
+            GhostlyApplication.instance.controller.profiles.value.firstOrNull { p -> p.servers.any { it.id == request.server.id } }?.name
+        }.getOrNull()
+        connectedAt = null
         shutdownCore()
 
         // A fresh log per run: the core appends to it, support gets only this attempt.
@@ -130,7 +134,10 @@ class GhostlyVpnService : VpnService() {
 
             AndroidVpn.appPort = appPort
             AndroidVpn.mutableTraffic.value = Traffic()
-            AndroidVpn.mutableState.value = VpnState.Connected(System.currentTimeMillis(), request.server.id)
+            val now = System.currentTimeMillis()
+            connectedAt = now
+            AndroidVpn.mutableState.value = VpnState.Connected(now, request.server.id)
+            updateNotification()
             watchNetwork()
             startStats()
         } catch (e: Throwable) {
@@ -192,7 +199,7 @@ class GhostlyVpnService : VpnService() {
                 upTotal += up
                 downTotal += down
                 AndroidVpn.mutableTraffic.value = Traffic(up, down, upTotal, downTotal)
-                updateNotification("↓ ${speed(down)}   ↑ ${speed(up)}")
+                updateNotification(VpnNotification.Stats(up, down, upTotal, downTotal))
             }
         }
     }
@@ -236,55 +243,34 @@ class GhostlyVpnService : VpnService() {
 
     // ------------------------------------------------------------------ notification
 
-    private fun goForeground(text: String) {
-        val nm = getSystemService(NotificationManager::class.java)
-        if (nm.getNotificationChannel(CHANNEL) == null) {
-            nm.createNotificationChannel(
-                NotificationChannel(CHANNEL, getString(R.string.notif_channel), NotificationManager.IMPORTANCE_LOW).apply {
-                    setShowBadge(false)
-                },
-            )
-        }
+    private fun goForeground(status: String) {
+        VpnNotification.ensureChannel(this)
         ServiceCompat.startForeground(
-            this, NOTIFICATION_ID, notification(text),
+            this, NOTIFICATION_ID, notification(status = status),
             if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0,
         )
     }
 
-    private fun updateNotification(text: String) {
-        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(text))
+    private fun updateNotification(stats: VpnNotification.Stats? = null) {
+        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(stats))
     }
 
-    private fun notification(text: String): Notification {
+    private fun notification(stats: VpnNotification.Stats? = null, status: String? = null): Notification {
         val stop = PendingIntent.getService(
             this, 1, Intent(this, GhostlyVpnService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        return NotificationCompat.Builder(this, CHANNEL)
-            .setSmallIcon(R.drawable.ic_ghost)
-            .setColor(0xFFA88DFF.toInt())
-            .setContentTitle(serverName.ifEmpty { getString(R.string.app_name) })
-            .setContentText(text)
-            .setContentIntent(openAppIntent())
-            .addAction(0, getString(R.string.notif_disconnect), stop)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setSilent(true)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .build()
+        return VpnNotification.build(
+            this, VpnNotification.Core.XRAY, serverName, subscriptionName,
+            connectedAt = if (status == null) connectedAt else null,
+            stats = stats, open = openAppIntent(), stop = stop, status = status,
+        )
     }
 
     private fun openAppIntent(): PendingIntent = PendingIntent.getActivity(
         this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
-
-    private fun speed(bps: Long): String = when {
-        bps < 1024 -> "$bps Б/с"
-        bps < 1024 * 1024 -> "${bps / 1024} КБ/с"
-        else -> String.format("%.1f МБ/с", bps / 1048576.0)
-    }
 
     private fun humanError(e: Throwable): String {
         val m = e.message.orEmpty()
@@ -301,7 +287,6 @@ class GhostlyVpnService : VpnService() {
         const val ACTION_START = "app.ghostly.vpn.START"
         const val ACTION_STOP = "app.ghostly.vpn.STOP"
         private const val TAG = "GhostlyVpn"
-        private const val CHANNEL = "vpn"
         private const val NOTIFICATION_ID = 7
         private const val TUN_V4 = "172.19.0.1"
         private const val TUN_V6 = "fdfe:dcba:9876::1"
