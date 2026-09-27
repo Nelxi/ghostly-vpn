@@ -137,19 +137,6 @@ object XrayConfigBuilder {
             add(buildJsonObject { put("tag", BLOCK); put("protocol", "blackhole") })
             add(buildJsonObject { put("tag", DNS_OUT); put("protocol", "dns") })
         }
-        putJsonObject("dns") {
-            putJsonArray("servers") {
-                add(buildJsonObject {
-                    put("address", "https://1.1.1.1/dns-query")
-                })
-                if (settings.routingMode == RoutingMode.SMART) add(buildJsonObject {
-                    put("address", "77.88.8.8")
-                    putJsonArray("domains") { add(JsonPrimitive("geosite:category-ru")) }
-                    put("skipFallback", true)
-                })
-                add(JsonPrimitive("8.8.8.8"))
-            }
-        }
         putJsonObject("routing") {
             put("domainStrategy", "IPIfNonMatch")
             putJsonArray("rules") {
@@ -343,23 +330,45 @@ object XrayConfigBuilder {
         return JsonObject(out)
     }
 
+    /**
+     * DNS: queries of the device are hijacked into the core (port 53 -> dns-out) and answered by these servers.
+     * The remote one is reached through the tunnel (routing sends its IP into the proxy), so the TSPU can't
+     * swap its answers; Russian domains may go to the "direct" one (+local = sent straight out).
+     * A provider's JSON keeps its own DNS while the user hasn't changed any DNS option.
+     */
     private fun dns(original: JsonObject?, settings: AppSettings): JsonObject {
         val src = original?.toMutableMap() ?: mutableMapOf()
-        val chosen = when (settings.dns) {
-            DnsPreset.PROVIDER -> null
-            DnsPreset.CUSTOM -> settings.customDns.trim().takeIf { it.isNotEmpty() }
-            else -> settings.dns.address
+        val keepProvider = original != null && settings.dnsDefaults && src["servers"] != null
+        if (!keepProvider) {
+            val remote = when (settings.dns) {
+                DnsPreset.PROVIDER -> null
+                DnsPreset.CUSTOM -> settings.customDns.trim().takeIf { it.isNotEmpty() }
+                else -> settings.dns.address
+            } ?: "https://1.1.1.1/dns-query"
+            // The provider's own split entries (objects with "domains") stay, e.g. special resolvers for some sites.
+            val providerSplit = (src["servers"] as? JsonArray).orEmpty().filter { it is JsonObject && "domains" in it }
+            val servers = buildList {
+                val direct = settings.directDnsAddress()
+                if (settings.routingMode == RoutingMode.SMART && settings.dnsSplitRu && direct != null) add(buildJsonObject {
+                    put("address", direct)
+                    putJsonArray("domains") {
+                        listOf("geosite:category-ru", "domain:ru", "domain:xn--p1ai", "domain:su").forEach { add(JsonPrimitive(it)) }
+                    }
+                    put("skipFallback", true)
+                })
+                addAll(providerSplit)
+                add(JsonPrimitive(remote))
+                add(JsonPrimitive("8.8.8.8"))
+            }
+            src["servers"] = JsonArray(servers)
         }
-        if (chosen != null || src["servers"] == null) {
-            // Keep the provider's split-DNS entries (objects with "domains"), replace the generic ones.
-            val keep = (src["servers"] as? JsonArray).orEmpty().filter { it is JsonObject && "domains" in it }
-            src["servers"] = JsonArray(keep + JsonPrimitive(chosen ?: "https://1.1.1.1/dns-query") + JsonPrimitive("8.8.8.8"))
-        }
-        src["queryStrategy"] = JsonPrimitive(if (settings.ipv6) "UseIP" else "UseIPv4")
-        // Ghostly's own servers resolve without any DNS: the TSPU answering NXDOMAIN for our domains (or the
-        // ISP resolver being spoofed) must not stop the connect. The provider's own hosts win.
+        src["queryStrategy"] = JsonPrimitive(settings.dnsStrategy.xray ?: if (settings.ipv6) "UseIP" else "UseIPv4")
+        if (!settings.dnsCache) src["disableCache"] = JsonPrimitive(true)
+        // Static answers: the user's lines, then Ghostly's own servers (a spoofed or blocked DNS answer
+        // must not stop the connect). Provider hosts win over ours, the user's win over everything.
         val hosts = (src["hosts"] as? JsonObject)?.toMutableMap() ?: mutableMapOf()
         OWN_HOSTS.forEach { (host, ip) -> if (host !in hosts) hosts[host] = JsonPrimitive(ip) }
+        settings.hostsMap().forEach { (host, ip) -> hosts[host] = JsonPrimitive(ip) }
         src["hosts"] = JsonObject(hosts)
         return JsonObject(src)
     }

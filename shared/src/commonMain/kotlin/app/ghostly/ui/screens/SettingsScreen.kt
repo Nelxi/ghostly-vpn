@@ -219,7 +219,12 @@ private fun MainSettings(controller: GhostlyController, contentPadding: PaddingV
                 RoutingMode.SMART -> "Умная: российские сайты напрямую"
                 RoutingMode.GLOBAL -> "Весь трафик через VPN"
             }, Icons.AutoMirrored.Rounded.AltRoute, onClick = { open(Page.ROUTING) }) { Chevron() }
-            SettingRow("DNS", if (s.dns == DnsPreset.CUSTOM) s.customDns.ifBlank { "Свой" } else s.dns.title, Icons.Rounded.Dns, onClick = { open(Page.DNS) }) { Chevron() }
+            SettingRow(
+                "DNS",
+                (if (s.dns == DnsPreset.CUSTOM) s.customDns.ifBlank { "Свой" } else if (s.dns == DnsPreset.PROVIDER) "Как в подписке" else s.dns.title) +
+                    if (s.dnsDefaults) "" else " · настроен",
+                Icons.Rounded.Dns, onClick = { open(Page.DNS) },
+            ) { Chevron() }
             if (controller.platform.supportsPerAppSplit) {
                 SettingRow("Приложения", when (s.splitMode) {
                     SplitMode.OFF -> "Все приложения через VPN"
@@ -397,28 +402,109 @@ private fun DomainListEditor(title: String, value: List<String>, onChange: (List
 private fun DnsPage(controller: GhostlyController, contentPadding: PaddingValues, back: () -> Unit) {
     val s by controller.settings.collectAsState()
     val c = Ghost.colors
+    val set = controller::updateSettings
     PageScaffold("DNS", contentPadding, back) {
-        Text("DNS-запросы идут через туннель, провайдер их не видит.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(6.dp, 12.dp))
+        Text(
+            "Запросы устройства перехватывает ядро VPN. DNS «через VPN» идёт внутри туннеля, поэтому провайдер и ТСПУ не могут подменить ответы.",
+            style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(6.dp, 12.dp),
+        )
+
+        SectionTitle("Через VPN")
         Group {
             DnsPreset.entries.forEach { p ->
-                SettingRow(p.title, p.address, onClick = { controller.updateSettings { it.copy(dns = p) } }) {
-                    if (s.dns == p) Icon(Icons.Rounded.Check, null, tint = c.accent)
+                SettingRow(
+                    if (p == DnsPreset.PROVIDER) "Как в подписке" else p.title,
+                    if (p == DnsPreset.PROVIDER) "DNS, который задал провайдер подписки" else p.address,
+                    onClick = { set { it.copy(dns = p) } },
+                ) { if (s.dns == p) Icon(Icons.Rounded.Check, null, tint = c.accent) }
+            }
+            if (s.dns == DnsPreset.CUSTOM) DnsField(
+                "Адрес", s.customDns, "https://dns.example/dns-query, tls://1.1.1.1 или 9.9.9.9",
+            ) { v -> set { it.copy(customDns = v) } }
+        }
+
+        SectionTitle("Без VPN")
+        Group {
+            ToggleRow(
+                "Российские сайты через свой DNS",
+                if (s.routingMode == RoutingMode.SMART) "Они открываются напрямую, и их адреса лучше узнавать у российского DNS"
+                else "Работает только в умной маршрутизации",
+                s.dnsSplitRu, Icons.AutoMirrored.Rounded.AltRoute,
+            ) { v -> set { it.copy(dnsSplitRu = v) } }
+            if (s.dnsSplitRu) {
+                app.ghostly.core.model.DirectDns.entries.forEach { d ->
+                    SettingRow(d.title, when (d) {
+                        app.ghostly.core.model.DirectDns.YANDEX -> "77.88.8.8 по HTTPS, мимо туннеля"
+                        app.ghostly.core.model.DirectDns.SYSTEM -> "DNS сети или провайдера"
+                        app.ghostly.core.model.DirectDns.CUSTOM -> "Любой адрес"
+                    }, onClick = { set { it.copy(dnsDirect = d) } }) { if (s.dnsDirect == d) Icon(Icons.Rounded.Check, null, tint = c.accent) }
                 }
+                if (s.dnsDirect == app.ghostly.core.model.DirectDns.CUSTOM) DnsField(
+                    "Адрес", s.dnsDirectCustom, "https+local://dns.example/dns-query (+local: мимо туннеля), 77.88.8.1",
+                ) { v -> set { it.copy(dnsDirectCustom = v) } }
             }
         }
-        if (s.dns == DnsPreset.CUSTOM) {
-            Spacer(Modifier.height(12.dp))
-            GlassCard(Modifier.fillMaxWidth(), padding = 14.dp) {
-                Text("Адрес", style = MaterialTheme.typography.labelMedium, color = c.ink3)
-                Spacer(Modifier.height(6.dp))
-                BasicTextField(
-                    s.customDns, { v -> controller.updateSettings { it.copy(customDns = v) } }, singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.ink), cursorBrush = SolidColor(c.accent),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Text("Например: https://dns.example/dns-query, tls://1.1.1.1 или 9.9.9.9", style = MaterialTheme.typography.bodySmall)
+
+        SectionTitle("Дополнительно")
+        Group {
+            SettingRow("Адреса IPv4 / IPv6", s.dnsStrategy.title, Icons.Rounded.Language)
+            Segmented(
+                listOf(
+                    app.ghostly.core.model.DnsStrategy.AUTO to "Авто",
+                    app.ghostly.core.model.DnsStrategy.IPV4 to "IPv4",
+                    app.ghostly.core.model.DnsStrategy.IPV4_FIRST to "4 → 6",
+                    app.ghostly.core.model.DnsStrategy.IPV6_FIRST to "6 → 4",
+                    app.ghostly.core.model.DnsStrategy.BOTH to "Оба",
+                ),
+                s.dnsStrategy, { v -> set { it.copy(dnsStrategy = v) } },
+            )
+            Spacer(Modifier.height(6.dp))
+            ToggleRow("Кэш DNS", "Повторные запросы отвечаются мгновенно", s.dnsCache, Icons.Rounded.Speed) { v -> set { it.copy(dnsCache = v) } }
+            ToggleRow(
+                "Fake-IP (Mihomo)", "Сайты открываются без ожидания DNS, имена узнаёт сервер. Выключите, если какое-то приложение не работает",
+                s.dnsFakeIp, Icons.Rounded.RocketLaunch,
+            ) { v -> set { it.copy(dnsFakeIp = v) } }
+            DnsField(
+                "Загрузочный DNS (Mihomo)", s.dnsBootstrap, "Обычный IP. Узнаёт адреса DoH-серверов до того, как поднимется туннель",
+            ) { v -> set { it.copy(dnsBootstrap = v) } }
+        }
+
+        SectionTitle("Свои записи")
+        DomainListEditor("hosts: домен и IP через пробел", s.dnsHosts) { v -> set { it.copy(dnsHosts = v) } }
+        Text(
+            "Например: example.com 93.184.216.34. Серверы Ghostly прописаны всегда, поэтому подключение работает, даже если их домены блокируют.",
+            style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(6.dp, 8.dp),
+        )
+        if (!s.dnsDefaults) {
+            SectionTitle("Сброс")
+            Group {
+                SettingRow("Вернуть DNS по умолчанию", "Подписки снова используют свой DNS", Icons.Rounded.Refresh, onClick = {
+                    set { it.copy(dns = DnsPreset.PROVIDER, dnsSplitRu = true, dnsDirect = app.ghostly.core.model.DirectDns.YANDEX,
+                        dnsStrategy = app.ghostly.core.model.DnsStrategy.AUTO, dnsCache = true, dnsHosts = emptyList(),
+                        dnsFakeIp = true, dnsBootstrap = "77.88.8.8") }
+                }) {}
             }
         }
+    }
+}
+
+/** A labelled one-line input inside a settings group. */
+@Composable
+private fun DnsField(label: String, value: String, hint: String, onChange: (String) -> Unit) {
+    val c = Ghost.colors
+    var text by remember(value) { mutableStateOf(value) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 8.dp)) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = c.ink3)
+        Spacer(Modifier.height(6.dp))
+        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = 0.25f)).padding(12.dp)) {
+            BasicTextField(
+                text, { t -> text = t; onChange(t.trim()) }, singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(color = c.ink, fontFamily = FontFamily.Monospace),
+                cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(hint, style = MaterialTheme.typography.bodySmall)
     }
 }
 

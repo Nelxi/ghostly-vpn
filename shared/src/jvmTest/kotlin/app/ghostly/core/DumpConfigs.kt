@@ -27,6 +27,14 @@ class DumpConfigs {
             "global" to AppSettings(routingMode = RoutingMode.GLOBAL),
             "rules" to AppSettings(directDomains = listOf("example.ru"), proxyDomains = listOf("youtube.com"), blockDomains = listOf("ads.example")),
             "fragment_mux" to AppSettings(fragment = true, mux = true),
+            "dns_adv" to AppSettings(
+                dns = app.ghostly.core.model.DnsPreset.CLOUDFLARE, dnsDirect = app.ghostly.core.model.DirectDns.SYSTEM,
+                dnsStrategy = app.ghostly.core.model.DnsStrategy.IPV4_FIRST, dnsCache = false, dnsHosts = listOf("example.com 93.184.216.34"),
+            ),
+            "dns_custom" to AppSettings(
+                dns = app.ghostly.core.model.DnsPreset.CUSTOM, customDns = "tls://1.1.1.1",
+                dnsDirect = app.ghostly.core.model.DirectDns.CUSTOM, dnsDirectCustom = "https+local://77.88.8.1/dns-query",
+            ),
         )
         parsed.servers.forEachIndexed { i, server ->
             variants.forEach { (name, settings) ->

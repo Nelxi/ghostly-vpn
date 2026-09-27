@@ -50,6 +50,26 @@ enum class DnsPreset(val title: String, val address: String?) {
     CUSTOM("Свой", null),
 }
 
+/** DNS for sites that open WITHOUT the VPN (Russian ones in smart routing). */
+@Serializable
+enum class DirectDns(val title: String, val address: String?) {
+    /** Yandex over DoH, sent straight out (not through the tunnel): encrypted, so the ISP can't swap answers. */
+    YANDEX("Яндекс (зашифрованный)", "https+local://77.88.8.8/dns-query"),
+    /** The resolver of the network / the ISP. */
+    SYSTEM("Системный (провайдера)", "localhost"),
+    CUSTOM("Свой", null),
+}
+
+/** Which address families DNS returns. AUTO follows the IPv6 switch. */
+@Serializable
+enum class DnsStrategy(val title: String, val xray: String?) {
+    AUTO("Как IPv6 в туннеле", null),
+    IPV4("Только IPv4", "UseIPv4"),
+    IPV4_FIRST("IPv4, затем IPv6", "UseIPv4v6"),
+    IPV6_FIRST("IPv6, затем IPv4", "UseIPv6v4"),
+    BOTH("IPv4 и IPv6", "UseIP"),
+}
+
 @Serializable
 enum class ThemeAccent(val argb: Long) {
     GHOST(0xFFA88DFF),
@@ -70,6 +90,19 @@ data class AppSettings(
     // --- dns
     val dns: DnsPreset = DnsPreset.PROVIDER,
     val customDns: String = "",
+    // --- dns, for advanced users (defaults = the behaviour before these settings existed)
+    /** Russian domains resolve through [dnsDirect] (only in smart routing). */
+    val dnsSplitRu: Boolean = true,
+    val dnsDirect: DirectDns = DirectDns.YANDEX,
+    val dnsDirectCustom: String = "",
+    /** Plain-IP resolver for the names of DoH servers and VPN servers before the tunnel is up (mihomo). */
+    val dnsBootstrap: String = "77.88.8.8",
+    val dnsStrategy: DnsStrategy = DnsStrategy.AUTO,
+    val dnsCache: Boolean = true,
+    /** mihomo: answer with fake addresses and resolve on the server side (fast, no DNS leaks). */
+    val dnsFakeIp: Boolean = true,
+    /** "domain ip" lines: static answers, applied before any DNS server. */
+    val dnsHosts: List<String> = emptyList(),
     val ipv6: Boolean = false,
     // --- tunnel
     /** Xray by default: one "Авто" button is what most people want; mihomo (selectors) is opt-in. */
@@ -155,4 +188,20 @@ data class AppSettings(
 
     fun withLogLevel(core: CoreType, level: String) =
         if (core == CoreType.MIHOMO) copy(mihomoLogLevel = level) else copy(logLevel = level)
+
+    /** True while every DNS option is at its default: provider configs keep their own DNS then. */
+    val dnsDefaults: Boolean
+        get() = dns == DnsPreset.PROVIDER && dnsSplitRu && dnsDirect == DirectDns.YANDEX && dnsStrategy == DnsStrategy.AUTO &&
+            dnsCache && dnsHosts.isEmpty()
+
+    fun directDnsAddress(): String? = when (dnsDirect) {
+        DirectDns.CUSTOM -> dnsDirectCustom.trim().takeIf { it.isNotEmpty() }
+        else -> dnsDirect.address
+    }
+
+    /** User hosts parsed from "domain ip" lines (anything malformed is skipped). */
+    fun hostsMap(): Map<String, String> = dnsHosts.mapNotNull { line ->
+        val p = line.trim().split(Regex("\\s+"))
+        if (p.size >= 2 && p[0].contains('.')) p[0].lowercase() to p[1] else null
+    }.toMap()
 }

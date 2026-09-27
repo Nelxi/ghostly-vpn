@@ -104,11 +104,11 @@ object MihomoConfigBuilder {
     private fun fromProvider(provided: JsonObject, server: Server, settings: AppSettings, ingress: MihomoIngress, stored: Map<String, String>): MihomoPlan {
         val cfg = provided.filterKeys { it !in DROP_KEYS }.toMutableMap()
         common(cfg, settings, ingress)
-        if (cfg["dns"] == null || (cfg["dns"] as? JsonObject)?.get("enable")?.bool() != true) {
+        if (cfg["dns"] == null || (cfg["dns"] as? JsonObject)?.get("enable")?.bool() != true || !settings.dnsDefaults) {
+            // the provider's DNS is kept only while the user hasn't touched any DNS option
             cfg["dns"] = defaultDns(settings)
-        } else if (chosenDns(settings) != null) {
-            cfg["dns"] = JsonObject((cfg["dns"] as JsonObject) + ("nameserver" to strings(listOf(chosenDns(settings)!!))))
         }
+        cfg["hosts"] = hosts(cfg["hosts"] as? JsonObject, settings)
         if (cfg["sniffer"] == null && settings.sniffing) cfg["sniffer"] = sniffer()
         if (cfg["geox-url"] == null) cfg["geox-url"] = geoxMirrors()
 
@@ -151,6 +151,7 @@ object MihomoConfigBuilder {
         cfg["geox-url"] = geoxMirrors()
         common(cfg, settings, ingress)
         cfg["dns"] = defaultDns(settings)
+        cfg["hosts"] = hosts(null, settings)
         if (settings.sniffing) cfg["sniffer"] = sniffer()
 
         val healthCheck = buildJsonObject {
@@ -269,18 +270,46 @@ object MihomoConfigBuilder {
     }
 
     private fun defaultDns(settings: AppSettings): JsonObject = buildJsonObject {
-        put("enable", true)
-        put("ipv6", settings.ipv6)
-        put("enhanced-mode", "fake-ip")
-        put("fake-ip-range", "198.18.0.1/16")
-        put("fake-ip-filter", strings(listOf("*.lan", "*.local", "+.msftconnecttest.com", "+.msftncsi.com", "+.stun.*.*", "+.stun.*.*.*", "time.*.com", "ntp.*.com", "+.market.xiaomi.com")))
-        put("respect-rules", true)
-        put("default-nameserver", strings(listOf("77.88.8.8", "1.1.1.1")))
-        put("proxy-server-nameserver", strings(listOf("https://77.88.8.8/dns-query", "https://1.1.1.1/dns-query")))
-        put("nameserver", strings(listOf(chosenDns(settings) ?: "https://1.1.1.1/dns-query", "https://8.8.8.8/dns-query")))
-        if (settings.routingMode == RoutingMode.SMART) {
-            putJsonObject("nameserver-policy") { put("geosite:category-ru", strings(listOf("https://77.88.8.8/dns-query"))) }
+        val v6 = when (settings.dnsStrategy) {
+            app.ghostly.core.model.DnsStrategy.AUTO -> settings.ipv6
+            app.ghostly.core.model.DnsStrategy.IPV4 -> false
+            else -> true
         }
+        val boot = settings.dnsBootstrap.trim().ifEmpty { "77.88.8.8" }
+        put("enable", true)
+        put("ipv6", v6)
+        put("cache-algorithm", "arc")
+        if (!settings.dnsCache) put("cache", false)
+        put("use-hosts", true)
+        if (settings.dnsFakeIp) {
+            put("enhanced-mode", "fake-ip")
+            put("fake-ip-range", "198.18.0.1/16")
+            put("fake-ip-filter", strings(listOf("*.lan", "*.local", "+.msftconnecttest.com", "+.msftncsi.com", "+.stun.*.*", "+.stun.*.*.*", "time.*.com", "ntp.*.com", "+.market.xiaomi.com")))
+        } else {
+            put("enhanced-mode", "redir-host")
+        }
+        put("respect-rules", true)
+        put("default-nameserver", strings(listOf(boot, "1.1.1.1")))
+        put("proxy-server-nameserver", strings(listOf("https://$boot/dns-query", "https://1.1.1.1/dns-query")))
+        put("nameserver", strings(listOf(chosenDns(settings) ?: "https://1.1.1.1/dns-query", "https://8.8.8.8/dns-query")))
+        val direct = when (settings.dnsDirect) {
+            app.ghostly.core.model.DirectDns.YANDEX -> "https://77.88.8.8/dns-query"
+            app.ghostly.core.model.DirectDns.SYSTEM -> "system"
+            app.ghostly.core.model.DirectDns.CUSTOM -> settings.dnsDirectCustom.trim().removePrefix("https+local://").let {
+                if (it.startsWith("http") || it.contains("://")) it else it.ifEmpty { null }
+            }
+        }
+        if (settings.routingMode == RoutingMode.SMART && settings.dnsSplitRu && direct != null) {
+            putJsonObject("nameserver-policy") { put("geosite:category-ru", strings(listOf(direct))) }
+        }
+    }
+
+    /** Static hosts: the user's lines and Ghostly's own servers (see XrayConfigBuilder.OWN_HOSTS). */
+    private fun hosts(original: JsonObject?, settings: AppSettings): JsonObject {
+        val out = original?.toMutableMap() ?: mutableMapOf()
+        app.ghostly.core.xray.XrayConfigBuilder.OWN_HOSTS.forEach { (h, ip) -> if (h !in out) out[h] = JsonPrimitive(ip) }
+        settings.hostsMap().forEach { (h, ip) -> out[h] = JsonPrimitive(ip) }
+        return JsonObject(out)
     }
 
     private fun sniffer() = buildJsonObject {
