@@ -143,7 +143,7 @@ fun SoftButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier,
     Row(
         modifier
             .pressScale(interaction, 0.96f)
-            .clip(RoundedCornerShape(20.dp))
+            .outerShadow(RoundedCornerShape(20.dp), 0.7f).clip(RoundedCornerShape(20.dp))
             .background(bg)
             .sheen(interaction, strength = 0.1f)
             .border(1.dp, edge, RoundedCornerShape(20.dp))
@@ -177,7 +177,7 @@ fun IconBubble(icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modi
         modifier
             .size(size)
             .pressScale(interaction, 0.88f, hover = 1.08f)
-            .clip(CircleShape)
+            .outerShadow(CircleShape, 0.6f).clip(CircleShape)
             .background(bg)
             .border(1.dp, edge, CircleShape)
             .clickable(interaction, null, onClick = onClick),
@@ -196,7 +196,7 @@ fun GhostSwitch(checked: Boolean, modifier: Modifier = Modifier) {
     val track by animateColorAsState(if (checked) c.accent else Color.White.copy(alpha = 0.12f), Motion.quick())
     // Liquid knob: stretches mid-flight, like a drop being dragged.
     val stretch = (4f * f * (1f - f)).coerceIn(0f, 1f) * 8f
-    Box(modifier.size(46.dp, 26.dp).clip(CircleShape).background(track).padding(3.dp)) {
+    Box(modifier.size(46.dp, 26.dp).outerShadow(CircleShape, 0.45f).clip(CircleShape).background(track).padding(3.dp)) {
         Box(
             Modifier.offset(x = (20f * f - stretch * f).dp).size((20f + stretch).dp, 20.dp).clip(CircleShape)
                 .background(if (checked) c.accentInk else Color.White.copy(alpha = 0.85f)),
@@ -263,7 +263,7 @@ fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> 
     val index = options.indexOfFirst { it.first == selected }.coerceAtLeast(0)
     val pos by animateFloatAsState(index.toFloat(), Motion.bouncy())
     BoxWithConstraints(
-        modifier.fillMaxWidth().height(42.dp).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.05f)).padding(3.dp),
+        modifier.fillMaxWidth().height(42.dp).outerShadow(RoundedCornerShape(16.dp), 0.6f).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.05f)).padding(3.dp),
     ) {
         val segW = maxWidth / options.size
         Box(

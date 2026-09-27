@@ -51,7 +51,11 @@ data class StageAudio(
     val drop: Float = 0f,
     /** Rising tension before a likely drop. */
     val build: Float = 0f,
-)
+) {
+    /** Darkness that may touch the UI: only while music is actually analysed. In silence (or on phones,
+     *  where there is no audio analysis) the look stays exactly as without the stage. */
+    val mood: Float get() = if (active) darkness else 0f
+}
 
 data class LyricLine(val timeMs: Long, val text: String)
 

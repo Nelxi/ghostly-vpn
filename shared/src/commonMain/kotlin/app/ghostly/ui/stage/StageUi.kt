@@ -127,12 +127,12 @@ fun StageOverlay(stage: StageState) {
         val w = size.width
         val h = size.height
         // Dark songs: the composition sinks into shadow at the edges.
-        val dim = (a.darkness * 0.85f * (1f - a.drop * 0.45f)).coerceIn(0f, 0.8f)
+        val dim = (a.mood * 0.85f * (1f - a.drop * 0.45f)).coerceIn(0f, 0.8f)
         if (dim > 0.01f) drawRect(
             Brush.radialGradient(listOf(Color.Transparent, Color.Black.copy(alpha = dim)), Offset(w / 2, h * 0.42f), max(w, h) * 0.72f),
         )
         // Bass lights the rims of the window like stage wash lights.
-        val rim = (a.bass * 0.22f + a.beat * 0.08f) * (1f - a.darkness * 0.9f) + a.drop * 0.3f * (1f - 0.6f * a.darkness)
+        val rim = (a.bass * 0.22f + a.beat * 0.08f) * (1f - a.mood * 0.9f) + a.drop * 0.3f * (1f - 0.6f * a.mood)
         if (rim > 0.01f) {
             val col = lerp(c.accent, Color(0xFFFF9AC8), a.drop)
             drawRect(Brush.verticalGradient(listOf(col.copy(alpha = rim), Color.Transparent), startY = h, endY = h * 0.7f))
@@ -143,8 +143,8 @@ fun StageOverlay(stage: StageState) {
         if (a.drop > 0.01f) drawRect(
             Brush.radialGradient(
                 listOf(
-                    Color.White.copy(alpha = 0.22f * a.drop * a.drop * (1f - 0.6f * a.darkness)),
-                    c.accent.copy(alpha = 0.18f * a.drop * (1f - 0.4f * a.darkness)),
+                    Color.White.copy(alpha = 0.22f * a.drop * a.drop * (1f - 0.6f * a.mood)),
+                    c.accent.copy(alpha = 0.18f * a.drop * (1f - 0.4f * a.mood)),
                     Color.Transparent,
                 ),
                 Offset(w / 2, h * 0.4f), max(w, h) * (0.4f + 0.5f * (1f - a.drop)),

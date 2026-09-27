@@ -46,6 +46,9 @@ val LocalHaptic = staticCompositionLocalOf<() -> Unit> { {} }
 /** Haptic of a chosen strength for UI pieces (rows, switches, segmented controls). */
 val LocalHapticOf = staticCompositionLocalOf<(app.ghostly.core.vpn.Haptic) -> Unit> { {} }
 
+/** A quiet note when the cursor enters something clickable (desktop; the site's hover sound). */
+val LocalHoverSound = staticCompositionLocalOf<() -> Unit> { {} }
+
 private class Particle(val start: Offset, val vx: Float, val heart: Boolean, val born: Long, val size: Float, val tint: Int)
 
 /**

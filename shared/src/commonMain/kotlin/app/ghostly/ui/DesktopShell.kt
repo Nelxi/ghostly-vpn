@@ -1,5 +1,6 @@
 package app.ghostly.ui
 
+import app.ghostly.ui.components.outerShadow
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
@@ -130,7 +131,7 @@ private fun Sidebar(controller: GhostlyController, tab: Tab, onTab: (Tab) -> Uni
         val indicatorY by animateDpAsState((NAV_ITEM_H + NAV_GAP) * index, Motion.bouncy())
         Box {
             Box(
-                Modifier.offset(y = indicatorY).fillMaxWidth().height(NAV_ITEM_H).clip(RoundedCornerShape(16.dp))
+                Modifier.offset(y = indicatorY).fillMaxWidth().height(NAV_ITEM_H).outerShadow(RoundedCornerShape(16.dp), 0.6f).clip(RoundedCornerShape(16.dp))
                     .background(Brush.horizontalGradient(listOf(c.accent.copy(alpha = 0.26f), c.accent2.copy(alpha = 0.10f))))
                     .border(1.dp, c.accent.copy(alpha = 0.32f), RoundedCornerShape(16.dp)),
             )
@@ -149,7 +150,7 @@ private fun Sidebar(controller: GhostlyController, tab: Tab, onTab: (Tab) -> Uni
         val profile = remember(profiles) { controller.selectedServer()?.let { controller.profileOf(it.id) } ?: profiles.firstOrNull() }
         profile?.info?.let { info ->
             Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.045f))
+                Modifier.fillMaxWidth().outerShadow(RoundedCornerShape(20.dp), 0.8f).clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.045f))
                     .border(1.dp, c.line, RoundedCornerShape(20.dp)).spotlight(c.accent, 140.dp).padding(14.dp),
             ) {
                 app.ghostly.ui.components.FlagText(profile.name, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -226,7 +227,7 @@ private fun StatusChip(state: VpnState, onClick: () -> Unit) {
     val pulse by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1600), RepeatMode.Restart))
     val interaction = remember { MutableInteractionSource() }
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+        Modifier.fillMaxWidth().outerShadow(RoundedCornerShape(16.dp), 0.8f).clip(RoundedCornerShape(16.dp))
             .background(color.copy(alpha = 0.10f))
             .border(1.dp, color.copy(alpha = 0.28f), RoundedCornerShape(16.dp))
             .sheen(interaction, color, 0.16f)

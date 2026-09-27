@@ -104,6 +104,9 @@ interface PlatformInfo {
      */
     fun playSound(kind: Haptic, volume: Float) {}
 
+    /** The quiet hover note (desktop only: touch screens have no hover). */
+    fun playHover(volume: Float) {}
+
     /** The system's wallpaper accent (Android 12+ Monet), ARGB; null where there is none. */
     fun systemAccent(): Long? = null
 

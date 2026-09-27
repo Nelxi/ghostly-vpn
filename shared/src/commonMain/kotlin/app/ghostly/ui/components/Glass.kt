@@ -1,5 +1,8 @@
 package app.ghostly.ui.components
 
+import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -103,7 +106,7 @@ fun AuroraBackground(energy: Float, modifier: Modifier = Modifier, content: @Com
             val sa = stage?.a
             // Darkness dominates: bass/beat only brighten bright songs, a drop flares less in a dark one.
             val glow = remote.aurora * (1f + (sa?.let {
-                (it.bass * 0.6f + it.beat * 0.2f) * (1f - it.darkness) + it.drop * 1.2f * (1f - 0.6f * it.darkness) - it.darkness * 0.9f
+                (it.bass * 0.6f + it.beat * 0.2f) * (1f - it.mood) + it.drop * 1.2f * (1f - 0.6f * it.mood) - it.mood * 0.9f
             } ?: 0f)).coerceAtLeast(0.12f)
             fun blob(cx0: Float, cy0: Float, r0: Float, color: Color, alpha0: Float) {
                 val cx = cx0 + px; val cy = cy0 + py
@@ -153,20 +156,9 @@ fun GlassCard(
     val lit by animateFloatAsState(if (hovered) 1f else 0f, Motion.quick(260))
     var m = modifier
     if (onClick != null) m = m.pressScale(interaction, 0.975f, hover = 1.012f)
-    // Neverlose-style depth. On a near-black background a dark shadow alone is invisible, so the outline is
-    // lit instead: a wide soft accent bloom around the card, a tight glow hugging the edge, and a dark drop
-    // shadow underneath for weight where the aurora is lighter. Strong cards glow more; hover warms it up.
-    val accentGlow = glow ?: c.accent
-    val power = (if (strong) 1f else 0.6f) + 0.5f * lit
-    m = m.dropShadow(shape, androidx.compose.ui.graphics.shadow.Shadow(
-        radius = 34.dp, color = Color.Black.copy(alpha = 0.55f), offset = androidx.compose.ui.unit.DpOffset(0.dp, 16.dp),
-    ))
-    m = m.dropShadow(shape, androidx.compose.ui.graphics.shadow.Shadow(
-        radius = 30.dp, color = accentGlow.copy(alpha = 0.16f * power), spread = 2.dp,
-    ))
-    m = m.dropShadow(shape, androidx.compose.ui.graphics.shadow.Shadow(
-        radius = 7.dp, color = accentGlow.copy(alpha = 0.20f * power),
-    ))
+    // Neverlose-style heavy black shadows, drawn only OUTSIDE the outline (see outerShadow): a dense dark
+    // rim hugging the edge, a soft mid shadow and a wide heavy tail. The glass itself keeps its colour.
+    m = m.outerShadow(shape, if (strong) 1f else 0.85f)
     m = m.clip(shape)
         .background(
             Brush.verticalGradient(
@@ -181,7 +173,7 @@ fun GlassCard(
     if (stageForCard != null) m = m.drawWithContent {
         drawContent()
         val a = stageForCard.a
-        val k = (a.beat * 0.35f + a.drop * 0.5f) * (1f - a.darkness * 0.6f)
+        val k = (a.beat * 0.35f + a.drop * 0.5f) * (1f - a.mood * 0.6f)
         if (k > 0.02f) drawRect(Brush.verticalGradient(listOf(c.accent.copy(alpha = 0.22f * k), Color.Transparent), endY = size.height * 0.5f))
     }
     m = m.spotlight(c.accent)
@@ -207,6 +199,8 @@ fun GlassCard(
 fun Modifier.pressScale(interaction: MutableInteractionSource, pressed: Float = 0.94f, hover: Float = 1.04f): Modifier = composed {
     val isPressed by interaction.collectIsPressedAsState()
     val isHovered by interaction.collectIsHoveredAsState()
+    val hoverSound = LocalHoverSound.current
+    androidx.compose.runtime.LaunchedEffect(isHovered) { if (isHovered) hoverSound() }
     val scale by animateFloatAsState(
         when {
             isPressed -> pressed
@@ -326,4 +320,26 @@ fun Modifier.orbitBorder(active: Boolean, color: Color, corner: Dp, width: Dp = 
 @Composable
 fun Hairline(modifier: Modifier = Modifier) {
     Box(modifier.fillMaxSize().background(Ghost.colors.line))
+}
+
+
+/**
+ * Heavy black shadow around [shape] that never shows through translucent content: the shadow is drawn with
+ * the platform's blurred DropShadowPainter and the shape itself is cut out of it (ClipOp.Difference).
+ * Three layers: a dense rim at the edge, a soft mid shadow, a wide heavy tail below.
+ */
+fun Modifier.outerShadow(shape: Shape, weight: Float = 1f): Modifier = composed {
+    val layers = remember(shape, weight) {
+        listOf(
+            androidx.compose.ui.graphics.shadow.Shadow(radius = 4.dp, color = Color.Black.copy(alpha = (0.85f * weight).coerceAtMost(0.95f)), spread = 1.dp),
+            androidx.compose.ui.graphics.shadow.Shadow(radius = 16.dp, color = Color.Black.copy(alpha = (0.65f * weight).coerceAtMost(0.8f)), offset = androidx.compose.ui.unit.DpOffset(0.dp, 6.dp)),
+            androidx.compose.ui.graphics.shadow.Shadow(radius = 38.dp, color = Color.Black.copy(alpha = (0.7f * weight).coerceAtMost(0.85f)), spread = 2.dp, offset = androidx.compose.ui.unit.DpOffset(0.dp, 18.dp)),
+        ).map { androidx.compose.ui.graphics.shadow.DropShadowPainter(shape, it) }
+    }
+    drawBehind {
+        val cut = androidx.compose.ui.graphics.Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawBehind)) }
+        clipPath(cut, androidx.compose.ui.graphics.ClipOp.Difference) {
+            layers.forEach { with(it) { draw(size) } }
+        }
+    }
 }

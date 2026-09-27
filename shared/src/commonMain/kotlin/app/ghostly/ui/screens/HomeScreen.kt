@@ -1,5 +1,6 @@
 package app.ghostly.ui.screens
 
+import app.ghostly.ui.components.outerShadow
 import androidx.compose.ui.draw.clipToBounds
 
 import androidx.compose.animation.AnimatedContent
@@ -349,8 +350,8 @@ fun HomeHero(m: HomeModel, controller: GhostlyController, orbSize: Dp) {
             controller.toggle()
         }, size = orbSize, modifier = Modifier.orbHalo(m.orb),
             sing = { stage?.let { s -> val t = s.track.value; if (t != null && t.playing) (s.a.vocal * 1.4f).coerceIn(0f, 1f) else 0f } ?: 0f },
-            beat = { stage?.a?.let { it.beat * (1f - 0.6f * it.darkness) } ?: 0f },
-            flare = { stage?.a?.let { it.drop * (1f - 0.5f * it.darkness) } ?: 0f },
+            beat = { stage?.a?.let { it.beat * (1f - 0.6f * it.mood) } ?: 0f },
+            flare = { stage?.a?.let { it.drop * (1f - 0.5f * it.mood) } ?: 0f },
             music = { stage?.track?.value?.playing == true },
         )
         Spacer(Modifier.height(14.dp))
@@ -495,7 +496,7 @@ fun ServerAvatar(server: Server?, size: Dp) {
     val c = Ghost.colors
     val flag = server?.title()?.flag
     Box(
-        Modifier.size(size).clip(RoundedCornerShape(size * 0.34f))
+        Modifier.size(size).outerShadow(RoundedCornerShape(size * 0.34f), 0.6f).clip(RoundedCornerShape(size * 0.34f))
             .background(Brush.linearGradient(listOf(c.accent.copy(alpha = 0.26f), c.accent2.copy(alpha = 0.12f)))),
         contentAlignment = Alignment.Center,
     ) {
@@ -533,7 +534,7 @@ fun SubscriptionCard(profile: Profile, now: Long, controller: GhostlyController,
                 var open by remember { mutableStateOf(false) }
                 Box {
                     Row(
-                        Modifier.clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.06f))
+                        Modifier.outerShadow(RoundedCornerShape(12.dp), 0.5f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.06f))
                             .clickable { open = true }.padding(start = 10.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -618,7 +619,7 @@ fun SubscriptionCard(profile: Profile, now: Long, controller: GhostlyController,
                 actions.forEach { (icon, label, onClick) ->
                     val busy = label == "Обновить" && profile.id in refreshing
                     Row(
-                        Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.06f))
+                        Modifier.weight(1f).outerShadow(RoundedCornerShape(12.dp), 0.5f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.06f))
                             .clickable(enabled = !busy, onClick = onClick).padding(vertical = 9.dp),
                         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
                     ) {

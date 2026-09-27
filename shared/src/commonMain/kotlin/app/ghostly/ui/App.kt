@@ -114,7 +114,7 @@ fun GhostlyApp(controller: GhostlyController) {
     // Monet (the wallpaper's colour) wins over both when the user turned it on.
     val accent = settings.monet.takeIf { it }?.let { controller.platform.systemAccent() }
         ?: design.accentArgb()?.takeIf { settings.accent == app.ghostly.core.model.ThemeAccent.GHOST } ?: settings.accent.argb
-    GhostlyTheme(accent, settings.reduceMotion) { androidx.compose.runtime.CompositionLocalProvider(app.ghostly.ui.components.LocalHaptic provides { controller.haptic(app.ghostly.core.vpn.Haptic.TICK) }, app.ghostly.ui.components.LocalHapticOf provides { k -> controller.haptic(k) }, app.ghostly.ui.theme.LocalDesign provides design) {
+    GhostlyTheme(accent, settings.reduceMotion) { androidx.compose.runtime.CompositionLocalProvider(app.ghostly.ui.components.LocalHaptic provides { controller.haptic(app.ghostly.core.vpn.Haptic.TICK) }, app.ghostly.ui.components.LocalHapticOf provides { k -> controller.haptic(k) }, app.ghostly.ui.components.LocalHoverSound provides { controller.hoverSound() }, app.ghostly.ui.theme.LocalDesign provides design) {
         var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
         var addOpen by remember { mutableStateOf(false) }
         var pickerOpen by remember { mutableStateOf(false) }

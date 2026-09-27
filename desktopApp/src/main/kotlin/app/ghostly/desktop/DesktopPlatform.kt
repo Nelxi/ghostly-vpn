@@ -138,6 +138,30 @@ class DesktopPlatform : PlatformInfo {
         }
     }
 
+    private val hoverClips: List<javax.sound.sampled.Clip> by lazy {
+        (0 until 5).mapNotNull { i ->
+            runCatching {
+                val res = DesktopPlatform::class.java.getResourceAsStream("/sounds/ui_hover_$i.wav") ?: return@runCatching null
+                javax.sound.sampled.AudioSystem.getClip().apply {
+                    open(javax.sound.sampled.AudioSystem.getAudioInputStream(java.io.BufferedInputStream(res)))
+                }
+            }.getOrNull()
+        }
+    }
+
+    override fun playHover(volume: Float) {
+        Thread {
+            runCatching {
+                val clip = hoverClips.randomOrNull() ?: return@runCatching
+                (clip.getControl(javax.sound.sampled.FloatControl.Type.MASTER_GAIN) as? javax.sound.sampled.FloatControl)?.let { g ->
+                    val db = if (volume <= 0.001f) g.minimum else (20f * kotlin.math.log10(volume.coerceIn(0.001f, 1f)))
+                    g.value = db.coerceIn(g.minimum, g.maximum)
+                }
+                clip.stop(); clip.framePosition = 0; clip.start()
+            }
+        }.apply { isDaemon = true }.start()
+    }
+
     override fun playSound(kind: app.ghostly.core.vpn.Haptic, volume: Float) {
         Thread {
             runCatching {

@@ -1,5 +1,6 @@
 package app.ghostly.ui.screens
 
+import app.ghostly.ui.components.outerShadow
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
@@ -265,7 +266,7 @@ private fun ServersList(
 private fun SearchField(value: String, onChange: (String) -> Unit, modifier: Modifier) {
     val c = Ghost.colors
     Row(
-        modifier.height(42.dp).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.06f))
+        modifier.height(42.dp).outerShadow(RoundedCornerShape(16.dp), 0.6f).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.06f))
             .border(1.dp, c.line, RoundedCornerShape(16.dp)).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

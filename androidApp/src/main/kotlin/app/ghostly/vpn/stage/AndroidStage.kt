@@ -185,7 +185,7 @@ class AndroidStage(private val context: Context) : StageSource {
             val breath = energy * (0.75f + 0.25f * kotlin.math.sin(ms / 900.0).toFloat())
             _audio.value = StageAudio(
                 active = false, bass = breath * 0.5f, melody = breath, vocal = lineVoice(ms), energy = breath,
-                calm = 1f - breath, darkness = 0.45f, tempo = 0.4f,
+                calm = 1f - breath, darkness = 0f, tempo = 0.4f,
             )
             delay(if (playing) 16 else 250)
         }

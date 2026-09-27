@@ -1065,9 +1065,21 @@ class GhostlyController(
     private fun tunnelAffecting(s: AppSettings) = s.copy(
         accent = AppSettings().accent, haptics = true, reduceMotion = false, language = "",
         autoUpdateSubs = true, autoConnect = false, startOnBoot = false, pingUrl = "",
-        hapticStrength = 0f, monet = false, blockCheck = false, sounds = false, soundVolume = 0f,
+        hapticStrength = 0f, monet = false, blockCheck = false, sounds = false, soundVolume = 0f, stageMode = false,
         pingMethod = app.ghostly.core.model.PingMethod.PROXY_GET, mihomoPingMethod = app.ghostly.core.model.PingMethod.PROXY_GET,
     )
+
+    private var lastHover = 0L
+
+    /** Hover note, at most one per 55 ms like on the site (sliding over a list stays a soft ripple). */
+    fun hoverSound() {
+        val s = _settings.value
+        if (!s.sounds) return
+        val t = now()
+        if (t - lastHover < 55) return
+        lastHover = t
+        platform.playHover(s.soundVolume)
+    }
 
     fun haptic(kind: app.ghostly.core.vpn.Haptic = app.ghostly.core.vpn.Haptic.CLICK) {
         val s = _settings.value
