@@ -121,6 +121,22 @@ class DesktopPlatform : PlatformInfo {
         true
     }.getOrDefault(false)
 
+    /** Windows accent colour (Settings → Personalisation → Colours), the desktop's "Monet". */
+    private val winAccent: Long? by lazy {
+        if (hostOs != HostOs.WINDOWS) return@lazy null
+        runCatching {
+            val out = ProcessBuilder("reg", "query", "HKCU\\Software\\Microsoft\\Windows\\DWM", "/v", "AccentColor")
+                .redirectErrorStream(true).start().inputStream.bufferedReader().readText()
+            val abgr = Regex("0x([0-9a-fA-F]+)").find(out)!!.groupValues[1].toLong(16)
+            val r = abgr and 0xFF; val g = (abgr shr 8) and 0xFF; val b = (abgr shr 16) and 0xFF
+            // Lift dark accents toward white so they read on the dark UI, like Monet's light tone.
+            fun lift(x: Long) = (x + (255 - x) * 0.35).toLong()
+            0xFF000000L or (lift(r) shl 16) or (lift(g) shl 8) or lift(b)
+        }.getOrNull()
+    }
+
+    override fun systemAccent(): Long? = winAccent
+
     /** Direct sockets; the controller skips it while a TUN tunnel would catch them. */
     override suspend fun blockCheck(target: app.ghostly.core.vpn.BlockTarget) = app.ghostly.core.vpn.JvmBlockCheck.run(target)
 

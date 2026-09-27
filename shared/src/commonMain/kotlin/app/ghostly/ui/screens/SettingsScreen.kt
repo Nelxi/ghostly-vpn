@@ -296,7 +296,7 @@ private fun MainSettings(controller: GhostlyController, contentPadding: PaddingV
         Group {
             val monetAccent = remember { controller.platform.systemAccent() }
             if (monetAccent != null) {
-                ToggleRow("Цвета системы", "Акцент берётся из обоев (Material You)", s.monet, Icons.Rounded.Palette) { v -> set { it.copy(monet = v) } }
+                ToggleRow("Цвета системы", if (controller.platform.isDesktop) "Акцент как в Windows (Параметры → Персонализация → Цвета)" else "Акцент берётся из обоев (Material You)", s.monet, Icons.Rounded.Palette) { v -> set { it.copy(monet = v) } }
             }
             SettingRow("Акцент", if (s.monet && monetAccent != null) "Сейчас из обоев — выбор ниже вернёт свой" else null, Icons.Rounded.Palette) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
