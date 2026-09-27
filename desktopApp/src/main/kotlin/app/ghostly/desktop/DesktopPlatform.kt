@@ -182,6 +182,8 @@ class DesktopPlatform : PlatformInfo {
 
     override fun systemAccent(): Long? = winAccent
 
+    override val demo: String? = System.getenv("GHOSTLY_DEMO")?.takeIf { it.isNotBlank() }
+
     /** Direct sockets; the controller skips it while a TUN tunnel would catch them. */
     override suspend fun blockCheck(target: app.ghostly.core.vpn.BlockTarget) = app.ghostly.core.vpn.JvmBlockCheck.run(target)
 

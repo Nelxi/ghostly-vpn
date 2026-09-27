@@ -227,8 +227,10 @@ fun HomeDesktop(controller: GhostlyController, onAdd: () -> Unit) {
             AnimatedContent(
                 targetState = m.orb == OrbState.CONNECTED,
                 transitionSpec = {
-                    (fadeIn(Motion.quick(380)) + slideInVertically(Motion.quick(460)) { it / 5 }) togetherWith
-                        (fadeOut(Motion.quick(160)) + slideOutVertically(Motion.quick(200)) { -it / 8 })
+                    ((fadeIn(Motion.quick(380)) + slideInVertically(Motion.quick(460)) { it / 5 }) togetherWith
+                        (fadeOut(Motion.quick(160)) + slideOutVertically(Motion.quick(200)) { -it / 8 }))
+                        // no clipping while the height changes: the cards' shadows spill outside
+                        .using(androidx.compose.animation.SizeTransform(clip = false))
                 },
                 modifier = Modifier.widthIn(max = 760.dp).fillMaxWidth(),
             ) { live ->

@@ -91,6 +91,12 @@ interface PlatformInfo {
     val supportsPerAppSplit: Boolean get() = false
     val isDesktop: Boolean get() = false
 
+    /**
+     * Demo script for screenshots / promo capture: "tabs:<ms>" cycles the tabs every <ms>.
+     * Desktop reads it from the GHOSTLY_DEMO environment variable; null (always, on phones) = off.
+     */
+    val demo: String? get() = null
+
     fun openUrl(url: String)
     fun copyToClipboard(text: String)
     fun readClipboard(): String?

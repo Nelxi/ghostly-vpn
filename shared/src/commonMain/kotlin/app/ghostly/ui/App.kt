@@ -1,5 +1,6 @@
 package app.ghostly.ui
 
+import app.ghostly.ui.components.pageFade
 import app.ghostly.ui.components.hoverSound
 import androidx.compose.animation.AnimatedContent
 import app.ghostly.ui.screens.predictiveCard
@@ -117,6 +118,14 @@ fun GhostlyApp(controller: GhostlyController) {
         ?: design.accentArgb()?.takeIf { settings.accent == app.ghostly.core.model.ThemeAccent.GHOST } ?: settings.accent.argb
     GhostlyTheme(accent, settings.reduceMotion) { androidx.compose.runtime.CompositionLocalProvider(app.ghostly.ui.components.LocalHaptic provides { controller.haptic(app.ghostly.core.vpn.Haptic.TICK) }, app.ghostly.ui.components.LocalHapticOf provides { k -> controller.haptic(k) }, app.ghostly.ui.components.LocalHoverSound provides { controller.hoverSound() }, app.ghostly.ui.theme.LocalDesign provides design) {
         var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
+        controller.platform.demo?.takeIf { it.startsWith("tabs:") }?.let { spec ->
+            val every = spec.removePrefix("tabs:").toLongOrNull() ?: 2500L
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                val order = listOf(Tab.SETTINGS, Tab.SERVERS, Tab.HOME)
+                var i = 0
+                while (true) { kotlinx.coroutines.delay(every); tab = order[i++ % order.size] }
+            }
+        }
         var addOpen by remember { mutableStateOf(false) }
         var pickerOpen by remember { mutableStateOf(false) }
         // The subscription page (all the provider's headers, actions, every subscription): which one is open.
@@ -171,7 +180,7 @@ fun GhostlyApp(controller: GhostlyController) {
                         val pad = PaddingValues(top = insets.calculateTopPadding() + 8.dp, bottom = insets.calculateBottomPadding() + 96.dp)
                         // Predictive back to Главная: it is drawn beneath while the current tab slides off as a card.
                         if (tabPeek > 0f && tab != Tab.HOME) {
-                            Box(Modifier.fillMaxSize().graphicsLayer { alpha = 0.8f + 0.2f * tabPeek }, contentAlignment = Alignment.TopCenter) {
+                            Box(Modifier.fillMaxSize().graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha; alpha = 0.8f + 0.2f * tabPeek }, contentAlignment = Alignment.TopCenter) {
                                 Box(Modifier.widthIn(max = 620.dp).fillMaxSize()) {
                                     HomeScreen(controller, onPickServer = {}, contentPadding = pad)
                                 }
@@ -179,10 +188,11 @@ fun GhostlyApp(controller: GhostlyController) {
                         }
                         AnimatedContent(
                             targetState = tab,
-                            transitionSpec = { (fadeIn(Motion.quick(260)) + scaleIn(initialScale = 0.985f)) togetherWith fadeOut(Motion.quick(160)) },
+                            // fade = pageFade below (the built-in fade cut the cards' shadows at the page edge)
+                            transitionSpec = { scaleIn(initialScale = 0.985f) togetherWith androidx.compose.animation.ExitTransition.KeepUntilTransitionsFinished },
                             modifier = Modifier.fillMaxSize().predictiveCard(tabPeek, app.ghostly.ui.screens.peekBrush()),
                         ) { t ->
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                            Box(Modifier.fillMaxSize().then(Modifier.pageFade(this@AnimatedContent, 260, 160)), contentAlignment = Alignment.TopCenter) {
                                 Box(Modifier.widthIn(max = 620.dp).fillMaxSize()) {
                                     when (t) {
                                         Tab.HOME -> HomeScreen(controller, onPickServer = { pickerOpen = true }, contentPadding = pad)
@@ -353,7 +363,7 @@ private fun BoxScope.PickerSheet(
         }
 
         Box(
-            Modifier.fillMaxSize().graphicsLayer { alpha = (1f - off / hidden).coerceIn(0f, 1f) }
+            Modifier.fillMaxSize().graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha; alpha = (1f - off / hidden).coerceIn(0f, 1f) }
                 .background(Color.Black.copy(alpha = 0.55f))
                 .hoverSound().clickable(remember { MutableInteractionSource() }, null, onClick = onClose),
         )

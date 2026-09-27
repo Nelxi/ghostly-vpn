@@ -260,6 +260,9 @@ fun Modifier.appear(index: Int, step: Long = 35L, enabled: Boolean = true): Modi
     }
     val p by animateFloatAsState(if (shown) 1f else 0f, if (reduce) tween(200) else Motion.bouncy())
     graphicsLayer {
+        // ModulateAlpha: no offscreen buffer clipped to the card's box, so the shadow that spills outside
+        // it isn't cut into a square while the card fades in (and doesn't "pop" when the fade ends).
+        compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
         alpha = p.coerceIn(0f, 1f)
         translationY = (1f - p) * 18.dp.toPx()
         val s = 0.96f + 0.04f * p
@@ -357,4 +360,21 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.softLayer(shape: Sh
             drawOutline(outline, Color.Black.copy(alpha = a))
         }
     }
+}
+
+
+/**
+ * Fade of an AnimatedContent page drawn with ModulateAlpha. The built-in fadeIn/fadeOut render the page
+ * into an offscreen buffer clipped to its bounds, which cuts the cards' shadows at the page edge during the
+ * transition and makes them "blink" when it ends. Pair with transitions that have no fade of their own.
+ */
+@Composable
+fun Modifier.pageFade(scope: androidx.compose.animation.AnimatedVisibilityScope, inMs: Int, outMs: Int): Modifier {
+    val a by scope.transition.animateFloat(
+        transitionSpec = {
+            if (targetState == androidx.compose.animation.EnterExitState.Visible) tween(inMs) else tween(outMs)
+        },
+        label = "pageFade",
+    ) { if (it == androidx.compose.animation.EnterExitState.Visible) 1f else 0f }
+    return graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha; alpha = a }
 }

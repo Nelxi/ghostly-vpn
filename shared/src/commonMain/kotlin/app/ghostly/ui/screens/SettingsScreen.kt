@@ -130,7 +130,7 @@ fun SettingsScreen(controller: GhostlyController, contentPadding: PaddingValues)
     androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
     // Where back leads, fully drawn beneath; the page on top turns into an opaque card that shrinks and slides off.
     if (peek > 0f && page != Page.MAIN) {
-        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().graphicsLayer { alpha = 0.8f + 0.2f * peek }) {
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha; alpha = 0.8f + 0.2f * peek }) {
             MainSettings(controller, contentPadding) {}
         }
     }

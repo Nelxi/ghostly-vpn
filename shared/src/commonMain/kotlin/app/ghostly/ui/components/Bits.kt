@@ -123,7 +123,7 @@ fun AccentButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifie
             .clip(RoundedCornerShape(20.dp))
             .background(c.accent)
             .sheen(interaction, strength = 0.22f)
-            .graphicsLayer { alpha = if (enabled) 1f else 0.45f }
+            .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha; alpha = if (enabled) 1f else 0.45f }
             .hoverSound().clickable(interaction, null, enabled = enabled, onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 15.dp),
         horizontalArrangement = Arrangement.Center,

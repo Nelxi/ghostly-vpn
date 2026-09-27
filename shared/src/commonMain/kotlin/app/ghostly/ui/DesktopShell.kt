@@ -1,5 +1,7 @@
 package app.ghostly.ui
 
+import app.ghostly.ui.components.pageFade
+import androidx.compose.animation.ExitTransition
 import app.ghostly.ui.components.hoverSound
 import app.ghostly.ui.components.outerShadow
 import androidx.compose.animation.AnimatedContent
@@ -84,10 +86,12 @@ internal fun DesktopShell(controller: GhostlyController, tab: Tab, onTab: (Tab) 
         AnimatedContent(
             targetState = tab,
             transitionSpec = {
-                (fadeIn(Motion.quick(320)) + slideInVertically(Motion.quick(420)) { it / 24 }) togetherWith fadeOut(Motion.quick(140))
+                // the fade itself is pageFade below (no offscreen buffer that cuts the shadows)
+                slideInVertically(Motion.quick(420)) { it / 24 } togetherWith ExitTransition.KeepUntilTransitionsFinished
             },
             modifier = Modifier.weight(1f).fillMaxHeight(),
         ) { t ->
+          Box(Modifier.fillMaxSize().pageFade(this@AnimatedContent, 320, 140)) {
             when (t) {
                 Tab.HOME -> HomeDesktop(controller, onAdd)
                 Tab.SERVERS -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -101,6 +105,7 @@ internal fun DesktopShell(controller: GhostlyController, tab: Tab, onTab: (Tab) 
                     }
                 }
             }
+          }
         }
     }
 }
