@@ -139,14 +139,17 @@ class Updater(private val platform: PlatformInfo, private val isDismissed: (Stri
         private val MANIFESTS = listOf(
             "https://ghostlinknex.online/dl/latest.json",
             "https://srv.ghostlinknex.online/dl/latest.json",
+            "https://ghostlynex.fun/dl/latest.json",
         )
         private val SERVERS = listOf(
             "https://srv.ghostlinknex.online/dl/",
             "https://ghostlinknex.online/dl/",
+            "https://ghostlynex.fun/dl/",
         )
         private val MIRRORS = listOf(
             "https://ghostlinknex.online/dl/",
             "https://srv.ghostlinknex.online/dl/",
+            "https://ghostlynex.fun/dl/",
             "https://github.com/Nelxi/ghostly-vpn/releases/latest/download/",
         )
 

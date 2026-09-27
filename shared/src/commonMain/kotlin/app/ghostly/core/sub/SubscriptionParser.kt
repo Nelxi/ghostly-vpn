@@ -29,6 +29,8 @@ data class ParsedSubscription(
     val servers: List<Server>,
     /** Clash/mihomo config when the body was YAML (see [app.ghostly.core.model.Profile.mihomo]). */
     val mihomo: JsonObject? = null,
+    /** The address that actually answered (the link itself or one of Ghostly's mirror domains). */
+    val fetchedFrom: String? = null,
 )
 
 object SubscriptionParser {

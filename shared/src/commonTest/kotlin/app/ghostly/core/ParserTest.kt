@@ -167,3 +167,19 @@ class ParserTest {
         assertTrue(cmp("0.1.1", "0.1.2") < 0)
     }
 }
+
+class GhostlyDomainsTest {
+    @kotlin.test.Test
+    fun mirrorsCoverEveryOwnDomain() {
+        val d = app.ghostly.core.sub.GhostlyDomains
+        kotlin.test.assertEquals(
+            listOf("https://srv.ghostlinknex.online/sub/abc", "https://ghostlynex.fun/sub/abc"),
+            d.mirrorsOf("https://ghostlinknex.online/sub/abc"),
+        )
+        kotlin.test.assertEquals(
+            listOf("https://ghostlinknex.online/sub/x?y=1", "https://srv.ghostlinknex.online/sub/x?y=1"),
+            d.mirrorsOf("https://ghostlynex.fun/sub/x?y=1"),
+        )
+        kotlin.test.assertTrue(d.mirrorsOf("https://example.com/sub/abc").isEmpty())
+    }
+}

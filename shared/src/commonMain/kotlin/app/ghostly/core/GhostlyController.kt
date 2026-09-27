@@ -361,6 +361,31 @@ class GhostlyController(
     // ------------------------------------------------------------------ profiles
 
     /** [manual]: the user pressed "Обновить" and waits for an answer, so success is reported too. */
+    /** Since when a Ghostly subscription is answered only by a mirror, not by its own domain (per profile). */
+    private val ownDomainDownSince = HashMap<String, Long>()
+
+    /**
+     * Seamless domain switch for Ghostly's own subscriptions: when the link's domain has been dead
+     * for [app.ghostly.core.sub.GhostlyDomains.SWITCH_AFTER_MS] (blocked by RKN, DNS gone) while a
+     * mirror answers, the subscription quietly moves to that mirror. Returns the new link, or null.
+     */
+    private fun domainFailover(profileId: String, url: String, fetchedFrom: String?): String? {
+        val d = app.ghostly.core.sub.GhostlyDomains
+        if (fetchedFrom == null || fetchedFrom == url || !d.isOurs(url)) {
+            ownDomainDownSince.remove(profileId)
+            return null
+        }
+        val first = profileId !in ownDomainDownSince
+        val since = ownDomainDownSince.getOrPut(profileId) { now() }
+        if (now() - since < d.SWITCH_AFTER_MS) {
+            // Check again soon: a blocked domain shouldn't wait for the usual refresh interval.
+            if (first) scope.launch { kotlinx.coroutines.delay(d.SWITCH_AFTER_MS + 5_000); refresh(profileId) }
+            return null
+        }
+        ownDomainDownSince.remove(profileId)
+        return fetchedFrom
+    }
+
     fun refresh(profileId: String, manual: Boolean = false) {
         val profile = _profiles.value.firstOrNull { it.id == profileId } ?: return
         val url = profile.url ?: return
@@ -369,9 +394,11 @@ class GhostlyController(
             _refreshing.update { it + profileId }
             try {
                 val parsed = subs.fetch(url, profileId, backend.appPort, mihomo = _settings.value.core == app.ghostly.core.model.CoreType.MIHOMO)
+                val movedTo = domainFailover(profileId, url, parsed.fetchedFrom)
                 _profiles.update { list ->
                     list.map {
                         if (it.id != profileId) it else it.copy(
+                            url = movedTo ?: it.url,
                             name = parsed.title ?: it.name,
                             info = parsed.info ?: it.info,
                             supportUrl = parsed.supportUrl ?: it.supportUrl,

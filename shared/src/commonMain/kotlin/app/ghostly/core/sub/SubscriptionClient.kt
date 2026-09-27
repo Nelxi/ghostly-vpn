@@ -55,12 +55,14 @@ class SubscriptionClient(private val platform: PlatformInfo) {
 
     suspend fun fetch(url: String, idPrefix: String, tunnelPort: Int? = null, mihomo: Boolean = false): ParsedSubscription = coroutineScope {
         data class Attempt(val url: String, val client: HttpClient, val delayMs: Long)
-        val mirror = mirrorOf(url)
+        val mirrors = mirrorsOf(url)
         val attempts = buildList {
             add(Attempt(url, direct, 0))
             tunnelPort?.let { add(Attempt(url, viaTunnel(it), 250)) }
-            mirror?.let { add(Attempt(it, direct, 900)) }
-            if (mirror != null && tunnelPort != null) add(Attempt(mirror, viaTunnel(tunnelPort), 1200))
+            mirrors.forEachIndexed { i, m ->
+                add(Attempt(m, direct, 900L + i * 600))
+                if (tunnelPort != null) add(Attempt(m, viaTunnel(tunnelPort), 1200L + i * 600))
+            }
         }
         val results = Channel<Result<ParsedSubscription>>(attempts.size)
         val jobs = attempts.map { a ->
@@ -108,22 +110,11 @@ class SubscriptionClient(private val platform: PlatformInfo) {
         val headers = response.headers.entries().associate { (k, v) -> k.lowercase() to v.joinToString(", ") }
         val parsed = SubscriptionParser.parse(body, headers, idPrefix)
         if (parsed.servers.isEmpty()) throw SubscriptionException("В подписке нет поддерживаемых серверов", definitive = true)
-        return parsed
+        return parsed.copy(fetchedFrom = url)
     }
 
-    /** Ghostly publishes every subscription on two domains (CDN + direct); try the other one too. */
-    private fun mirrorOf(url: String): String? {
-        val scheme = url.substringBefore("://", "")
-        if (scheme.isEmpty()) return null
-        val rest = url.substringAfter("://")
-        val host = rest.substringBefore('/').substringBefore(':')
-        val other = when (host.lowercase()) {
-            "ghostlinknex.online" -> "srv.ghostlinknex.online"
-            "srv.ghostlinknex.online" -> "ghostlinknex.online"
-            else -> return null
-        }
-        return "$scheme://$other" + rest.removePrefix(host)
-    }
+    /** Ghostly's other addresses of the same subscription, in the order they are tried. */
+    fun mirrorsOf(url: String): List<String> = GhostlyDomains.mirrorsOf(url)
 
     fun close() {
         direct.close()

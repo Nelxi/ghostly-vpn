@@ -145,20 +145,30 @@ class AndroidPlatform(private val context: Context) : PlatformInfo {
     }
 
     private fun effect(v: Vibrator, kind: Haptic, strength: Float): VibrationEffect {
-        if (Build.VERSION.SDK_INT >= 30 && strength <= PRIMITIVE_MAX) {
+        // A linear motor (Nothing, Pixel, Samsung…) always gets the system primitives — that crisp
+        // "tap" is what these phones are for; the rough pulse below is only for motors without them.
+        // The slider scales them, and its upper part stacks a second, heavier primitive right on top
+        // (a tap you really feel on soft-tuned ROMs), instead of switching to a buzz.
+        if (Build.VERSION.SDK_INT >= 30) {
             fun has(vararg p: Int) = v.areAllPrimitivesSupported(*p)
-            val thud = if (Build.VERSION.SDK_INT >= 31 && has(VibrationEffect.Composition.PRIMITIVE_THUD)) VibrationEffect.Composition.PRIMITIVE_THUD else VibrationEffect.Composition.PRIMITIVE_CLICK
-            if (has(VibrationEffect.Composition.PRIMITIVE_CLICK, VibrationEffect.Composition.PRIMITIVE_TICK)) {
-                // 0 → a whisper, PRIMITIVE_MAX → the primitives at full scale.
+            val click = VibrationEffect.Composition.PRIMITIVE_CLICK
+            val tick = VibrationEffect.Composition.PRIMITIVE_TICK
+            if (has(click, tick)) {
+                val thud = if (Build.VERSION.SDK_INT >= 31 && has(VibrationEffect.Composition.PRIMITIVE_THUD)) VibrationEffect.Composition.PRIMITIVE_THUD else click
                 val k = (0.15f + strength / PRIMITIVE_MAX * 0.85f).coerceIn(0.05f, 1f)
-                val click = VibrationEffect.Composition.PRIMITIVE_CLICK
+                // 0 below PRIMITIVE_MAX, up to 1 at the right end: weight of the stacked body.
+                val boost = ((strength - PRIMITIVE_MAX) / (1f - PRIMITIVE_MAX)).coerceIn(0f, 1f)
                 val comp = VibrationEffect.startComposition()
+                fun tap(p: Int, scale: Float, delay: Int = 0) {
+                    comp.addPrimitive(p, scale, delay)
+                    if (boost > 0f) comp.addPrimitive(if (p == tick) click else thud, boost, 0)
+                }
                 when (kind) {
-                    Haptic.TICK -> comp.addPrimitive(VibrationEffect.Composition.PRIMITIVE_TICK, k)
-                    Haptic.CLICK -> comp.addPrimitive(click, k)
-                    Haptic.HEAVY -> comp.addPrimitive(thud, k).addPrimitive(click, k, 20)
-                    Haptic.SUCCESS -> comp.addPrimitive(click, 0.7f * k).addPrimitive(thud, k, 70)
-                    Haptic.ERROR -> comp.addPrimitive(click, k).addPrimitive(click, k, 60).addPrimitive(click, k, 60)
+                    Haptic.TICK -> tap(tick, k)
+                    Haptic.CLICK -> tap(click, k)
+                    Haptic.HEAVY -> { tap(thud, k); comp.addPrimitive(click, k, 20) }
+                    Haptic.SUCCESS -> { tap(click, 0.7f * k); tap(thud, k, 70) }
+                    Haptic.ERROR -> { tap(click, k); tap(click, k, 60); tap(click, k, 60) }
                 }
                 return comp.compose()
             }

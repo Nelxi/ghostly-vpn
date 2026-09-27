@@ -780,7 +780,7 @@ private fun HapticStrength(controller: GhostlyController, value: Float, onChange
                 thumbColor = c.accent, activeTrackColor = c.accent, inactiveTrackColor = c.ink3.copy(alpha = 0.25f),
             ),
         )
-        Text("Если отклик почти не чувствуется, двигай вправо: верхняя часть шкалы включает сильные импульсы", style = MaterialTheme.typography.bodySmall)
+        Text("Если отклик почти не чувствуется, двигай вправо: в конце шкалы к нажатию добавляется плотный удар", style = MaterialTheme.typography.bodySmall)
     }
 }
 
