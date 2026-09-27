@@ -188,11 +188,11 @@ fun GhostlyApp(controller: GhostlyController) {
                         }
                         AnimatedContent(
                             targetState = tab,
-                            // fade = pageFade below (the built-in fade cut the cards' shadows at the page edge)
-                            transitionSpec = { scaleIn(initialScale = 0.985f) togetherWith androidx.compose.animation.ExitTransition.KeepUntilTransitionsFinished },
+                            // no fade (it cuts or delays the cards' shadows): old page leaves at once, new one settles in
+                            transitionSpec = { (scaleIn(initialScale = 0.985f) + androidx.compose.animation.slideInVertically(Motion.quick(320)) { it / 40 }) togetherWith androidx.compose.animation.ExitTransition.None },
                             modifier = Modifier.fillMaxSize().predictiveCard(tabPeek, app.ghostly.ui.screens.peekBrush()),
                         ) { t ->
-                            Box(Modifier.fillMaxSize().then(Modifier.pageFade(this@AnimatedContent, 260, 160)), contentAlignment = Alignment.TopCenter) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                                 Box(Modifier.widthIn(max = 620.dp).fillMaxSize()) {
                                     when (t) {
                                         Tab.HOME -> HomeScreen(controller, onPickServer = { pickerOpen = true }, contentPadding = pad)

@@ -260,10 +260,9 @@ fun Modifier.appear(index: Int, step: Long = 35L, enabled: Boolean = true): Modi
     }
     val p by animateFloatAsState(if (shown) 1f else 0f, if (reduce) tween(200) else Motion.bouncy())
     graphicsLayer {
-        // ModulateAlpha: no offscreen buffer clipped to the card's box, so the shadow that spills outside
-        // it isn't cut into a square while the card fades in (and doesn't "pop" when the fade ends).
-        compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
-        alpha = p.coerceIn(0f, 1f)
+        // Motion only, no alpha: a fade renders through an offscreen buffer clipped to the card's box (the
+        // shadow gets cut, then pops), and ModulateAlpha doesn't reach child layers (the text shows at once
+        // while the shadow lags). A card with its shadow is fully drawn from the first frame instead.
         translationY = (1f - p) * 18.dp.toPx()
         val s = 0.96f + 0.04f * p
         scaleX = s; scaleY = s

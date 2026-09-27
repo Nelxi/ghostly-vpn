@@ -139,8 +139,8 @@ fun SettingsScreen(controller: GhostlyController, contentPadding: PaddingValues)
         targetState = page,
         transitionSpec = {
             val forward = targetState != Page.MAIN
-            (slideInHorizontally { if (forward) it / 3 else -it / 3 } + fadeIn()) togetherWith
-                (slideOutHorizontally { if (forward) -it / 3 else it / 3 } + fadeOut())
+            // slide only (a fade cuts the groups' shadows); the old page leaves at once
+            slideInHorizontally(app.ghostly.ui.theme.Motion.quick(320)) { if (forward) it / 4 else -it / 4 } togetherWith androidx.compose.animation.ExitTransition.None
         },
     ) { p ->
         val back = { page = Page.MAIN }

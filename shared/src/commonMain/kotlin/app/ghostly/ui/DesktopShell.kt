@@ -86,12 +86,12 @@ internal fun DesktopShell(controller: GhostlyController, tab: Tab, onTab: (Tab) 
         AnimatedContent(
             targetState = tab,
             transitionSpec = {
-                // the fade itself is pageFade below (no offscreen buffer that cuts the shadows)
-                slideInVertically(Motion.quick(420)) { it / 24 } togetherWith ExitTransition.KeepUntilTransitionsFinished
+                // no fade (it cuts or delays the shadows): the old page leaves at once, the new one slides in
+                slideInVertically(Motion.quick(360)) { it / 28 } togetherWith ExitTransition.None
             },
             modifier = Modifier.weight(1f).fillMaxHeight(),
         ) { t ->
-          Box(Modifier.fillMaxSize().pageFade(this@AnimatedContent, 320, 140)) {
+          Box(Modifier.fillMaxSize()) {
             when (t) {
                 Tab.HOME -> HomeDesktop(controller, onAdd)
                 Tab.SERVERS -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
