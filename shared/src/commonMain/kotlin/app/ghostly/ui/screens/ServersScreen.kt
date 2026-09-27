@@ -233,9 +233,26 @@ private fun ServersList(
                 )
             }
             if (profile.id !in collapsed) {
-                itemsIndexed(list, key = { _, it -> it.id }) { i, s ->
-                    val animate = remember(s.id) { seen.add(s.id) && i < 12 }
-                    ServerRow(s, s.id == selected, pings[s.id], s.id in pinging, s.id in favorites, controller, Modifier.appear(i, enabled = animate).animateItem()) { pick(s) }
+                // Several countries in one list: consecutive servers of a country get one header with the
+                // flag and the country's name, and the rows show the protocol instead of repeating the flag.
+                // Sorting by ping mixes countries, so there the flags stay on the rows.
+                val byCountry = sort != Sort.PING && list.mapNotNull { it.title().flag }.distinct().size > 1
+                // One section per country (order of first appearance; the provider's order inside it),
+                // so a torrent server at the end doesn't split "Финляндия" into two sections.
+                val rows = if (byCountry) {
+                    val order = list.mapNotNull { it.title().flag }.distinct()
+                    list.sortedBy { srv -> srv.title().flag?.let { order.indexOf(it) } ?: -1 }
+                } else list
+                val flags = rows.map { it.title().flag }
+                rows.forEachIndexed { i, s ->
+                    val flag = flags[i]
+                    if (byCountry && flag != null && (i == 0 || flags[i - 1] != flag)) {
+                        item(key = "country:" + profile.id + ":" + i) { CountryHeader(flag, Modifier.animateItem()) }
+                    }
+                    item(key = s.id) {
+                        val animate = remember(s.id) { seen.add(s.id) && i < 12 }
+                        ServerRow(s, s.id == selected, pings[s.id], s.id in pinging, s.id in favorites, controller, Modifier.appear(i, enabled = animate).animateItem(), showFlag = !(byCountry && flag != null)) { pick(s) }
+                    }
                 }
             }
         }
@@ -248,8 +265,8 @@ private fun ServersList(
 private fun SearchField(value: String, onChange: (String) -> Unit, modifier: Modifier) {
     val c = Ghost.colors
     Row(
-        modifier.height(42.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.06f))
-            .border(1.dp, c.line, RoundedCornerShape(14.dp)).padding(horizontal = 12.dp),
+        modifier.height(42.dp).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.06f))
+            .border(1.dp, c.line, RoundedCornerShape(16.dp)).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.Rounded.Search, null, tint = c.ink3, modifier = Modifier.size(18.dp))
@@ -262,6 +279,17 @@ private fun SearchField(value: String, onChange: (String) -> Unit, modifier: Mod
                 cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth(),
             )
         }
+    }
+}
+
+/** Country section inside a subscription: flag + name, quieter than the subscription header. */
+@Composable
+private fun CountryHeader(flag: String, modifier: Modifier = Modifier) {
+    val c = Ghost.colors
+    Row(modifier.padding(start = LocalListPad.current + 14.dp, top = 14.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        app.ghostly.ui.components.FlagIcon(flag, 13.dp)
+        Spacer(Modifier.width(8.dp))
+        Text(app.ghostly.ui.countryName(flag), style = MaterialTheme.typography.labelMedium, color = c.ink2)
     }
 }
 
@@ -287,7 +315,7 @@ private fun ProfileHeader(profile: Profile, collapsed: Boolean, refreshing: Bool
     ) {
         // The arrow folds the list; the rest of the header opens the subscription page.
         Icon(Icons.Rounded.ExpandMore, if (collapsed) "Развернуть" else "Свернуть", tint = c.ink3,
-            modifier = Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).clickable(onClick = onToggle).padding(7.dp).rotate(arrow))
+            modifier = Modifier.size(34.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onToggle).padding(7.dp).rotate(arrow))
         Column(
             Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).pointerHoverIcon(PointerIcon.Hand)
                 .clickable { nav.open(profile.id) }.padding(horizontal = 6.dp, vertical = 6.dp),
@@ -312,12 +340,12 @@ private fun ProfileHeader(profile: Profile, collapsed: Boolean, refreshing: Bool
             Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) {
                 if (refreshing) Spinner(c.accent, Modifier.size(18.dp))
                 else Icon(Icons.Rounded.Refresh, "Обновить", tint = c.ink3,
-                    modifier = Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).clickable { controller.refresh(profile.id, manual = true) }.padding(8.dp))
+                    modifier = Modifier.size(34.dp).clip(RoundedCornerShape(12.dp)).clickable { controller.refresh(profile.id, manual = true) }.padding(8.dp))
             }
         }
         Box {
             Icon(Icons.Rounded.MoreHoriz, null, tint = c.ink3,
-                modifier = Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).clickable { menu = true }.padding(7.dp))
+                modifier = Modifier.size(34.dp).clip(RoundedCornerShape(12.dp)).clickable { menu = true }.padding(7.dp))
             DropdownMenu(menu, { menu = false }) {
                 DropdownMenuItem(text = { Text("О подписке") }, leadingIcon = { Icon(Icons.Rounded.Info, null) },
                     onClick = { menu = false; nav.open(profile.id) })
@@ -391,7 +419,7 @@ private fun BestRow(server: Server, ms: Long?, onClick: () -> Unit) {
 @Composable
 private fun ServerRow(
     server: Server, selected: Boolean, ping: Ping?, loading: Boolean, favorite: Boolean,
-    controller: GhostlyController, modifier: Modifier = Modifier, onClick: () -> Unit,
+    controller: GhostlyController, modifier: Modifier = Modifier, showFlag: Boolean = true, onClick: () -> Unit,
 ) {
     val c = Ghost.colors
     val interaction = remember { MutableInteractionSource() }
@@ -410,7 +438,8 @@ private fun ServerRow(
     var menu by remember { mutableStateOf(false) }
     Row(
         modifier.fillMaxWidth().padding(horizontal = LocalListPad.current, vertical = 1.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .pressScale(interaction, 0.985f, hover = 1f)
+            .clip(RoundedCornerShape(16.dp))
             .background(bg)
             .drawBehind {
                 if (bar > 0.01f) drawRoundRect(
@@ -426,7 +455,7 @@ private fun ServerRow(
             .animateContentSize(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ServerGlyph(server)
+        ServerGlyph(server, showFlag)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             val t = server.title()
@@ -452,12 +481,12 @@ private fun ServerRow(
             Icon(
                 if (favorite) Icons.Rounded.Star else Icons.Rounded.StarBorder, null,
                 tint = if (favorite) c.warn else c.ink3.copy(alpha = 0.6f),
-                modifier = Modifier.size(32.dp).clip(RoundedCornerShape(10.dp)).clickable { controller.toggleFavorite(server.id) }.padding(7.dp),
+                modifier = Modifier.size(32.dp).clip(RoundedCornerShape(12.dp)).clickable { controller.toggleFavorite(server.id) }.padding(7.dp),
             )
         } else Spacer(Modifier.width(32.dp))
         Box {
             Icon(Icons.Rounded.MoreHoriz, null, tint = c.ink3.copy(alpha = if (showTools) 1f else 0f),
-                modifier = Modifier.size(30.dp).clip(RoundedCornerShape(10.dp)).clickable { menu = true }.padding(6.dp))
+                modifier = Modifier.size(30.dp).clip(RoundedCornerShape(12.dp)).clickable { menu = true }.padding(6.dp))
             DropdownMenu(menu, { menu = false }) {
                 DropdownMenuItem(text = { Text("Проверить пинг") }, leadingIcon = { Icon(Icons.Rounded.NetworkPing, null) },
                     onClick = { menu = false; controller.ping(server.id) })
@@ -477,16 +506,16 @@ private fun ServerRow(
 
 /** Flag if the name has one, otherwise a small muted protocol glyph — no filled tiles on every row. */
 @Composable
-private fun ServerGlyph(server: Server) {
+private fun ServerGlyph(server: Server, showFlag: Boolean = true) {
     val c = Ghost.colors
-    val flag = server.title().flag
+    val flag = server.title().flag?.takeIf { showFlag }
     Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
         when {
             flag != null -> app.ghostly.ui.components.FlagIcon(flag, 15.dp)
             server.isAuto -> Icon(Icons.Rounded.AutoAwesome, null, tint = c.accent, modifier = Modifier.size(19.dp))
             server.isWhitelist -> Icon(Icons.Rounded.Shield, null, tint = c.ink2, modifier = Modifier.size(18.dp))
             server.protocol == "hysteria" -> Icon(Icons.Rounded.Bolt, null, tint = c.ink2, modifier = Modifier.size(19.dp))
-            else -> Icon(Icons.Rounded.Public, null, tint = c.ink2, modifier = Modifier.size(18.dp))
+            else -> Icon(Icons.Rounded.Public, null, tint = c.ink3.copy(alpha = 0.7f), modifier = Modifier.size(17.dp))
         }
     }
 }

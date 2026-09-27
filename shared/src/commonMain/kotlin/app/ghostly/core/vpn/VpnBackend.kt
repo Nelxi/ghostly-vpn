@@ -98,6 +98,12 @@ interface PlatformInfo {
     /** Vibration of the given kind; [strength] 0..1 is the user's slider (no-op where there is no motor). */
     fun haptic(kind: Haptic = Haptic.CLICK, strength: Float = 0.6f) {}
 
+    /**
+     * A short UI sound for the same moments as [haptic]: CLICK a tick, HEAVY the ghost press,
+     * SUCCESS connected, ERROR failed (TICK stays silent: switches would be too chatty). [volume] 0..1.
+     */
+    fun playSound(kind: Haptic, volume: Float) {}
+
     /** The system's wallpaper accent (Android 12+ Monet), ARGB; null where there is none. */
     fun systemAccent(): Long? = null
 

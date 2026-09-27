@@ -322,6 +322,8 @@ private fun MainSettings(controller: GhostlyController, contentPadding: PaddingV
                     SettingRow("Дать доступ для сцены", need, Icons.Rounded.MusicNote, onClick = { stage.requestSetup() }) { Chevron() }
                 }
             }
+            ToggleRow("Звуки", "Мягкие звуки при подключении, ошибках и выборе сервера", s.sounds, Icons.Rounded.MusicNote) { v -> set { it.copy(sounds = v) } }
+            if (s.sounds) SoundVolume(controller, s.soundVolume) { v -> set { it.copy(soundVolume = v) } }
             if (!controller.platform.isDesktop) {
                 ToggleRow("Вибрация", "Отклик на нажатия", s.haptics, Icons.Rounded.Vibration) { v -> set { it.copy(haptics = v) } }
                 if (s.haptics) HapticStrength(controller, s.hapticStrength) { v -> set { it.copy(hapticStrength = v) } }
@@ -451,7 +453,7 @@ private fun AppsPage(controller: GhostlyController, contentPadding: PaddingValue
                     style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(6.dp, 10.dp),
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.weight(1f).height(42.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.06f)).padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
+                    Box(Modifier.weight(1f).height(42.dp).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.06f)).padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
                         if (query.isEmpty()) Text("Поиск приложений", style = MaterialTheme.typography.bodyMedium, color = c.ink3)
                         BasicTextField(query, { query = it }, singleLine = true, textStyle = MaterialTheme.typography.bodyMedium.copy(color = c.ink), cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
                     }
@@ -477,7 +479,7 @@ private fun AppsPage(controller: GhostlyController, contentPadding: PaddingValue
                     }.padding(horizontal = 22.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(Modifier.size(36.dp).clip(RoundedCornerShape(11.dp)).background(c.accent.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(c.accent.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
                         Text(app.label.take(1).uppercase(), style = MaterialTheme.typography.titleSmall, color = c.accent)
                     }
                     Spacer(Modifier.width(12.dp))
@@ -567,8 +569,8 @@ private fun PortField(label: String, value: Int, modifier: Modifier, onChange: (
     var text by remember(value) { mutableStateOf(value.toString()) }
     val valid = text.toIntOrNull()?.let { it in 1024..65535 } == true
     Column(
-        modifier.clip(RoundedCornerShape(14.dp)).background(Color.Black.copy(alpha = 0.22f))
-            .border(1.dp, if (valid) c.line else c.bad.copy(alpha = 0.6f), RoundedCornerShape(14.dp)).padding(12.dp),
+        modifier.clip(RoundedCornerShape(16.dp)).background(Color.Black.copy(alpha = 0.22f))
+            .border(1.dp, if (valid) c.line else c.bad.copy(alpha = 0.6f), RoundedCornerShape(16.dp)).padding(12.dp),
     ) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = c.ink3)
         BasicTextField(
@@ -592,8 +594,8 @@ private fun CredentialField(label: String, value: String, controller: GhostlyCon
     var text by remember(value) { mutableStateOf(value) }
     var shown by remember { mutableStateOf(!secret) }
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.Black.copy(alpha = 0.22f))
-            .border(1.dp, c.line, RoundedCornerShape(14.dp)).padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 6.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.Black.copy(alpha = 0.22f))
+            .border(1.dp, c.line, RoundedCornerShape(16.dp)).padding(start = 12.dp, top = 8.dp, bottom = 8.dp, end = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -781,6 +783,30 @@ private fun HapticStrength(controller: GhostlyController, value: Float, onChange
             ),
         )
         Text("Если отклик почти не чувствуется, двигай вправо: в конце шкалы к нажатию добавляется плотный удар", style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+/** Volume of the UI sounds; lifting the finger plays the "connected" chime at the new level. */
+@Composable
+private fun SoundVolume(controller: GhostlyController, value: Float, onChange: (Float) -> Unit) {
+    val c = Ghost.colors
+    var v by remember(value) { mutableStateOf(value) }
+    Column(Modifier.padding(start = 6.dp, end = 6.dp, bottom = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Громкость", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            Text("${(v * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+        }
+        androidx.compose.material3.Slider(
+            value = v,
+            onValueChange = { v = it },
+            onValueChangeFinished = {
+                onChange(v)
+                controller.platform.playSound(app.ghostly.core.vpn.Haptic.SUCCESS, v)
+            },
+            colors = androidx.compose.material3.SliderDefaults.colors(
+                thumbColor = c.accent, activeTrackColor = c.accent, inactiveTrackColor = c.ink3.copy(alpha = 0.25f),
+            ),
+        )
     }
 }
 

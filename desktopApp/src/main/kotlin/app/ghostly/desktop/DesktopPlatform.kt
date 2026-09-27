@@ -121,6 +121,38 @@ class DesktopPlatform : PlatformInfo {
         true
     }.getOrDefault(false)
 
+    // Several takes per action (like the site): the same action never sounds exactly the same twice.
+    private val clips: Map<app.ghostly.core.vpn.Haptic, List<javax.sound.sampled.Clip>> by lazy {
+        val files = mapOf(
+            app.ghostly.core.vpn.Haptic.CLICK to ("ui_click" to 3), app.ghostly.core.vpn.Haptic.HEAVY to ("ui_press" to 4),
+            app.ghostly.core.vpn.Haptic.SUCCESS to ("ui_success" to 4), app.ghostly.core.vpn.Haptic.ERROR to ("ui_error" to 2),
+        )
+        files.mapValues { (_, spec) ->
+            (0 until spec.second).mapNotNull { i ->
+                runCatching {
+                    val res = DesktopPlatform::class.java.getResourceAsStream("/sounds/${spec.first}_$i.wav") ?: return@runCatching null
+                    val stream = javax.sound.sampled.AudioSystem.getAudioInputStream(java.io.BufferedInputStream(res))
+                    javax.sound.sampled.AudioSystem.getClip().apply { open(stream) }
+                }.getOrNull()
+            }
+        }
+    }
+
+    override fun playSound(kind: app.ghostly.core.vpn.Haptic, volume: Float) {
+        Thread {
+            runCatching {
+                val clip = clips[kind]?.randomOrNull() ?: return@runCatching
+                (clip.getControl(javax.sound.sampled.FloatControl.Type.MASTER_GAIN) as? javax.sound.sampled.FloatControl)?.let { g ->
+                    val db = if (volume <= 0.001f) g.minimum else (20f * kotlin.math.log10(volume.coerceIn(0.001f, 1f)))
+                    g.value = db.coerceIn(g.minimum, g.maximum)
+                }
+                clip.stop()
+                clip.framePosition = 0
+                clip.start()
+            }
+        }.apply { isDaemon = true }.start()
+    }
+
     /** Windows accent colour (Settings → Personalisation → Colours), the desktop's "Monet". */
     private val winAccent: Long? by lazy {
         if (hostOs != HostOs.WINDOWS) return@lazy null

@@ -119,7 +119,7 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
         // Expiry and traffic
         if (info != null) {
             Spacer(Modifier.height(16.dp))
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White.copy(alpha = 0.05f)).padding(14.dp)) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.05f)).padding(14.dp)) {
                 Text(
                     if (info.unlimitedTime) "Бессрочно" else Format.expiryPhrase(info.expire, now),
                     style = MaterialTheme.typography.titleMedium,
@@ -162,8 +162,8 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
         profile.announce?.let { note ->
             Spacer(Modifier.height(12.dp))
             Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.accent.copy(alpha = 0.09f))
-                    .border(1.dp, c.accent.copy(alpha = 0.22f), RoundedCornerShape(18.dp)).padding(14.dp),
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.accent.copy(alpha = 0.09f))
+                    .border(1.dp, c.accent.copy(alpha = 0.22f), RoundedCornerShape(20.dp)).padding(14.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.Campaign, null, tint = c.accent, modifier = Modifier.size(16.dp))
@@ -180,8 +180,8 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
             val tone = when (n.color) { "red" -> c.bad; "green" -> c.ok; "blue" -> Color(0xFF6EA8FF); else -> c.accent }
             Spacer(Modifier.height(12.dp))
             Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(tone.copy(alpha = 0.10f))
-                    .border(1.dp, tone.copy(alpha = 0.28f), RoundedCornerShape(18.dp)).padding(14.dp),
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(tone.copy(alpha = 0.10f))
+                    .border(1.dp, tone.copy(alpha = 0.28f), RoundedCornerShape(20.dp)).padding(14.dp),
             ) {
                 FlagText(n.text, style = MaterialTheme.typography.bodyMedium)
                 n.buttonUrl?.let { url ->
@@ -199,7 +199,7 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
         val traffic = info != null && info.pools.isEmpty() && info.used > 0
         if (traffic || profile.url != null) {
             Spacer(Modifier.height(12.dp))
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White.copy(alpha = 0.05f)).padding(horizontal = 14.dp, vertical = 6.dp)) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.05f)).padding(horizontal = 14.dp, vertical = 6.dp)) {
                 if (traffic) {
                     Fact("Скачано", Format.bytes(info!!.download))
                     Fact("Отдано", Format.bytes(info.upload))
@@ -223,7 +223,7 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
             Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { (icon, label, onClick) ->
                     Row(
-                        Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.06f))
+                        Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.06f))
                             .clickable(onClick = onClick).padding(vertical = 12.dp),
                         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -247,7 +247,7 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
         subs.forEach { p ->
             val isActive = p.servers.any { it.id == selected }
             Row(
-                Modifier.fillMaxWidth().padding(vertical = 2.dp).clip(RoundedCornerShape(14.dp))
+                Modifier.fillMaxWidth().padding(vertical = 2.dp).clip(RoundedCornerShape(16.dp))
                     .background(if (p.id == profile.id) c.accent.copy(alpha = 0.10f) else Color.Transparent)
                     .clickable { shownId = p.id }.padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,

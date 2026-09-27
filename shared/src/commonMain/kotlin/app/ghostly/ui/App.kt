@@ -218,8 +218,8 @@ fun GhostlyApp(controller: GhostlyController) {
                 var last by remember { mutableStateOf("") }
                 toast?.let { last = it }
                 Box(
-                    Modifier.widthIn(max = 520.dp).clip(RoundedCornerShape(18.dp)).background(Color(0xF01A1328))
-                        .border(1.dp, Ghost.colors.accent.copy(alpha = 0.3f), RoundedCornerShape(18.dp))
+                    Modifier.widthIn(max = 520.dp).clip(RoundedCornerShape(20.dp)).background(Color(0xF01A1328))
+                        .border(1.dp, Ghost.colors.accent.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
                         .clickable { toast = null }.padding(horizontal = 16.dp, vertical = 12.dp),
                 ) { Text(last, style = MaterialTheme.typography.bodyMedium.copy(color = Ghost.colors.ink)) }
             }
@@ -394,9 +394,9 @@ private fun TabBar(selected: Tab, onSelect: (Tab) -> Unit, modifier: Modifier) {
     val c = Ghost.colors
     Row(
         modifier
-            .clip(RoundedCornerShape(30.dp))
+            .clip(RoundedCornerShape(28.dp))
             .background(Color(0xE6130E1D))
-            .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.16f), Color.White.copy(alpha = 0.04f))), RoundedCornerShape(30.dp))
+            .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.16f), Color.White.copy(alpha = 0.04f))), RoundedCornerShape(28.dp))
             .padding(6.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {

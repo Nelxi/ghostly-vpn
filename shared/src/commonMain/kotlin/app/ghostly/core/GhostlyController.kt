@@ -1065,13 +1065,14 @@ class GhostlyController(
     private fun tunnelAffecting(s: AppSettings) = s.copy(
         accent = AppSettings().accent, haptics = true, reduceMotion = false, language = "",
         autoUpdateSubs = true, autoConnect = false, startOnBoot = false, pingUrl = "",
-        hapticStrength = 0f, monet = false, blockCheck = false,
+        hapticStrength = 0f, monet = false, blockCheck = false, sounds = false, soundVolume = 0f,
         pingMethod = app.ghostly.core.model.PingMethod.PROXY_GET, mihomoPingMethod = app.ghostly.core.model.PingMethod.PROXY_GET,
     )
 
     fun haptic(kind: app.ghostly.core.vpn.Haptic = app.ghostly.core.vpn.Haptic.CLICK) {
         val s = _settings.value
         if (s.haptics) platform.haptic(kind, s.hapticStrength)
+        if (s.sounds && kind != app.ghostly.core.vpn.Haptic.TICK) platform.playSound(kind, s.soundVolume)
     }
 
     fun markOnboarded() {

@@ -149,8 +149,8 @@ private fun Sidebar(controller: GhostlyController, tab: Tab, onTab: (Tab) -> Uni
         val profile = remember(profiles) { controller.selectedServer()?.let { controller.profileOf(it.id) } ?: profiles.firstOrNull() }
         profile?.info?.let { info ->
             Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White.copy(alpha = 0.045f))
-                    .border(1.dp, c.line, RoundedCornerShape(18.dp)).spotlight(c.accent, 140.dp).padding(14.dp),
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.045f))
+                    .border(1.dp, c.line, RoundedCornerShape(20.dp)).spotlight(c.accent, 140.dp).padding(14.dp),
             ) {
                 app.ghostly.ui.components.FlagText(profile.name, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(2.dp))

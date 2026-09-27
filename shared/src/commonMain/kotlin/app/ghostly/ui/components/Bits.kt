@@ -1,5 +1,6 @@
 package app.ghostly.ui.components
 
+import androidx.compose.ui.draw.dropShadow
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
@@ -99,7 +100,7 @@ fun PingPill(ms: Long?, loading: Boolean, modifier: Modifier = Modifier) {
 fun Tag(text: String, modifier: Modifier = Modifier, color: Color = Ghost.colors.ink3) {
     Text(
         text.uppercase(),
-        modifier.clip(RoundedCornerShape(7.dp)).background(color.copy(alpha = 0.12f)).padding(horizontal = 6.dp, vertical = 2.dp),
+        modifier.clip(RoundedCornerShape(8.dp)).background(color.copy(alpha = 0.12f)).padding(horizontal = 6.dp, vertical = 2.dp),
         style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp, letterSpacing = 0.6.sp),
         color = color, maxLines = 1,
     )
@@ -115,7 +116,11 @@ fun AccentButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifie
     Row(
         modifier
             .pressScale(interaction, 0.96f)
-            .clip(RoundedCornerShape(18.dp))
+            // accent bloom under the primary button
+            .then(if (enabled) Modifier.dropShadow(RoundedCornerShape(20.dp), androidx.compose.ui.graphics.shadow.Shadow(
+                radius = 26.dp, color = c.accent.copy(alpha = 0.55f), spread = 1.dp, offset = androidx.compose.ui.unit.DpOffset(0.dp, 6.dp),
+            )) else Modifier)
+            .clip(RoundedCornerShape(20.dp))
             .background(c.accent)
             .sheen(interaction, strength = 0.22f)
             .graphicsLayer { alpha = if (enabled) 1f else 0.45f }
@@ -138,10 +143,10 @@ fun SoftButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier,
     Row(
         modifier
             .pressScale(interaction, 0.96f)
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(20.dp))
             .background(bg)
             .sheen(interaction, strength = 0.1f)
-            .border(1.dp, edge, RoundedCornerShape(18.dp))
+            .border(1.dp, edge, RoundedCornerShape(20.dp))
             .clickable(interaction, null, onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.Center,
@@ -227,7 +232,7 @@ fun SettingRow(
             Box(
                 Modifier.size(34.dp)
                     .graphicsLayer { val s = 1f + 0.08f * lift; scaleX = s; scaleY = s; rotationZ = -6f * lift }
-                    .clip(RoundedCornerShape(11.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(c.accent.copy(alpha = 0.13f + 0.1f * lift)),
                 contentAlignment = Alignment.Center,
             ) {
@@ -258,18 +263,18 @@ fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> 
     val index = options.indexOfFirst { it.first == selected }.coerceAtLeast(0)
     val pos by animateFloatAsState(index.toFloat(), Motion.bouncy())
     BoxWithConstraints(
-        modifier.fillMaxWidth().height(42.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.05f)).padding(3.dp),
+        modifier.fillMaxWidth().height(42.dp).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.05f)).padding(3.dp),
     ) {
         val segW = maxWidth / options.size
         Box(
-            Modifier.offset(x = segW * pos).width(segW).fillMaxHeight().clip(RoundedCornerShape(11.dp))
+            Modifier.offset(x = segW * pos).width(segW).fillMaxHeight().clip(RoundedCornerShape(12.dp))
                 .background(Brush.linearGradient(listOf(c.accent.copy(alpha = 0.32f), c.accent2.copy(alpha = 0.26f))))
-                .border(1.dp, c.accent.copy(alpha = 0.35f), RoundedCornerShape(11.dp)),
+                .border(1.dp, c.accent.copy(alpha = 0.35f), RoundedCornerShape(12.dp)),
         )
         Row(Modifier.fillMaxWidth().fillMaxHeight()) {
             options.forEach { (value, label) ->
                 Box(
-                    Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(11.dp))
+                    Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(12.dp))
                         .clickable(remember { MutableInteractionSource() }, null) { if (value != selected) feel(app.ghostly.core.vpn.Haptic.CLICK); onSelect(value) },
                     contentAlignment = Alignment.Center,
                 ) {

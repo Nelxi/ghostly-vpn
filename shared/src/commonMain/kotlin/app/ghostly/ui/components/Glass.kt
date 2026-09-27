@@ -1,5 +1,6 @@
 package app.ghostly.ui.components
 
+import androidx.compose.ui.draw.dropShadow
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -139,7 +140,7 @@ fun AuroraBackground(energy: Float, modifier: Modifier = Modifier, content: @Com
 @Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(26.dp),
+    shape: Shape = RoundedCornerShape(28.dp),
     padding: Dp = 18.dp,
     strong: Boolean = false,
     glow: Color? = null,
@@ -152,6 +153,20 @@ fun GlassCard(
     val lit by animateFloatAsState(if (hovered) 1f else 0f, Motion.quick(260))
     var m = modifier
     if (onClick != null) m = m.pressScale(interaction, 0.975f, hover = 1.012f)
+    // Neverlose-style depth. On a near-black background a dark shadow alone is invisible, so the outline is
+    // lit instead: a wide soft accent bloom around the card, a tight glow hugging the edge, and a dark drop
+    // shadow underneath for weight where the aurora is lighter. Strong cards glow more; hover warms it up.
+    val accentGlow = glow ?: c.accent
+    val power = (if (strong) 1f else 0.6f) + 0.5f * lit
+    m = m.dropShadow(shape, androidx.compose.ui.graphics.shadow.Shadow(
+        radius = 34.dp, color = Color.Black.copy(alpha = 0.55f), offset = androidx.compose.ui.unit.DpOffset(0.dp, 16.dp),
+    ))
+    m = m.dropShadow(shape, androidx.compose.ui.graphics.shadow.Shadow(
+        radius = 30.dp, color = accentGlow.copy(alpha = 0.16f * power), spread = 2.dp,
+    ))
+    m = m.dropShadow(shape, androidx.compose.ui.graphics.shadow.Shadow(
+        radius = 7.dp, color = accentGlow.copy(alpha = 0.20f * power),
+    ))
     m = m.clip(shape)
         .background(
             Brush.verticalGradient(

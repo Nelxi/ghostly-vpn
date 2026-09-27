@@ -119,3 +119,40 @@ fun Server.transportLabel(): String? = when {
     transport != null -> transport.uppercase()
     else -> null
 }
+
+
+private val COUNTRY_NAMES = mapOf(
+    "FI" to "Финляндия", "DE" to "Германия", "NL" to "Нидерланды", "RU" to "Россия", "US" to "США",
+    "GB" to "Великобритания", "FR" to "Франция", "SE" to "Швеция", "NO" to "Норвегия", "PL" to "Польша",
+    "TR" to "Турция", "KZ" to "Казахстан", "EE" to "Эстония", "LV" to "Латвия", "LT" to "Литва",
+    "AT" to "Австрия", "CH" to "Швейцария", "JP" to "Япония", "SG" to "Сингапур", "HK" to "Гонконг",
+    "UA" to "Украина", "CA" to "Канада", "EU" to "Европа", "AE" to "ОАЭ", "IT" to "Италия", "ES" to "Испания",
+    "CZ" to "Чехия", "RO" to "Румыния", "BG" to "Болгария", "RS" to "Сербия", "AM" to "Армения",
+    "GE" to "Грузия", "BY" to "Беларусь", "KR" to "Корея", "IN" to "Индия", "AU" to "Австралия",
+    "BR" to "Бразилия", "IL" to "Израиль", "HU" to "Венгрия", "MD" to "Молдова", "IE" to "Ирландия",
+    "DK" to "Дания", "BE" to "Бельгия", "PT" to "Португалия", "GR" to "Греция", "CY" to "Кипр",
+)
+
+/** Russian name of a flag emoji's country ("🇫🇮" → "Финляндия"); the two-letter code when unknown. */
+fun countryName(flag: String): String {
+    val cps = flag.flagCodePoints()
+    if (cps.size < 2) return flag
+    val code = cps.take(2).map { ('A'.code + (it - 0x1F1E6)).toChar() }.joinToString("")
+    return COUNTRY_NAMES[code] ?: code
+}
+
+private fun String.flagCodePoints(): List<Int> {
+    val out = ArrayList<Int>()
+    var i = 0
+    while (i < length) {
+        val c = this[i]
+        if (c.isHighSurrogate() && i + 1 < length) {
+            out += ((c.code - 0xD800) shl 10) + (this[i + 1].code - 0xDC00) + 0x10000
+            i += 2
+        } else {
+            out += c.code
+            i++
+        }
+    }
+    return out.filter { it in 0x1F1E6..0x1F1FF }
+}

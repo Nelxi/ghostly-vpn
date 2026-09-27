@@ -188,6 +188,30 @@ class AndroidPlatform(private val context: Context) : PlatformInfo {
         }
     }
 
+    // Several takes per action (like the site): the same action never sounds exactly the same twice.
+    private val sounds: Pair<android.media.SoundPool, Map<Haptic, List<Int>>> by lazy {
+        val pool = android.media.SoundPool.Builder().setMaxStreams(3).setAudioAttributes(
+            android.media.AudioAttributes.Builder()
+                .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build(),
+        ).build()
+        fun load(vararg ids: Int) = ids.map { pool.load(context, it, 1) }
+        pool to mapOf(
+            Haptic.CLICK to load(R.raw.ui_click_0, R.raw.ui_click_1, R.raw.ui_click_2),
+            Haptic.HEAVY to load(R.raw.ui_press_0, R.raw.ui_press_1, R.raw.ui_press_2, R.raw.ui_press_3),
+            Haptic.SUCCESS to load(R.raw.ui_success_0, R.raw.ui_success_1, R.raw.ui_success_2, R.raw.ui_success_3),
+            Haptic.ERROR to load(R.raw.ui_error_0, R.raw.ui_error_1),
+        )
+    }
+
+    override fun playSound(kind: Haptic, volume: Float) {
+        val (pool, ids) = sounds
+        val id = ids[kind]?.randomOrNull() ?: return
+        val v = volume.coerceIn(0f, 1f)
+        if (v > 0f) pool.play(id, v, v, 1, 0, 1f)
+    }
+
     /** Material You: the wallpaper's primary accent, a light tone that reads on the dark UI. */
     override fun systemAccent(): Long? =
         if (Build.VERSION.SDK_INT >= 31) runCatching { context.getColor(android.R.color.system_accent1_200).toLong() and 0xFFFFFFFFL }.getOrNull()

@@ -1,5 +1,7 @@
 package app.ghostly.ui.screens
 
+import androidx.compose.ui.draw.clipToBounds
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -200,12 +202,17 @@ fun HomeScreen(controller: GhostlyController, onPickServer: () -> Unit, contentP
 fun HomeDesktop(controller: GhostlyController, onAdd: () -> Unit) {
     val m = rememberHome(controller)
     val c = Ghost.colors
-    Row(Modifier.fillMaxSize().padding(24.dp), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().padding(24.dp)) {
+    // The servers panel shares the width with the main column: it narrows first and hides when the
+    // main column would drop under 480 dp (servers stay one click away on the «Серверы» tab).
+    val panel = (maxWidth * 0.4f).coerceIn(320.dp, 400.dp)
+    val showPanel = maxWidth - panel - 22.dp >= 480.dp
+    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
         Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
             // Top line: which subscription, and when it runs out.
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    KineticText(greeting(m.now, controller.platform.utcOffsetMinutes()), style = MaterialTheme.typography.headlineMedium, color = c.ink)
+                    KineticText(greeting(m.now, controller.platform.utcOffsetMinutes()), style = MaterialTheme.typography.headlineMedium, color = c.ink, modifier = Modifier.clipToBounds())
                     Text(m.profile?.name ?: "Добавь подписку, чтобы начать", style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 m.profile?.supportUrl?.let { url -> IconBubble(Icons.Rounded.SupportAgent, onClick = { controller.platform.openUrl(url) }) }
@@ -239,13 +246,14 @@ fun HomeDesktop(controller: GhostlyController, onAdd: () -> Unit) {
             }
             Spacer(Modifier.height(10.dp))
         }
-        // Right: servers always at hand.
-        GlassCard(Modifier.width(400.dp).fillMaxHeight().appear(1), padding = 0.dp, strong = true) {
+        // Right: servers always at hand (when there is room for them).
+        if (showPanel) GlassCard(Modifier.width(panel).fillMaxHeight().appear(1), padding = 0.dp, strong = true) {
             Row(Modifier.padding(start = 20.dp, end = 12.dp, top = 18.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Серверы", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
             }
             ServersScreen(controller, PaddingValues(bottom = 12.dp), onAdd = onAdd, showHeader = false, compact = true)
         }
+    }
     }
 }
 
@@ -266,34 +274,54 @@ private fun ReadyCard(m: HomeModel, controller: GhostlyController) {
     val c = Ghost.colors
     val server = m.server
     GlassCard(Modifier.fillMaxWidth(), padding = 18.dp, strong = true) {
+      androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val narrow = maxWidth < 440.dp
+        val connect: @Composable (Modifier) -> Unit = { mod ->
+            app.ghostly.ui.components.AccentButton(
+                if (m.orb == OrbState.CONNECTING) "Подключаю…" else "Подключить",
+                { controller.haptic(app.ghostly.core.vpn.Haptic.HEAVY); controller.toggle() },
+                modifier = mod,
+                icon = Icons.Rounded.Bolt,
+                enabled = server != null && m.orb != OrbState.CONNECTING,
+            )
+        }
+       Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             ServerAvatar(server, 52.dp)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(if (m.orb == OrbState.ERROR) "Попробуем ещё раз?" else "Готов к подключению", style = MaterialTheme.typography.labelSmall, color = c.ink3)
+                Text(if (m.orb == OrbState.ERROR) "Попробуем ещё раз?" else "Готов к подключению", style = MaterialTheme.typography.labelSmall, color = c.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (server == null) Text("Сервер не выбран", style = MaterialTheme.typography.titleMedium)
                 else {
                     val t = server.title()
                     app.ghostly.ui.components.FlagText(t.title + (t.subtitle?.let { " · $it" } ?: ""), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(4.dp))
-                    Text(
-                        listOfNotNull(server.protocolLabel(), server.transportLabel()).joinToString(" · "),
-                        style = MaterialTheme.typography.bodySmall, maxLines = 1,
-                    )
+                    // The ping sits on the protocol line: the name gets the card's full width instead of
+                    // being squeezed between a pill and the button.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            listOfNotNull(server.protocolLabel(), server.transportLabel()).joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        if (server.canPing) {
+                            Spacer(Modifier.width(8.dp))
+                            PingPill(m.ping, m.pinging)
+                        }
+                    }
                 }
             }
-            if (server != null && server.canPing) {
-                Spacer(Modifier.width(10.dp))
-                PingPill(m.ping, m.pinging)
+            if (!narrow) {
+                Spacer(Modifier.width(12.dp))
+                connect(Modifier)
             }
-            Spacer(Modifier.width(12.dp))
-            app.ghostly.ui.components.AccentButton(
-                if (m.orb == OrbState.CONNECTING) "Подключаю…" else "Подключить",
-                { controller.haptic(app.ghostly.core.vpn.Haptic.HEAVY); controller.toggle() },
-                icon = Icons.Rounded.Bolt,
-                enabled = server != null && m.orb != OrbState.CONNECTING,
-            )
         }
+        if (narrow) {
+            Spacer(Modifier.height(14.dp))
+            connect(Modifier.fillMaxWidth())
+        }
+       }
+      }
     }
 }
 

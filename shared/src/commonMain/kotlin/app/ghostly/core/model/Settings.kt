@@ -135,6 +135,10 @@ data class AppSettings(
     val haptics: Boolean = true,
     /** 0..1: how strong the vibration is (motors differ a lot between phones). */
     val hapticStrength: Float = 0.6f,
+    /** Soft UI sounds on actions (connect, connected, error, picks). */
+    val sounds: Boolean = true,
+    /** 0..1 */
+    val soundVolume: Float = 0.5f,
     /** Android 12+: take the accent from the wallpaper (Material You / Monet) instead of [accent]. */
     val monet: Boolean = false,
     val reduceMotion: Boolean = false,
