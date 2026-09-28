@@ -234,6 +234,15 @@ fun GhostlyApp(controller: GhostlyController) {
                         .hoverSound().clickable { toast = null }.padding(horizontal = 16.dp, vertical = 12.dp),
                 ) { Text(last, style = MaterialTheme.typography.bodyMedium.copy(color = Ghost.colors.ink)) }
             }
+
+            // Ghostly's messages (broadcast or personal): on top of everything, like a Telegram message.
+            if (onboarded) {
+                app.ghostly.ui.components.NoticeOverlay(
+                    controller,
+                    Modifier.align(if (wideLayout) Alignment.TopEnd else Alignment.TopCenter)
+                        .padding(top = insets.calculateTopPadding() + 10.dp, start = 12.dp, end = if (wideLayout) 20.dp else 12.dp),
+                )
+            }
         }
 
         }

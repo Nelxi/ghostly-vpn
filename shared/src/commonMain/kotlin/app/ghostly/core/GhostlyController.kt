@@ -93,6 +93,13 @@ class GhostlyController(
     /** Server-tunable look (glow, parallax, seasonal accent, announcement) — changes without an app update. */
     val design = app.ghostly.core.design.RemoteDesign(store, "GhostlyVPN/${platform.appVersion} (${platform.os})")
 
+    /** Messages from Ghostly (to everyone or to this person), shown in the app window. */
+    val notices = app.ghostly.core.notice.Notices(store, platform, "GhostlyVPN/${platform.appVersion} (${platform.os})")
+
+    fun dismissNotice(id: Long) {
+        scope.launch(Dispatchers.IO) { runCatching { notices.dismiss(id) } }
+    }
+
     /** Proxy groups (selectors) of the running mihomo core. */
     val mihomoGroups = app.ghostly.core.mihomo.MihomoGroups(backend as? app.ghostly.core.mihomo.DualCoreBackend, scope) { _settings.value.mihomoPingUrl }
 
@@ -202,6 +209,13 @@ class GhostlyController(
                     }
                 }
                 kotlinx.coroutines.delay(2 * 60_000L)
+            }
+        }
+        scope.launch(Dispatchers.IO) {
+            kotlinx.coroutines.delay(2_500)
+            while (true) {
+                runCatching { notices.refresh(_profiles.value) }
+                kotlinx.coroutines.delay(45_000L)
             }
         }
         scope.launch(Dispatchers.IO) {
