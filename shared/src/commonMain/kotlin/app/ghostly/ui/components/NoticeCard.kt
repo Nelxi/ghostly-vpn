@@ -37,6 +37,7 @@ import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.CardGiftcard
 import androidx.compose.material.icons.rounded.ChatBubble
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.Icon
@@ -79,11 +80,17 @@ import kotlin.math.roundToInt
 
 private class NoticeLook(val a: Color, val b: Color, val icon: ImageVector)
 
-private fun lookOf(kind: String) = when (kind) {
-    "gift" -> NoticeLook(Color(0xFF10B981), Color(0xFF6EE7B7), Icons.Rounded.CardGiftcard)
-    "warn" -> NoticeLook(Color(0xFFF59E0B), Color(0xFFFCD34D), Icons.Rounded.WarningAmber)
-    "danger" -> NoticeLook(Color(0xFFEF4444), Color(0xFFFB7185), Icons.Rounded.Block)
-    else -> NoticeLook(Color(0xFF8B5CF6), Color(0xFFC084FC), Icons.Rounded.ChatBubble)
+/** Colours come from the theme (the user's accent, Monet, a seasonal accent), so a notice looks like the rest of the app. */
+@Composable
+private fun lookOf(kind: String): NoticeLook {
+    val c = Ghost.colors
+    fun deep(x: Color) = androidx.compose.ui.graphics.lerp(x, Color(0xFF0A0614), 0.38f)
+    return when (kind) {
+        "gift" -> NoticeLook(deep(c.ok), c.ok, Icons.Rounded.CardGiftcard)
+        "warn" -> NoticeLook(deep(c.warn), c.warn, Icons.Rounded.WarningAmber)
+        "danger" -> NoticeLook(deep(c.bad), c.bad, Icons.Rounded.Block)
+        else -> NoticeLook(c.accent2, c.accent, Icons.Rounded.ChatBubble)
+    }
 }
 
 /**
@@ -160,7 +167,7 @@ private fun NoticeCard(n: Notice, more: Int, controller: GhostlyController) {
             }
             .shadow(28.dp, shape, ambientColor = look.a, spotColor = look.a.copy(alpha = 0.6f))
             .clip(shape)
-            .background(Brush.verticalGradient(listOf(Color(0xF5261E38), Color(0xF8161122))))
+            .background(Brush.verticalGradient(listOf(androidx.compose.ui.graphics.lerp(Color(0xF01A1328), look.a, 0.10f), Color(0xF20E091A))))
             .background(Brush.radialGradient(listOf(look.a.copy(alpha = 0.22f), Color.Transparent), radius = 420f, center = androidx.compose.ui.geometry.Offset(0f, 0f)))
             .border(1.dp, Brush.linearGradient(listOf(look.a.copy(alpha = 0.7f), Color.White.copy(alpha = 0.06f), look.b.copy(alpha = 0.45f))), shape)
             .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 13.dp),
@@ -204,12 +211,12 @@ private fun NoticeCard(n: Notice, more: Int, controller: GhostlyController) {
                 }
                 if (n.title.isNotBlank()) {
                     Spacer(Modifier.height2())
-                    Text(n.title, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold), color = Color.White)
+                    Text(n.title, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold), color = c.ink)
                 }
                 if (n.text.isNotBlank()) {
                     Spacer(Modifier.height2())
                     Box(Modifier.heightIn(max = 260.dp).verticalScroll(rememberScrollState())) {
-                        Text(rich(n.text, look.b), style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp), color = c.ink.copy(alpha = 0.88f))
+                        Text(rich(n.text, look.b), style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp), color = c.ink2)
                     }
                 }
                 val b = n.button
@@ -218,14 +225,14 @@ private fun NoticeCard(n: Notice, more: Int, controller: GhostlyController) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         if (b?.url != null) {
                             Row(
-                                Modifier.clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(listOf(look.a, look.b)))
+                                Modifier.clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(listOf(look.b, androidx.compose.ui.graphics.lerp(look.b, look.a, 0.45f))))
                                     .hoverSound().clickable { controller.haptic(); controller.platform.openUrl(b.url) }
                                     .padding(horizontal = 14.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text(b.text.ifBlank { "Открыть" }, color = Color.White, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold))
+                                Text(b.text.ifBlank { "Открыть" }, color = Color(0xFF150A2C), style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold))
                                 Spacer(Modifier.width(6.dp))
-                                Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = Color.White, modifier = Modifier.size(15.dp))
+                                Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = Color(0xFF150A2C), modifier = Modifier.size(15.dp))
                             }
                         }
                         if (more > 0) Text("ещё $more", style = MaterialTheme.typography.labelMedium, color = c.ink3)
@@ -263,4 +270,85 @@ private fun rich(text: String, accent: Color): AnnotatedString = buildAnnotatedS
         i = m.range.last + 1
     }
     append(text.substring(i))
+}
+
+
+/** Bell in the header: unread count, and a window with the last 14 days of notices. */
+@Composable
+fun NoticeBell(controller: GhostlyController) {
+    val c = Ghost.colors
+    val unread by controller.notices.queue.collectAsState()
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconBubble(Icons.Rounded.Notifications, onClick = { open = true; controller.loadNoticeHistory() }, active = open)
+        if (unread.isNotEmpty()) {
+            Box(
+                Modifier.align(Alignment.TopEnd).offset(2.dp, (-2).dp).size(18.dp).clip(CircleShape).background(c.bad),
+                contentAlignment = Alignment.Center,
+            ) { Text("${unread.size}", color = Color(0xFF1A0610), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp)) }
+        }
+    }
+    if (open) {
+        androidx.compose.ui.window.Dialog(onDismissRequest = { open = false }) {
+            val items by controller.notices.history.collectAsState()
+            Column(
+                Modifier.widthIn(max = 480.dp).fillMaxWidth().heightIn(max = 640.dp).clip(RoundedCornerShape(26.dp))
+                    .background(Color(0xFF130E1D))
+                    .border(1.dp, Brush.verticalGradient(listOf(c.accent.copy(alpha = 0.4f), Color.White.copy(alpha = 0.05f))), RoundedCornerShape(26.dp))
+                    .padding(18.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Уведомления", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = c.ink, modifier = Modifier.weight(1f))
+                    Icon(Icons.Rounded.Close, "Закрыть", tint = c.ink2, modifier = Modifier.size(30.dp).clip(CircleShape).clickable { open = false }.padding(5.dp))
+                }
+                Spacer(Modifier.height(12.dp))
+                if (items.isEmpty()) {
+                    Text("Пока тихо. Здесь будут объявления Ghostly и сообщения лично вам.", color = c.ink3, style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        items.forEach { n -> NoticeRow(n, controller) }
+                    }
+                }
+            }
+        }
+        // Opening the window counts as reading: pending pop-ups go away.
+        LaunchedEffect(Unit) { controller.notices.queue.value.forEach { controller.dismissNotice(it.id) } }
+    }
+}
+
+@Composable
+private fun NoticeRow(n: Notice, controller: GhostlyController) {
+    val c = Ghost.colors
+    val look = lookOf(n.kind)
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+            .background(Brush.verticalGradient(listOf(look.a.copy(alpha = 0.12f), Color.White.copy(alpha = 0.02f))))
+            .border(1.dp, look.b.copy(alpha = 0.25f), RoundedCornerShape(18.dp)).padding(14.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(22.dp).clip(CircleShape).background(look.a), contentAlignment = Alignment.Center) {
+                Icon(look.icon, null, tint = Color.White, modifier = Modifier.size(12.dp))
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(n.sender.ifBlank { "Ghostly" }, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold), color = c.ink)
+            if (n.personal) {
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    "лично вам", color = look.b, style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.clip(CircleShape).background(look.a.copy(alpha = 0.2f)).padding(horizontal = 7.dp, vertical = 1.dp),
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            Text(ago(n.ts), style = MaterialTheme.typography.labelSmall, color = c.ink3)
+        }
+        if (n.title.isNotBlank()) Text(n.title, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold), color = c.ink, modifier = Modifier.padding(top = 6.dp))
+        if (n.text.isNotBlank()) Text(rich(n.text, look.b), style = MaterialTheme.typography.bodyMedium, color = c.ink2, modifier = Modifier.padding(top = 3.dp))
+        val b = n.button
+        if (b?.url != null) {
+            Text(
+                b.text.ifBlank { "Открыть" } + " →", color = look.b, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(10.dp)).clickable { controller.platform.openUrl(b.url) }.padding(vertical = 4.dp),
+            )
+        }
+    }
 }

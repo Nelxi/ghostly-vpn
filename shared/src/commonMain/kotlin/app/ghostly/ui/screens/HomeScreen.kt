@@ -173,6 +173,8 @@ fun HomeScreen(controller: GhostlyController, onPickServer: () -> Unit, contentP
                 Text("Ghostly", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold))
                 Text(m.profile?.name ?: "VPN", style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            app.ghostly.ui.components.NoticeBell(controller)
+            Spacer(Modifier.width(8.dp))
             m.profile?.supportUrl?.let { url -> IconBubble(Icons.Rounded.SupportAgent, onClick = { controller.platform.openUrl(url) }) }
         }
         app.ghostly.ui.components.UpdateBanner(controller, Modifier.padding(top = 12.dp))
@@ -217,6 +219,8 @@ fun HomeDesktop(controller: GhostlyController, onAdd: () -> Unit) {
                     KineticText(greeting(m.now, controller.platform.utcOffsetMinutes()), style = MaterialTheme.typography.headlineMedium, color = c.ink, modifier = Modifier.clipToBounds())
                     Text(m.profile?.name ?: "Добавь подписку, чтобы начать", style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+                app.ghostly.ui.components.NoticeBell(controller)
+                Spacer(Modifier.width(8.dp))
                 m.profile?.supportUrl?.let { url -> IconBubble(Icons.Rounded.SupportAgent, onClick = { controller.platform.openUrl(url) }) }
             }
             AnnouncementCard(controller, Modifier.widthIn(max = 760.dp).padding(top = 12.dp))

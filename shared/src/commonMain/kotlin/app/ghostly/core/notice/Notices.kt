@@ -58,12 +58,20 @@ class Notices(private val store: FileStore, private val platform: PlatformInfo, 
     /** Not yet dismissed, oldest first; the UI shows the head. */
     val queue: StateFlow<List<Notice>> = _queue.asStateFlow()
 
+    private val _history = MutableStateFlow<List<Notice>>(emptyList())
+    /** The last 14 days, newest first, including dismissed and expired ones (the bell). */
+    val history: StateFlow<List<Notice>> = _history.asStateFlow()
+
+    suspend fun loadHistory(profiles: List<Profile>) {
+        val all = subsOf(profiles).flatMap { fetch(it, history = true).orEmpty() }
+        _history.value = all.distinctBy { it.id }.sortedByDescending { it.id }
+    }
+
     /** Where each notice came from, to report it as seen on the same subscription. */
     private val origin = mutableMapOf<Long, String>()
 
     suspend fun refresh(profiles: List<Profile>) {
-        val subs = profiles.mapNotNull { p -> p.url?.takeIf { GhostlyDomains.isOurs(it) }?.let { subIdOf(it) } }.distinct()
-        for (sub in subs) {
+        for (sub in subsOf(profiles)) {
             val list = fetch(sub) ?: continue
             val fresh = list.filter { it.id !in seen && _queue.value.none { q -> q.id == it.id } }
             if (fresh.isEmpty()) continue
@@ -90,10 +98,13 @@ class Notices(private val store: FileStore, private val platform: PlatformInfo, 
         }
     }
 
-    private suspend fun fetch(sub: String): List<Notice>? {
+    private fun subsOf(profiles: List<Profile>) =
+        profiles.mapNotNull { p -> p.url?.takeIf { GhostlyDomains.isOurs(it) }?.let { subIdOf(it) } }.distinct()
+
+    private suspend fun fetch(sub: String, history: Boolean = false): List<Notice>? {
         for (host in HOSTS) {
             val reply = runCatching {
-                val r = http.get("https://$host/sub/$sub/notices") {
+                val r = http.get("https://$host/sub/$sub/notices" + if (history) "?all=1" else "") {
                     header("User-Agent", userAgent)
                     header("x-hwid", platform.hwid)
                 }

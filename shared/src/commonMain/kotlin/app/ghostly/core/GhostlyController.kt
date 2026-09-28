@@ -96,6 +96,10 @@ class GhostlyController(
     /** Messages from Ghostly (to everyone or to this person), shown in the app window. */
     val notices = app.ghostly.core.notice.Notices(store, platform, "GhostlyVPN/${platform.appVersion} (${platform.os})")
 
+    fun loadNoticeHistory() {
+        scope.launch(Dispatchers.IO) { runCatching { notices.loadHistory(_profiles.value) } }
+    }
+
     fun dismissNotice(id: Long) {
         scope.launch(Dispatchers.IO) { runCatching { notices.dismiss(id) } }
     }
@@ -366,6 +370,17 @@ class GhostlyController(
         if (server(_selected.value) == null) select(servers.first().id)
         markOnboarded()
         _events.emit(if (servers.size == 1) "Сервер «${servers.first().name}» добавлен" else "Добавлено серверов: ${servers.size}")
+        // One core at a time: say which core the new servers need when the chosen one can't run them.
+        val core = _settings.value.core
+        val hidden = servers.filter { s ->
+            if (core == app.ghostly.core.model.CoreType.XRAY) s.outbound == null && s.config == null
+            else s.link != null && s.protocol in app.ghostly.core.link.LinkParser.XRAY_ONLY
+        }
+        if (hidden.isNotEmpty()) {
+            val names = hidden.map { it.protocol.uppercase() }.distinct().joinToString()
+            _events.emit(if (core == app.ghostly.core.model.CoreType.XRAY) "$names работает на ядре Prizrak-Core — переключите ядро в настройках"
+                         else "$names работает на ядре Xray — переключите ядро в настройках")
+        }
         pingServers(servers)
         return true
     }

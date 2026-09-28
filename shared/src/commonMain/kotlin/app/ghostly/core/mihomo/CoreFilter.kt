@@ -9,9 +9,14 @@ import app.ghostly.core.model.Profile
  * go with the chosen core. Returns null when nothing of the profile fits.
  */
 fun Profile.visibleFor(core: CoreType): Profile? = when (core) {
-    CoreType.XRAY -> if (mihomo != null) null else this
+    CoreType.XRAY -> if (mihomo != null) null else {
+        // tuic / anytls / mieru links have no Xray outbound
+        val runnable = servers.filter { it.config != null || it.outbound != null }
+        if (servers.isNotEmpty() && runnable.isEmpty()) null else copy(servers = runnable)
+    }
     CoreType.MIHOMO -> {
-        val runnable = servers.filter { it.config == null }
+        // mihomo's link parser has no WireGuard links
+        val runnable = servers.filter { it.config == null && !(it.link != null && it.protocol in app.ghostly.core.link.LinkParser.XRAY_ONLY) }
         if (servers.isNotEmpty() && runnable.isEmpty()) null else copy(servers = runnable)
     }
 }

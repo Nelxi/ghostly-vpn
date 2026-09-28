@@ -18,11 +18,18 @@ import kotlinx.serialization.json.putJsonObject
 
 /**
  * Share links → Xray proxy outbounds (tag "proxy").
- * Supported: vless://, vmess://, trojan://, ss://, hysteria2:// / hy2://.
+ * Xray: vless://, vmess://, trojan://, ss://, hysteria2:// / hy2://, wireguard:// / wg://.
+ * mihomo only (no Xray outbound, the link is handed to mihomo as is): tuic://, anytls://, mierus:// (mieru).
  */
 object LinkParser {
 
-    val SCHEMES = listOf("vless", "vmess", "trojan", "ss", "hysteria2", "hy2")
+    val SCHEMES = listOf("vless", "vmess", "trojan", "ss", "hysteria2", "hy2", "wireguard", "wg", "tuic", "anytls", "mierus", "mieru")
+
+    /** Protocols only mihomo runs: such servers have a link but no Xray outbound. */
+    val MIHOMO_ONLY = setOf("tuic", "anytls", "mieru")
+
+    /** Protocols only Xray runs (mihomo's link parser has no WireGuard links). */
+    val XRAY_ONLY = setOf("wireguard")
 
     fun looksLikeLink(line: String): Boolean {
         val l = line.trim().lowercase()
@@ -36,6 +43,11 @@ object LinkParser {
             "trojan" -> trojan(link, id)
             "ss" -> shadowsocks(link, id)
             "hysteria2", "hy2" -> hysteria2(link, id)
+            "wireguard", "wg" -> wireguard(link, id)
+            "tuic" -> mihomoOnly(link, id, "tuic", "quic")
+            "anytls" -> mihomoOnly(link, id, "anytls", "tcp")
+            // mieru's share scheme is mierus://; accept the short form too
+            "mierus", "mieru" -> mihomoOnly("mierus://" + link.trim().substringAfter("://"), id, "mieru", "tcp")
             else -> null
         }
     }.getOrNull()
@@ -222,6 +234,55 @@ object LinkParser {
             id = id, name = u.fragment?.takeIf { it.isNotBlank() } ?: "${u.host}:${u.port}",
             protocol = "hysteria", transport = "hysteria", security = "tls",
             host = u.host, port = u.port, outbound = outbound, link = link.trim(),
+        )
+    }
+
+    // ---------------------------------------------------------------- wireguard
+
+    /** `wireguard://<private key>@host:port?publickey=…&address=10.0.0.2/32,fd00::2/128&mtu=1280&reserved=1,2,3&presharedkey=…#name` */
+    private fun wireguard(link: String, id: String): Server? {
+        val u = ShareUri.parse(link) ?: return null
+        val secret = u.userInfo?.takeIf { it.isNotBlank() } ?: u.q("privatekey") ?: return null
+        val peer = u.q("publickey") ?: u.q("peer") ?: return null
+        val port = if (u.port > 0) u.port else 51820
+        val addresses = (u.q("address") ?: u.q("ip") ?: "10.0.0.2/32").split(',').map { it.trim() }.filter { it.isNotEmpty() }
+            .map { if ('/' in it) it else if (':' in it) "$it/128" else "$it/32" }
+        val reserved = u.q("reserved")?.split(',')?.mapNotNull { it.trim().toIntOrNull() }?.takeIf { it.size == 3 }
+        val endpoint = if (':' in u.host) "[${u.host}]:$port" else "${u.host}:$port"
+        val outbound = buildJsonObject {
+            put("tag", "proxy")
+            put("protocol", "wireguard")
+            putJsonObject("settings") {
+                put("secretKey", secret)
+                put("address", JsonArray(addresses.map(::JsonPrimitive)))
+                putJsonArray("peers") {
+                    add(buildJsonObject {
+                        put("publicKey", peer)
+                        u.q("presharedkey")?.let { put("preSharedKey", it) }
+                        put("endpoint", endpoint)
+                        put("keepAlive", u.q("keepalive")?.toIntOrNull() ?: 25)
+                    })
+                }
+                put("mtu", u.q("mtu")?.toIntOrNull() ?: 1420)
+                reserved?.let { r -> put("reserved", JsonArray(r.map(::JsonPrimitive))) }
+            }
+        }
+        return Server(
+            id = id, name = u.fragment?.takeIf { it.isNotBlank() } ?: "${u.host}:$port",
+            protocol = "wireguard", transport = "udp", security = "wireguard",
+            host = u.host, port = port, outbound = outbound, link = link.trim(),
+        )
+    }
+
+    // ---------------------------------------------------------------- tuic / anytls / mieru (mihomo)
+
+    private fun mihomoOnly(link: String, id: String, protocol: String, transport: String): Server? {
+        val u = ShareUri.parse(link) ?: return null
+        if (u.host.isBlank()) return null
+        return Server(
+            id = id, name = u.fragment?.takeIf { it.isNotBlank() } ?: "${u.host}:${u.port}",
+            protocol = protocol, transport = transport, security = if (protocol == "mieru") "mieru" else "tls",
+            host = u.host, port = u.port, outbound = null, link = link.trim(),
         )
     }
 
