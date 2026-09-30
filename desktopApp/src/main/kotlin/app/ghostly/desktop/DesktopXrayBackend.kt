@@ -104,6 +104,7 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
                 return@withContext
             }
             val tun = settings.desktopMode == DesktopMode.TUN
+            if (!tun) clearLeftoverTun()
             tunMode = tun
             if (tun && !isElevated()) {
                 _state.value = VpnState.Failed("Режиму TUN нужны права администратора. Запусти Ghostly от имени администратора или выбери «Системный прокси» в настройках.")
@@ -112,7 +113,7 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
             val proxy = XrayConfigBuilder.localProxy(settings)
             val appPort0 = freePort()
             val osPort = if (settings.desktopMode == DesktopMode.SYSTEM_PROXY) freePort() else 0
-            val ingress = if (tun) Ingress.TunSystem(settings.mtu, if (hostOs == HostOs.MACOS) "utun99" else "ghostly", proxy, appPort0)
+            val ingress = if (tun) Ingress.TunSystem(settings.mtu, if (hostOs == HostOs.MACOS) "utun99" else TUN_NAME, proxy, appPort0)
             else Ingress.Proxy(proxy, osPort, appPort0)
 
             apiPort = freePort()
@@ -175,12 +176,35 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
             SystemProxy.disable()
             proxyEnabled = false
         }
+        val hadTun = tunMode && process != null
         process?.let { p ->
             p.destroy()
             if (!p.waitFor(3, TimeUnit.SECONDS)) p.destroyForcibly()
         }
         process = null
         _traffic.value = Traffic()
+        if (hadTun) clearLeftoverTun(force = true)
+    }
+
+    /**
+     * Windows: a TUN core is stopped with TerminateProcess, so it never gets to remove the routes of its
+     * Wintun adapter. The adapter then stays with the default route, and everything that doesn't use the
+     * proxy (after switching TUN → «Системный прокси», or after a crash) goes into a dead adapter until the
+     * next reconnect. Drop those routes. [force]: we know a TUN session just ended; otherwise only when a
+     * Wintun adapter is present at all (a cheap check, no process started for nothing).
+     */
+    private fun clearLeftoverTun(force: Boolean = false) {
+        if (hostOs != HostOs.WINDOWS) return
+        val present = force || runCatching {
+            java.net.NetworkInterface.networkInterfaces().anyMatch { it.displayName.contains("Wintun", ignoreCase = true) }
+        }.getOrDefault(false)
+        if (!present || !isElevated()) return
+        runCatching {
+            ProcessBuilder(
+                "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+                "Get-NetRoute -InterfaceAlias '$TUN_NAME' -ErrorAction SilentlyContinue | Remove-NetRoute -Confirm:${'$'}false -ErrorAction SilentlyContinue",
+            ).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start().waitFor(8, TimeUnit.SECONDS)
+        }
     }
 
     /** Adds Xray's StatsService on a loopback port so we can read traffic counters. */
@@ -394,6 +418,9 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
 
     companion object {
         val exeName = if (hostOs == HostOs.WINDOWS) "xray.exe" else "xray"
+
+        /** Name of the Wintun adapter in TUN mode on Windows/Linux. */
+        const val TUN_NAME = "ghostly"
 
         fun freePort(): Int = ServerSocket(0).use { it.localPort }
 
