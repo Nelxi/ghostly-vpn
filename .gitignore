@@ -25,3 +25,7 @@ keystore.properties
 *.jks
 *.keystore
 androidApp/libs/.mihomo-ref
+
+# local notes, not part of the repo
+CLAUDE.md
+store/google-play/README.md
