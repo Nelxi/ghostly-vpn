@@ -170,7 +170,7 @@ private fun Sidebar(controller: GhostlyController, tab: Tab, onTab: (Tab) -> Uni
                         Spacer(Modifier.height(10.dp))
                         Text(p.title, style = MaterialTheme.typography.bodySmall)
                         Spacer(Modifier.height(4.dp))
-                        GlowBar(if (p.total > 0) p.used.toFloat() / p.total else 0f, if (p.id == "wl") c.accent else c.ok)
+                        GlowBar(if (p.total > 0) p.used.toFloat() / p.total else 0f, if (p.isWhitelist) c.accent else c.ok)
                         Spacer(Modifier.height(3.dp))
                         Text(if (p.total > 0) "${Format.bytes(p.used)} из ${Format.bytes(p.total)}" else "без лимита", style = MaterialTheme.typography.bodySmall)
                     }

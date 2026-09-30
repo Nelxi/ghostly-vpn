@@ -48,10 +48,31 @@ data class SubscriptionInfo(
     val unlimitedTime: Boolean get() = expire <= 0
 }
 
-/** A traffic pool: "wl" (white lists) or "reg" (regular servers). Bytes; total 0 = unlimited. */
+/** White lists over the classic CDN route — the scarce pool the app leaves as soon as it can. */
+const val POOL_WL = "wl"
+
+/**
+ * «Белые списки 2»: the same idea over Hysteria2 (UDP). Mobile operators throttle TCP far more
+ * aggressively than QUIC, so this variant keeps working where the CDN front stops passing traffic.
+ * It is a white-list pool, not a regular one: the guard uses it when normal traffic is blocked.
+ */
+const val POOL_WL2 = "wl2"
+
+/** Regular servers (everything that is not a white list). */
+const val POOL_REG = "reg"
+
+/** A traffic pool: [POOL_WL], [POOL_WL2] or [POOL_REG]. Bytes; total 0 = unlimited. */
 @Serializable
 data class TrafficPool(val id: String, val used: Long, val total: Long, val topupLeftGb: Int = 0) {
-    val title: String get() = if (id == "wl") "Белые списки" else "Обычные серверы"
+    val title: String
+        get() = when (id) {
+            POOL_WL -> "Белые списки"
+            POOL_WL2 -> "Белые списки 2"
+            else -> "Обычные серверы"
+        }
+
+    /** White lists of either kind get the accent colour in the bars. */
+    val isWhitelist: Boolean get() = id == POOL_WL || id == POOL_WL2
 }
 
 /**
@@ -77,7 +98,7 @@ data class Server(
     val config: JsonObject? = null,
     /** Original share link, if the server came from one (for "copy link"). */
     val link: String? = null,
-    /** Traffic pool: "wl" (white lists) or "reg"; from the provider's meta or guessed by name. */
+    /** Traffic pool: [POOL_WL] / [POOL_WL2] / [POOL_REG]; from the provider's meta or guessed by name. */
     val pool: String? = null,
     /** Proxy entry of a Clash/mihomo YAML subscription (the config itself is [Profile.mihomo]). */
     val mihomo: JsonObject? = null,
@@ -85,16 +106,64 @@ data class Server(
     val isAuto: Boolean get() = protocol == "balancer" || protocol == MIHOMO_PROFILE
     /** A balancer is measured through its main proxy; a whole mihomo profile has no single endpoint. */
     val canPing: Boolean get() = protocol != MIHOMO_PROFILE
-    val isWhitelist: Boolean get() = pool == "wl"
+    /** A white list, either pool: the tunnel is only used where normal traffic is blocked. */
+    val isWhitelist: Boolean get() = pool == POOL_WL || pool == POOL_WL2
+    /**
+     * «Белые списки 2» — the white list that runs on Hysteria2. The Ghostly server sends it as
+     * plain [POOL_WL] (older apps only know that one), so the protocol tells the two apart.
+     */
+    val isWhitelistHysteria: Boolean get() = pool == POOL_WL2 || (pool == POOL_WL && isHysteria)
+    /** Xray spells Hysteria2 as `hysteria` (the version lives in the settings). UDP, so it wins on mobile. */
+    val isHysteria: Boolean get() = protocol == "hysteria"
 }
 
 /** Pseudo server for a mihomo profile whose proxies come only from proxy-providers. */
 const val MIHOMO_PROFILE = "mihomo"
 
+/** 🇫🇮 as regional indicator symbols — a name check can't look for the letters "FI". */
+const val FI_FLAG = "\uD83C\uDDEB\uD83C\uDDEE"
+
 /** Guess the pool of a server from its name when the provider doesn't say. */
 fun guessPool(name: String): String? {
     val n = name.lowercase()
-    return if (("бел" in n && "спис" in n) || "whitelist" in n || "white list" in n) "wl" else null
+    val whitelist = ("бел" in n && "спис" in n) || "whitelist" in n || "white list" in n
+    if (!whitelist) return null
+    // «Белые списки 2» is the Hysteria2 white list the provider ships next to the CDN route; the name
+    // check needs the protocol in it, otherwise the CDN «Белые списки 2» would be mistaken for it.
+    // Providers that care send an explicit `meta.pool` instead of relying on names at all.
+    return if ("hysteria" in n || "hy2" in n) POOL_WL2 else POOL_WL
+}
+
+/**
+ * How much we want a *regular* server right after leaving the white lists. The bigger the better;
+ * the guard picks among the highest score by ping (see `GhostlyController.preferredRegular`).
+ *
+ * Hysteria2 on the Finnish node is what actually feels fast there: UDP survives what mobile
+ * operators do to TCP, and that node is the one the provider measured best. It is a preference,
+ * not a rule — a node with a bad ping still loses to a healthy one inside the same score.
+ */
+fun regularPreference(server: Server): Int {
+    var score = 0
+    if (server.isHysteria) score += 2
+    if (isFinnish(server)) score += 1
+    return score
+}
+
+/**
+ * The same idea for the white-list pool: «Белые списки 2» (Hysteria2) keeps working on mobile
+ * networks where the CDN route stalls, and the Finnish node is the one to be on. The guard picks
+ * among the highest score by ping (see `GhostlyController.preferredWhitelist`).
+ */
+fun whitelistPreference(server: Server): Int {
+    var score = 0
+    if (server.isWhitelistHysteria || server.isHysteria) score += 2
+    if (isFinnish(server)) score += 1
+    return score
+}
+
+private fun isFinnish(server: Server): Boolean {
+    val n = server.name.lowercase()
+    return n.contains("финлянд") || n.contains("finland") || server.name.contains(FI_FLAG)
 }
 
 /** A latency result: millis, or a negative code. */

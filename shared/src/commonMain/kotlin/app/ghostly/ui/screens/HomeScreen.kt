@@ -649,7 +649,7 @@ fun PoolBar(p: app.ghostly.core.model.TrafficPool) {
     val color = when {
         frac > 0.95f -> c.bad
         frac > 0.8f -> c.warn
-        p.id == "wl" -> c.accent
+        p.isWhitelist -> c.accent
         else -> c.ok
     }
     Row(verticalAlignment = Alignment.CenterVertically) {

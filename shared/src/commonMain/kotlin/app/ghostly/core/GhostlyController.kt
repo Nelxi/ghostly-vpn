@@ -919,21 +919,33 @@ class GhostlyController(
     }
 
     /**
-     * While connected: every ~20 s check that traffic really passes through the tunnel (not just
-     * "connected"). Two failures in a row → switch to the best working server, picking white-list
-     * servers when the mobile network is in white-list mode. On a white-list server, go back to a
-     * regular one as soon as it's reachable again — white-list traffic is the scarce pool.
+     * While connected: check that traffic really passes through the tunnel (not just "connected").
+     * Two failures in a row → switch to the best working server, picking white-list servers when the
+     * mobile network is in white-list mode. On a white-list server, go back to a regular one as soon
+     * as it's reachable again — white-list traffic is the scarce pool.
+     *
+     * Mobile data takes a shorter path: when the operator turns the white lists on, a regular server
+     * stops passing traffic from one check to the next, so the *first* failed check is already an
+     * unambiguous signal. Waiting for the second one, and then a full poll interval, cost about a
+     * minute before the app switched — that delay is what users notice. Wi-Fi keeps the two-failure
+     * rule, where a single hiccup is noise.
      */
     private fun startGuard() {
         if (guardJob?.isActive == true) return
         guardJob = scope.launch(Dispatchers.IO) {
             var fails = 0
             var regularBack = 0
-            kotlinx.coroutines.delay(12_000)
+            // First check almost immediately: the tunnel needs a moment, but 12 s of silence made the
+            // guard notice a blocked network much later than it had to.
+            kotlinx.coroutines.delay(FIRST_GUARD_DELAY_MS)
             while (true) {
+                var delayMs = GUARD_DELAY_MS
                 val s = _settings.value
                 val cur = selectedServer()
                 if (s.smartGuard && cur != null) {
+                    val net = platform.networkType()
+                    val netChanged = lastNet != null && net != lastNet
+                    lastNet = net
                     val ms = runCatching { backend.healthCheck(s.pingUrlOf(s.core)) }.getOrDefault(-1L)
                     if (ms > 0) {
                         fails = 0
@@ -941,20 +953,20 @@ class GhostlyController(
                     } else if (!cur.isAuto) {
                         fails++
                     }
-                    if (fails >= 2) {
+                    // Mobile + a regular server: a dead tunnel means the white lists came on, most
+                    // likely. Switched on the first failure instead of the second.
+                    val fastFail = net == NetType.CELLULAR && !cur.isWhitelist && !cur.isAuto
+                    if (fails >= if (fastFail) 1 else 2) {
                         fails = 0
                         guardFailover(cur)
-                        kotlinx.coroutines.delay(15_000)
+                        kotlinx.coroutines.delay(if (fastFail) FAST_GUARD_DELAY_MS else 15_000)
                         continue
                     }
-                    val net = platform.networkType()
-                    val netChanged = lastNet != null && net != lastNet
-                    lastNet = net
                     if (!cur.isAuto && s.saveWhitelist && backend.directProbesBypassTunnel && hasWhitelistServers()) {
                         when {
                             // Switched Wi-Fi -> mobile while on a regular server: re-check right away.
                             netChanged && net == NetType.CELLULAR && !cur.isWhitelist && !regularStable() -> {
-                                bestOf(whitelistServers())?.let { next ->
+                                preferredWhitelist(whitelistServers())?.let { next ->
                                     _events.emit("Мобильный интернет — перешла на белые списки «${next.name}»")
                                     select(next.id)
                                 }
@@ -962,13 +974,13 @@ class GhostlyController(
                             }
                             cur.isWhitelist -> {
                                 // Wi-Fi: back as soon as regular servers answer. Mobile: only when they are
-                                // stable three checks in a row (~1 min) — a flaky regular route is worse.
+                                // stable three checks in a row — a flaky regular route is worse.
                                 val ok = if (net == NetType.CELLULAR) regularStable() else regularReachable()
                                 regularBack = if (ok) regularBack + 1 else 0
                                 val need = if (net == NetType.CELLULAR) 3 else 2
                                 if (regularBack >= need) {
                                     regularBack = 0
-                                    bestOf(regularServers())?.let { next ->
+                                    preferredRegular(regularServers())?.let { next ->
                                         _events.emit("Обычный интернет стабилен — перешла на «${next.name}», чтобы не тратить трафик белых списков")
                                         select(next.id)
                                     }
@@ -976,11 +988,14 @@ class GhostlyController(
                             }
                             else -> regularBack = 0
                         }
+                        // Mobile on a regular server (white lists may come on any moment) or halfway
+                        // back to regular: look more often, a late switch is the whole complaint.
+                        if ((net == NetType.CELLULAR && !cur.isWhitelist) || regularBack > 0) delayMs = FAST_GUARD_DELAY_MS
                     } else {
                         regularBack = 0
                     }
                 }
-                kotlinx.coroutines.delay(20_000)
+                kotlinx.coroutines.delay(delayMs)
             }
         }
     }
@@ -990,6 +1005,29 @@ class GhostlyController(
     private fun whitelistServers() = allServers().filter { !it.isAuto && it.isWhitelist }
     private fun regularServers() = allServers().filter { !it.isAuto && !it.isWhitelist }
     private fun hasWhitelistServers() = whitelistServers().isNotEmpty()
+
+    /**
+     * The regular server to move to: the highest [app.ghostly.core.model.regularPreference] wins
+     * (Hysteria2, and the Finnish node above all), the lowest ping decides inside that group. A
+     * provider whose servers all score zero keeps the old plain-lowest-ping behaviour.
+     */
+    private fun preferredRegular(list: List<Server>): Server? {
+        if (list.isEmpty()) return null
+        val top = list.maxOf { app.ghostly.core.model.regularPreference(it) }
+        if (top <= 0) return bestOf(list)
+        return bestOf(list.filter { app.ghostly.core.model.regularPreference(it) == top })
+    }
+
+    /**
+     * The white-list server to move to: «Белые списки 2» on Hysteria2, the Finnish node first
+     * ([app.ghostly.core.model.whitelistPreference]); the lowest ping decides inside that group.
+     */
+    private fun preferredWhitelist(list: List<Server>): Server? {
+        if (list.isEmpty()) return null
+        val top = list.maxOf { app.ghostly.core.model.whitelistPreference(it) }
+        if (top <= 0) return bestOf(list)
+        return bestOf(list.filter { app.ghostly.core.model.whitelistPreference(it) == top })
+    }
 
     /**
      * Pick the pool for the current network before connecting (rules from real-life testing):
@@ -1002,13 +1040,13 @@ class GhostlyController(
             NetType.CELLULAR -> when {
                 server.isWhitelist -> server
                 regularStable() -> server
-                else -> bestOf(whitelistServers())?.also {
+                else -> preferredWhitelist(whitelistServers())?.also {
                     _events.emit("Мобильный интернет: белые списки сейчас надёжнее — подключаюсь через «${it.name}»")
                 } ?: server
             }
             NetType.WIFI, NetType.ETHERNET -> when {
                 !server.isWhitelist -> server
-                regularReachable() -> bestOf(regularServers())?.also {
+                regularReachable() -> preferredRegular(regularServers())?.also {
                     _events.emit("Wi-Fi: обычные серверы доступны — подключаюсь через «${it.name}»")
                 } ?: server
                 else -> server
@@ -1059,7 +1097,10 @@ class GhostlyController(
         val whitelistMode = others.any { it.isWhitelist } && backend.directProbesBypassTunnel &&
             (platform.networkType() == NetType.CELLULAR || !regularReachable())
         val pool = if (whitelistMode) others.filter { it.isWhitelist } else others.filter { !it.isWhitelist }.ifEmpty { others }
-        val next = bestOf(pool.filter { it.name != cur.name }) ?: return
+        val candidates = pool.filter { it.name != cur.name }
+        // Both ways the Finnish Hysteria2 wins: «Белые списки 2» onto the white lists, plain
+        // Hysteria2 coming off them (see [preferredWhitelist] / [preferredRegular]).
+        val next = (if (whitelistMode) preferredWhitelist(candidates) else preferredRegular(candidates)) ?: return
         _events.emit(
             if (whitelistMode) "Похоже, включились белые списки — перешла на «${next.name}»"
             else "«${cur.name}» перестал пропускать трафик — перешла на «${next.name}»",
@@ -1164,6 +1205,15 @@ class GhostlyController(
         private const val SETTINGS = "settings.json"
         private const val STATE = "state.json"
         const val MANUAL = "manual"
+
+        /** Normal poll of the connection guard. */
+        private const val GUARD_DELAY_MS = 20_000L
+
+        /** Poll while a switch is pending (mobile on a regular server, or heading back to regular). */
+        private const val FAST_GUARD_DELAY_MS = 6_000L
+
+        /** First look at the freshly raised tunnel — long enough to be a real check, short enough to matter. */
+        private const val FIRST_GUARD_DELAY_MS = 1_500L
 
         fun now(): Long = Clock.System.now().toEpochMilliseconds()
     }

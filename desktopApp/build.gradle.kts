@@ -159,7 +159,7 @@ val fetchMihomoCore = tasks.register<FetchMihomoDesktop>("fetchMihomoCore") {
 tasks.matching { it.name == "prepareAppResources" }.configureEach { dependsOn(fetchXrayCore, fetchMihomoCore) }
 
 /** The one place to bump the desktop version (Windows/Linux use it as is, macOS as 1.x.y). */
-val ghostlyVersion = "0.3.10"
+val ghostlyVersion = "0.3.11"
 
 compose.desktop {
     application {
