@@ -5,9 +5,6 @@ import app.ghostly.core.stage.NowPlaying
 import app.ghostly.core.stage.StageAudio
 import app.ghostly.core.stage.StageSource
 import app.ghostly.desktop.audio.AudioReactiveEngine
-import com.sun.jna.Pointer
-import com.sun.jna.platform.win32.Ole32
-import dev.redstones.mediaplayerinfo.MediaPlayerInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -41,7 +38,8 @@ import kotlin.math.min
 
 /**
  * Windows stage source, ported from the Kasane media bar:
- * - now playing from the system media session (SMTC) via media-player-info, polled on its own COM thread;
+ * - now playing from the system media session (SMTC), read by a separate PowerShell helper (a crash there
+ *   can never take the app down);
  * - time-synced lines looked up at runtime on lrclib.net for the track that is playing, matched by
  *   artist and duration (never another song with the same name) and cached on disk;
  * - WASAPI loopback analysis (AudioReactiveEngine) plus a mood layer on top: darkness, tempo,
@@ -50,7 +48,7 @@ import kotlin.math.min
 class DesktopStage(dataDir: String) : StageSource {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    // media-player-info talks COM: one dedicated thread, initialised once.
+    // The now-playing helper is read with blocking calls: give it a dedicated thread.
     private val comThread = Executors.newSingleThreadExecutor { Thread(it, "ghostly-now-playing").apply { isDaemon = true } }
         .asCoroutineDispatcher()
     private var jobs: List<Job> = emptyList()
@@ -99,45 +97,92 @@ class DesktopStage(dataDir: String) : StageSource {
 
     // ------------------------------------------------------------------ now playing
 
-    private suspend fun pollNowPlaying() {
-        runCatching {
-            if (Ole32.INSTANCE.CoInitializeEx(Pointer.NULL, Ole32.COINIT_MULTITHREADED).toInt() < 0)
-                Ole32.INSTANCE.CoInitializeEx(Pointer.NULL, Ole32.COINIT_APARTMENTTHREADED)
+    /** One reading of the system media session as the helper reports it; times in seconds. */
+    private class Snap(val title: String, val artist: String, val position: Long, val duration: Long, val playing: Boolean)
+
+    /**
+     * Reads the Windows media session (SMTC) through a separate PowerShell process (resources/nowplaying.ps1).
+     * The native library used before threw C++ exceptions that nothing could catch, and each one took the
+     * whole app down with it (hs_err_pid*.log, thread "ghostly-now-playing"). Now the worst a broken session
+     * can do is end the helper, which is started again on the next read. It sits in [WindowsJob], so it
+     * never outlives Ghostly.
+     */
+    private inner class NowPlayingHelper {
+        private var proc: Process? = null
+        private var reader: java.io.BufferedReader? = null
+
+        /** The next reading (blocks for about one poll): a session, null when nothing plays. */
+        fun next(): Result<Snap?> = runCatching {
+            val r = reader?.takeIf { proc?.isAlive == true } ?: start()
+            val line = r.readLine() ?: run { close(); error("now-playing helper ended") }
+            val o = json.parseToJsonElement(line) as JsonObject
+            if (o.containsKey("err")) error("now-playing read failed")
+            if (o.isEmpty()) return@runCatching null
+            fun str(k: String) = o[k]?.jsonPrimitive?.contentOrNull.orEmpty()
+            fun num(k: String) = o[k]?.jsonPrimitive?.doubleOrNull?.toLong() ?: 0L
+            Snap(str("t"), str("a"), num("pos"), num("dur"), o["play"]?.jsonPrimitive?.contentOrNull == "true")
         }
+
+        private fun start(): java.io.BufferedReader {
+            close()
+            val script = File(cacheDir.parentFile, "nowplaying.ps1")
+            javaClass.getResourceAsStream("/nowplaying.ps1")!!.use { src -> script.outputStream().use { src.copyTo(it) } }
+            val p = ProcessBuilder(
+                "powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+                "-File", script.absolutePath, "-PollMs", POLL_MS.toString(),
+            ).redirectError(ProcessBuilder.Redirect.DISCARD).start()
+            WindowsJob.adopt(p)
+            proc = p
+            return p.inputStream.bufferedReader(Charsets.UTF_8).also { reader = it }
+        }
+
+        fun close() {
+            runCatching { reader?.close() }
+            proc?.destroyForcibly()
+            proc = null
+            reader = null
+        }
+    }
+
+    private suspend fun pollNowPlaying() {
+        val helper = NowPlayingHelper()
         var key = ""
-        while (currentCoroutineContextActive()) {
-            val ok = runCatching {
-                val session = MediaPlayerInfo.Instance.getMediaSessions()
-                    .firstOrNull { s -> s.media.let { it.title.isNotEmpty() || it.artist.isNotEmpty() } }
-                if (session == null) {
-                    if (_track.value != null) { _track.value = null; key = "" }
-                    return@runCatching
-                }
-                val m = session.media
-                val now = System.currentTimeMillis()
-                val raw = m.position
-                val delta = if (lastRawPos < 0) -1 else raw - lastRawPos
-                lastRawPos = raw
-                val moving = m.playing || (delta > 0 && delta <= POLL_MS * 3 / msFactor.coerceAtLeast(0.01))
-                // Hysteresis: the flag flickers on some players (Spotify) — a pause needs two quiet polls in a row.
-                quietPolls = if (moving) 0 else quietPolls + 1
-                val playing = moving || (quietPolls < 2 && _track.value?.playing == true)
-                val newKey = (m.artist + "|" + m.title).lowercase()
-                if (newKey != key) {
-                    key = newKey
-                    trackKey = newKey
-                    AudioReactiveEngine.notifyTrackChanged()
-                    msFactor = 1000.0
-                    _track.value = NowPlaying(m.title, m.artist, (m.duration * msFactor).toLong(), playing, lyricsLoading = true)
-                    val title = m.title; val artist = m.artist; val dur = m.duration
-                    scope.launch(Dispatchers.IO) { loadLines(newKey, title, artist, dur) }
-                }
-                basePos = (raw * msFactor).toLong()
-                baseAt = now
-                advancing = playing
-                _track.value = _track.value?.copy(playing = playing, durationMs = (m.duration * msFactor).toLong())
-            }.isSuccess
-            delay(if (ok) POLL_MS else 15_000)
+        try {
+            while (currentCoroutineContextActive()) {
+                val ok = runCatching {
+                    val m = helper.next().getOrThrow()
+                    if (m == null) {
+                        if (_track.value != null) { _track.value = null; key = "" }
+                        return@runCatching
+                    }
+                    val now = System.currentTimeMillis()
+                    val raw = m.position
+                    val delta = if (lastRawPos < 0) -1 else raw - lastRawPos
+                    lastRawPos = raw
+                    val moving = m.playing || (delta > 0 && delta <= POLL_MS * 3 / msFactor.coerceAtLeast(0.01))
+                    // Hysteresis: the flag flickers on some players (Spotify) — a pause needs two quiet polls in a row.
+                    quietPolls = if (moving) 0 else quietPolls + 1
+                    val playing = moving || (quietPolls < 2 && _track.value?.playing == true)
+                    val newKey = (m.artist + "|" + m.title).lowercase()
+                    if (newKey != key) {
+                        key = newKey
+                        trackKey = newKey
+                        AudioReactiveEngine.notifyTrackChanged()
+                        msFactor = 1000.0
+                        _track.value = NowPlaying(m.title, m.artist, (m.duration * msFactor).toLong(), playing, lyricsLoading = true)
+                        val title = m.title; val artist = m.artist; val dur = m.duration
+                        scope.launch(Dispatchers.IO) { loadLines(newKey, title, artist, dur) }
+                    }
+                    basePos = (raw * msFactor).toLong()
+                    baseAt = now
+                    advancing = playing
+                    _track.value = _track.value?.copy(playing = playing, durationMs = (m.duration * msFactor).toLong())
+                }.isSuccess
+                // The helper paces the loop (one line per poll); a failure backs off before it is restarted.
+                if (!ok) delay(15_000)
+            }
+        } finally {
+            helper.close()
         }
     }
 

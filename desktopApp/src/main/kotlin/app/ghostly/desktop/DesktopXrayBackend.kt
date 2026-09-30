@@ -97,6 +97,7 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
     override suspend fun connect(server: Server, settings: AppSettings) = lock.withLock {
         withContext(Dispatchers.IO) {
             stopBlocking()
+            killOrphanCores(exe)
             _state.value = VpnState.Connecting
             if (!exe.isFile) {
                 _state.value = VpnState.Failed("Не найдено ядро Xray (${exe.absolutePath})")
@@ -129,6 +130,7 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
                 _state.value = VpnState.Failed("Не удалось запустить ядро: ${e.message}")
                 return@withContext
             }
+            WindowsJob.adopt(p)  // the core ends with Ghostly, even if the app crashes
             process = p
             synchronized(log) { log.clear() }
             Thread {

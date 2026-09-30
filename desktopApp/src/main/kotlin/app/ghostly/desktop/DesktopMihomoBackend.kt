@@ -81,6 +81,7 @@ class DesktopMihomoBackend(private val platform: DesktopPlatform, private val xr
     override suspend fun connect(server: Server, profile: Profile?, settings: AppSettings, stored: Map<String, String>): Unit = lock.withLock {
         withContext(Dispatchers.IO) {
             stopBlocking()
+            killOrphanCores(exe)
             _state.value = VpnState.Connecting
             if (!exe.isFile) {
                 _state.value = VpnState.Failed("Не найдено ядро Mihomo (${exe.absolutePath})")
@@ -120,6 +121,7 @@ class DesktopMihomoBackend(private val platform: DesktopPlatform, private val xr
                 _state.value = VpnState.Failed("Не удалось запустить Mihomo: ${e.message}")
                 return@withContext
             }
+            WindowsJob.adopt(p)  // the core ends with Ghostly, even if the app crashes
             process = p
             Thread {
                 p.inputStream.bufferedReader().forEachLine { line ->
@@ -260,6 +262,7 @@ class DesktopMihomoBackend(private val platform: DesktopPlatform, private val xr
         val file = File(dir, "config.yaml").apply { writeText(JsonX.encodeToString(JsonObject.serializer(), cfg)) }
         val p = ProcessBuilder(exe.absolutePath, "-d", dir.absolutePath, "-f", file.absolutePath)
             .directory(dir).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start()
+            .also { WindowsJob.adopt(it) }
         val client = MihomoApi(controller, secret)
         try {
             val deadline = System.currentTimeMillis() + 6000

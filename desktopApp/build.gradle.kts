@@ -18,7 +18,6 @@ dependencies {
     implementation(libs.compose.components.resources)
     implementation(libs.jna.platform)
     // Now playing (Windows SMTC): the same small library the Kasane media bar uses.
-    implementation(files("libs/media-player-info-0.1.0.jar"))
 }
 
 kotlin {
@@ -159,7 +158,7 @@ val fetchMihomoCore = tasks.register<FetchMihomoDesktop>("fetchMihomoCore") {
 tasks.matching { it.name == "prepareAppResources" }.configureEach { dependsOn(fetchXrayCore, fetchMihomoCore) }
 
 /** The one place to bump the desktop version (Windows/Linux use it as is, macOS as 1.x.y). */
-val ghostlyVersion = "0.3.12"
+val ghostlyVersion = "0.3.13"
 
 compose.desktop {
     application {
