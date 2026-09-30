@@ -34,12 +34,9 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import java.io.File
-import java.net.HttpURLConnection
 import java.net.InetSocketAddress
-import java.net.Proxy
 import java.net.ServerSocket
 import java.net.Socket
-import java.net.URI
 import java.util.concurrent.TimeUnit
 
 /**
@@ -288,24 +285,7 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
             .start()
         try {
             if (!waitForPort(port, 4000)) return@withContext -1L
-            val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port))
-            var best = -1L
-            repeat(2) {
-                val t0 = System.nanoTime()
-                val ok = runCatching {
-                    val c = URI(url).toURL().openConnection(proxy) as HttpURLConnection
-                    c.connectTimeout = 6000
-                    c.readTimeout = 6000
-                    c.instanceFollowRedirects = false
-                c.requestMethod = app.ghostly.core.vpn.Probe.httpMethod
-                    val code = c.responseCode
-                    c.disconnect()
-                    code in 200..399
-                }.getOrDefault(false)
-                val ms = (System.nanoTime() - t0) / 1_000_000
-                if (ok && (best < 0 || ms < best)) best = ms
-            }
-            best
+            measure(port, url)
         } finally {
             p.destroyForcibly()
             file.delete()
@@ -359,7 +339,9 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
                 return@withContext
             }
             kotlinx.coroutines.coroutineScope {
-                val gate = kotlinx.coroutines.sync.Semaphore(12)
+                // Few at a time: parallel probes through one process share its CPU and the uplink and
+                // add their own noise to each other's numbers.
+                val gate = kotlinx.coroutines.sync.Semaphore(6)
                 batch.forEachIndexed { i, (s, _) ->
                     launch {
                         gate.acquire()
@@ -386,27 +368,8 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
         measure(port, url)
     }
 
-    /** Best of two HTTP round-trips through a local SOCKS port. */
-    private fun measure(port: Int, url: String): Long {
-        val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port))
-        var best = -1L
-        repeat(2) {
-            val t0 = System.nanoTime()
-            val ok = runCatching {
-                val c = URI(url).toURL().openConnection(proxy) as HttpURLConnection
-                c.connectTimeout = 6000
-                c.readTimeout = 6000
-                c.instanceFollowRedirects = false
-                c.requestMethod = app.ghostly.core.vpn.Probe.httpMethod
-                val code = c.responseCode
-                c.disconnect()
-                code in 200..399
-            }.getOrDefault(false)
-            val ms = (System.nanoTime() - t0) / 1_000_000
-            if (ok && (best < 0 || ms < best)) best = ms
-        }
-        return best
-    }
+    /** Round-trip of the tunnel through a local SOCKS port, setup excluded (see [app.ghostly.core.vpn.UnifiedDelay]). */
+    private fun measure(port: Int, url: String): Long = app.ghostly.core.vpn.UnifiedDelay.viaSocks(port, url)
 
     override fun coreVersion(): String = runCatching {
         exec(exe.absolutePath, "version").lineSequence().firstOrNull()?.trim()
