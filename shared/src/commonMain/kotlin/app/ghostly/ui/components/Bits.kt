@@ -76,8 +76,7 @@ fun PingPill(ms: Long?, loading: Boolean, modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (loading) {
-            val t = rememberInfiniteTransition()
-            val a by t.animateFloat(0.25f, 1f, infiniteRepeatable(tween(600), androidx.compose.animation.core.RepeatMode.Reverse))
+            val a by ambientFloat(0.25f, 1f, 600, reverse = true)
             Box(Modifier.size(6.dp).graphicsLayer { alpha = a }.clip(CircleShape).background(animated))
         } else {
             Box(Modifier.size(6.dp).clip(CircleShape).background(animated))
@@ -339,8 +338,7 @@ fun GlowBar(progress: Float, color: Color, modifier: Modifier = Modifier) {
 
 @Composable
 fun Spinner(color: Color, modifier: Modifier = Modifier) {
-    val t = rememberInfiniteTransition()
-    val a by t.animateFloat(0f, 360f, infiniteRepeatable(tween(900, easing = LinearEasing)))
+    val a by ambientFloat(0f, 360f, 900, LinearEasing)
     Canvas(modifier) {
         drawArc(color, a, 260f, false, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
     }

@@ -150,6 +150,10 @@ fun main(args: Array<String>) {
                     window.requestFocus()
                 }
             }
+            // Looping decorations stop while the window is in the tray or minimized (see Ambient.kt).
+            androidx.compose.runtime.LaunchedEffect(visible, windowState.isMinimized) {
+                app.ghostly.ui.components.AmbientMotion.visible.value = visible && !windowState.isMinimized
+            }
             GhostlyApp(c)
         }
     }

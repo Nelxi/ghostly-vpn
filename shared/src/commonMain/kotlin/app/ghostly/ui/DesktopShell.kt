@@ -11,6 +11,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
+import app.ghostly.ui.components.ambientFloat
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -229,8 +230,7 @@ private fun StatusChip(state: VpnState, onClick: () -> Unit) {
         },
         Motion.quick(),
     )
-    val t = rememberInfiniteTransition()
-    val pulse by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1600), RepeatMode.Restart))
+    val pulse by ambientFloat(0f, 1f, 1600)
     val interaction = remember { MutableInteractionSource() }
     Row(
         Modifier.fillMaxWidth().outerShadow(RoundedCornerShape(16.dp), 0.8f).clip(RoundedCornerShape(16.dp))

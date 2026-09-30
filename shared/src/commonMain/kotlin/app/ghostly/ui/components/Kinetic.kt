@@ -117,9 +117,8 @@ fun Modifier.orbHalo(state: OrbState): Modifier {
         },
         tween(900),
     )
-    val t = rememberInfiniteTransition()
-    val rot by t.animateFloat(0f, 360f, infiniteRepeatable(tween(if (state == OrbState.CONNECTING) 7000 else 46_000, easing = LinearEasing)))
-    val breath by t.animateFloat(0f, 1f, infiniteRepeatable(tween(3600, easing = Motion.EaseInOut), RepeatMode.Reverse))
+    val rot by ambientFloat(0f, 360f, if (state == OrbState.CONNECTING) 7000 else 46_000, LinearEasing)
+    val breath by ambientFloat(0f, 1f, 3600, Motion.EaseInOut, reverse = true)
     return drawBehind {
         val k = design.halo
         if (k <= 0.01f) return@drawBehind
@@ -156,8 +155,7 @@ fun Modifier.orbHalo(state: OrbState): Modifier {
 /** Small pulsing dot for "live" data. */
 @Composable
 fun LiveDot(color: Color, modifier: Modifier = Modifier) {
-    val t = rememberInfiniteTransition()
-    val p by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1400, easing = LinearEasing)))
+    val p by ambientFloat(0f, 1f, 1400, LinearEasing)
     Box(modifier.size(14.dp), contentAlignment = Alignment.Center) {
         Box(Modifier.size(14.dp).graphicsLayer { val s = 0.4f + 0.9f * p; scaleX = s; scaleY = s; alpha = (1f - p) * 0.6f }.clip(CircleShape).background(color))
         Box(Modifier.size(6.dp).clip(CircleShape).background(color))

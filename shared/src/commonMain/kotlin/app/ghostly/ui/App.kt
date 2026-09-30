@@ -116,7 +116,9 @@ fun GhostlyApp(controller: GhostlyController) {
     // Monet (the wallpaper's colour) wins over both when the user turned it on.
     val accent = settings.monet.takeIf { it }?.let { controller.platform.systemAccent() }
         ?: design.accentArgb()?.takeIf { settings.accent == app.ghostly.core.model.ThemeAccent.GHOST } ?: settings.accent.argb
-    GhostlyTheme(accent, settings.reduceMotion) { androidx.compose.runtime.CompositionLocalProvider(app.ghostly.ui.components.LocalHaptic provides { controller.haptic(app.ghostly.core.vpn.Haptic.TICK) }, app.ghostly.ui.components.LocalHapticOf provides { k -> controller.haptic(k) }, app.ghostly.ui.components.LocalHoverSound provides { controller.hoverSound() }, app.ghostly.ui.theme.LocalDesign provides design) {
+    // One clock for every looping decoration, paused while the app is off screen (see Ambient.kt).
+    val ambientTime = app.ghostly.ui.components.rememberAmbientClock()
+    GhostlyTheme(accent, settings.reduceMotion) { androidx.compose.runtime.CompositionLocalProvider(app.ghostly.ui.components.LocalAmbientTime provides ambientTime, app.ghostly.ui.components.LocalHaptic provides { controller.haptic(app.ghostly.core.vpn.Haptic.TICK) }, app.ghostly.ui.components.LocalHapticOf provides { k -> controller.haptic(k) }, app.ghostly.ui.components.LocalHoverSound provides { controller.hoverSound() }, app.ghostly.ui.theme.LocalDesign provides design) {
         var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
         controller.platform.demo?.takeIf { it.startsWith("tabs:") }?.let { spec ->
             val every = spec.removePrefix("tabs:").toLongOrNull() ?: 2500L

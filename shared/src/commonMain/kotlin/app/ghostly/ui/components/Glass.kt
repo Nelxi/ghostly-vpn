@@ -75,9 +75,8 @@ import kotlin.random.Random
 fun AuroraBackground(energy: Float, modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
     val c = Ghost.colors
     val reduce = LocalReduceMotion.current
-    val t = rememberInfiniteTransition()
-    val phase by t.animateFloat(0f, (2 * PI).toFloat(), infiniteRepeatable(tween(if (reduce) 70_000 else 30_000, easing = LinearEasing)))
-    val drift by t.animateFloat(0f, 1f, infiniteRepeatable(tween(if (reduce) 120_000 else 60_000, easing = LinearEasing)))
+    val phase by ambientFloat(0f, (2 * PI).toFloat(), if (reduce) 70_000 else 30_000, LinearEasing)
+    val drift by ambientFloat(0f, 1f, if (reduce) 120_000 else 60_000, LinearEasing)
     val e by animateFloatAsState(energy, tween(1400, easing = Motion.Ease))
     val stars = remember {
         val r = Random(7)
@@ -301,8 +300,7 @@ fun Modifier.orbitBorder(active: Boolean, color: Color, corner: Dp, width: Dp = 
     val a by animateFloatAsState(if (active) 1f else 0f, tween(450))
     val reduce = LocalReduceMotion.current
     val phase = if (active && !reduce) {
-        val t = rememberInfiniteTransition()
-        t.animateFloat(0f, 1f, infiniteRepeatable(tween(3400, easing = LinearEasing))).value
+        ambientFloat(0f, 1f, 3400, LinearEasing).value
     } else 0.125f
     drawWithContent {
         drawContent()

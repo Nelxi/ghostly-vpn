@@ -74,9 +74,8 @@ fun PokeGhost(modifier: Modifier = Modifier, happy: Float = 1f) {
     val c = Ghost.colors
     val haptic = LocalHaptic.current
     val scope = rememberCoroutineScope()
-    val t = rememberInfiniteTransition()
-    val bob by t.animateFloat(0f, 1f, infiniteRepeatable(tween(2400, easing = Motion.EaseInOut), RepeatMode.Reverse))
-    val clock by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1000, easing = LinearEasing)))
+    val bob by ambientFloat(0f, 1f, 2400, Motion.EaseInOut, reverse = true)
+    val clock by ambientFloat(0f, 1f, 1000, LinearEasing)
 
     val squish = remember { Animatable(0f) }
     val jump = remember { Animatable(0f) }

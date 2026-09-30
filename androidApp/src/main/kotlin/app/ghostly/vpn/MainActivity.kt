@@ -1,5 +1,6 @@
 package app.ghostly.vpn
 
+import app.ghostly.ui.components.AmbientMotion
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -84,6 +85,17 @@ class MainActivity : ComponentActivity() {
         ) {
             notificationsPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+    }
+
+    // Looping decorations stop while the app is in the background (see Ambient.kt).
+    override fun onStart() {
+        super.onStart()
+        AmbientMotion.visible.value = true
+    }
+
+    override fun onStop() {
+        AmbientMotion.visible.value = false
+        super.onStop()
     }
 
     override fun onDestroy() {

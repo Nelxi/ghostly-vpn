@@ -75,24 +75,15 @@ fun ConnectOrb(
     val c = Ghost.colors
     val reduce = LocalReduceMotion.current
     val interaction = remember { MutableInteractionSource() }
-    val t = rememberInfiniteTransition()
 
-    val spin by t.animateFloat(0f, 360f, infiniteRepeatable(tween(if (state == OrbState.CONNECTING) 1000 else 16_000, easing = LinearEasing)))
-    val orbit by t.animateFloat(0f, (2 * PI).toFloat(), infiniteRepeatable(tween(if (state == OrbState.CONNECTING) 2600 else 11_000, easing = LinearEasing)))
-    val swirl by t.animateFloat(0f, 360f, infiniteRepeatable(tween(9000, easing = LinearEasing)))
-    val wave by t.animateFloat(0f, 1f, infiniteRepeatable(tween(if (reduce) 4200 else 2600, easing = LinearEasing)))
-    val breath by t.animateFloat(0f, 1f, infiniteRepeatable(tween(if (reduce) 5200 else 3000, easing = Motion.EaseInOut), RepeatMode.Reverse))
-    val floatY by t.animateFloat(0f, 1f, infiniteRepeatable(tween(2600, easing = Motion.EaseInOut), RepeatMode.Reverse))
-    val blink by t.animateFloat(
-        1f, 1f,
-        infiniteRepeatable(keyframes {
-            durationMillis = 4800
-            1f at 0
-            1f at 4300
-            0.08f at 4400
-            1f at 4520
-        }),
-    )
+    val spin by ambientFloat(0f, 360f, if (state == OrbState.CONNECTING) 1000 else 16_000, LinearEasing)
+    val orbitState = ambientFloat(0f, (2 * PI).toFloat(), if (state == OrbState.CONNECTING) 2600 else 11_000, LinearEasing)
+    val orbit by orbitState
+    val swirl by ambientFloat(0f, 360f, 9000, LinearEasing)
+    val wave by ambientFloat(0f, 1f, if (reduce) 4200 else 2600, LinearEasing)
+    val breath by ambientFloat(0f, 1f, if (reduce) 5200 else 3000, Motion.EaseInOut, reverse = true)
+    val floatY by ambientFloat(0f, 1f, 2600, Motion.EaseInOut, reverse = true)
+    val blink by ambientKeyframes(4800, 0 to 1f, 4300 to 1f, 4400 to 0.08f, 4520 to 1f)
 
     val on by animateFloatAsState(if (state == OrbState.CONNECTED) 1f else 0f, tween(900, easing = Motion.Ease))
     val musicOn by remember { androidx.compose.runtime.derivedStateOf { music() } }
@@ -105,9 +96,20 @@ fun ConnectOrb(
     var pointer by remember { mutableStateOf<Offset?>(null) }
     var hover by remember { mutableStateOf(false) }
     val hoverA by animateFloatAsState(if (hover) 1f else 0f, Motion.quick(300))
-    val lookTarget = pointer?.let { p -> Offset(p.x.coerceIn(-1f, 1f), p.y.coerceIn(-1f, 1f)) }
-        ?: Offset(0.18f * sin(orbit * 0.5f), 0.12f * cos(orbit * 0.7f))
-    val look by animateOffsetAsState(lookTarget, spring(dampingRatio = 0.6f, stiffness = 120f))
+    // The spring follows only the cursor and settles when there is none; the idle sway is added on top from
+    // the ambient clock. A spring chasing the always-moving sway never settled, and a running spring asks for
+    // a frame on every screen refresh — the window kept redrawing at the monitor's full rate at rest.
+    val lookSpring = animateOffsetAsState(
+        pointer?.let { p -> Offset(p.x.coerceIn(-1f, 1f), p.y.coerceIn(-1f, 1f)) } ?: Offset.Zero,
+        spring(dampingRatio = 0.6f, stiffness = 120f),
+    )
+    val idleLook = animateFloatAsState(if (pointer == null) 1f else 0f, spring(dampingRatio = 1f, stiffness = 120f))
+    val look by remember(orbitState) {
+        androidx.compose.runtime.derivedStateOf {
+            val o = orbitState.value
+            lookSpring.value + Offset(0.18f * sin(o * 0.5f), 0.12f * cos(o * 0.7f)) * idleLook.value
+        }
+    }
 
     // Every tap squishes the ghost and makes it giggle — it's a button, but a cute one.
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -480,8 +482,7 @@ fun GhostMark(modifier: Modifier = Modifier, happy: Float = 1f, pokeable: Boolea
         return
     }
     val c = Ghost.colors
-    val t = rememberInfiniteTransition()
-    val bob by t.animateFloat(0f, 1f, infiniteRepeatable(tween(2400, easing = Motion.EaseInOut), RepeatMode.Reverse))
+    val bob by ambientFloat(0f, 1f, 2400, Motion.EaseInOut, reverse = true)
     Canvas(modifier) {
         translate(0f, (bob - 0.5f) * size.height * 0.05f) {
             drawGhost(size.minDimension, 1f, happy, 0f, c.accent, sleepy = 0f)
