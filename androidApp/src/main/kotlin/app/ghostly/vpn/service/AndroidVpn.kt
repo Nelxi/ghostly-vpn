@@ -4,11 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.VpnService
 import androidx.core.content.ContextCompat
-import app.ghostly.core.JsonX
 import app.ghostly.core.model.AppSettings
-import app.ghostly.core.model.PingMethod
 import app.ghostly.core.model.Server
-import app.ghostly.core.vpn.Probe
 import app.ghostly.core.vpn.Traffic
 import app.ghostly.core.vpn.VpnBackend
 import app.ghostly.core.vpn.VpnState
@@ -20,7 +17,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.JsonObject
 import libv2ray.Libv2ray
 import java.io.File
 
@@ -126,19 +122,15 @@ object AndroidVpn : VpnBackend {
 
     override suspend fun ping(server: Server, url: String): Long = withContext(Dispatchers.IO) {
         val config = XrayConfigBuilder.buildPing(server) ?: return@withContext -1L
-        if (Probe.method == PingMethod.PROXY_HEAD) return@withContext AndroidHttpProbe.viaXray(config, url)
-        try {
-            Libv2ray.measureOutboundDelay(JsonX.encodeToString(JsonObject.serializer(), config), url)
-        } catch (_: Exception) {
-            -1L
-        }
+        // Our own probe for GET too: the tunnel's round-trip with setup excluded, like mihomo's unified-delay.
+        AndroidHttpProbe.viaXray(config, url)
     }
 
     /** The running core, set by the service while connected. */
     @Volatile internal var liveCore: libv2ray.CoreController? = null
 
     override suspend fun healthCheck(url: String): Long = withContext(Dispatchers.IO) {
-        if (Probe.method == PingMethod.PROXY_HEAD) appPort?.let { return@withContext AndroidHttpProbe.socks(it, url) }
+        appPort?.let { return@withContext AndroidHttpProbe.socks(it, url) }
         val core = liveCore ?: return@withContext -1L
         try {
             core.measureDelay(url)

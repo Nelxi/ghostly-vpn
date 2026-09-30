@@ -18,8 +18,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -731,8 +729,9 @@ class GhostlyController(
     }
 
     /**
-     * Two phases: an instant TCP handshake to every server (results in ~100 ms, marked quick),
-     * then the real round-trip through the core, batched by the backend.
+     * The real round-trip through the core, batched by the backend. The previous number stays on
+     * screen while a server is re-pinged (a spinner marks it); a bare TCP handshake is no longer shown
+     * in its place first — that made every ping jump from ~40 ms to the real value a second later.
      */
     private fun pingServers(servers: List<Server>): kotlinx.coroutines.Job? {
         val targets = servers.filter { it.canPing && it.id !in _pinging.value }
@@ -743,17 +742,6 @@ class GhostlyController(
             return scope.launch(Dispatchers.IO) { pingDirect(targets, method) }
         }
         return scope.launch(Dispatchers.IO) {
-            val gate = Semaphore(24)
-            targets.filter { it.protocol != "hysteria" && it.host != null && it.port > 0 }.map { s ->
-                async {
-                    gate.withPermit {
-                        val ms = platform.tcpPing(s.host!!, s.port, 2500)
-                        if (ms > 0 && _pings.value[s.id]?.let { !it.quick && now() - it.at < 60_000 } != true) {
-                            _pings.update { it + (s.id to Ping(ms, now(), quick = true)) }
-                        }
-                    }
-                }
-            }.awaitAll()
             runCatching {
                 backend.pingMany(targets, _settings.value.let { it.pingUrlOf(it.core) }) { id, ms -> pinged(id, ms) }
             }
@@ -770,7 +758,7 @@ class GhostlyController(
      * Skipped while connected through the tunnel on platforms where the app's sockets would go into it.
      */
     private fun pinged(id: String, ms: Long) {
-        _pings.update { it + (id to Ping(ms, now())) }
+        _pings.update { it + (id to Ping(app.ghostly.core.vpn.Latency.shown(it[id], ms, now()), now())) }
         _pinging.update { it - id }
         if (ms > 0 || !_settings.value.blockCheck) return
         val target = server(id)?.let { app.ghostly.core.vpn.BlockCheck.target(it) } ?: return
@@ -958,7 +946,7 @@ class GhostlyController(
                     val ms = runCatching { backend.healthCheck(s.pingUrlOf(s.core)) }.getOrDefault(-1L)
                     if (ms > 0) {
                         fails = 0
-                        _pings.update { it + (cur.id to Ping(ms, now())) }
+                        _pings.update { it + (cur.id to Ping(app.ghostly.core.vpn.Latency.shown(it[cur.id], ms, now()), now())) }
                     } else if (!cur.isAuto) {
                         fails++
                     }
