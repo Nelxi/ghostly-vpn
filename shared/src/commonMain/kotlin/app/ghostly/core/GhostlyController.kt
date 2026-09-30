@@ -666,11 +666,20 @@ class GhostlyController(
         saveUi()
     }
 
-    /** Best non-auto server by latency among those with a successful ping. */
+    /**
+     * The server to recommend (the «Лучший сейчас» card, failover): among those that answer, regular
+     * servers before white lists (the scarce pool), inside them Hysteria2 and the Finnish node first
+     * ([app.ghostly.core.model.regularPreference]); the lowest ping only decides within that group.
+     */
     fun bestServer(exclude: Set<String> = emptySet()): Server? {
         val p = _pings.value
-        return allServers().filter { !it.isAuto && it.id !in exclude && p[it.id]?.ok == true }
-            .minByOrNull { p[it.id]!!.ms }
+        val alive = allServers().filter { !it.isAuto && it.id !in exclude && p[it.id]?.ok == true }
+        val regular = alive.filter { !it.isWhitelist }
+        val pool = regular.ifEmpty { alive }
+        val score: (Server) -> Int = if (regular.isNotEmpty()) { s -> app.ghostly.core.model.regularPreference(s) }
+        else { s -> app.ghostly.core.model.whitelistPreference(s) }
+        val top = pool.maxOfOrNull(score) ?: return null
+        return pool.filter { score(it) == top }.minByOrNull { p[it.id]!!.ms }
     }
 
     // ------------------------------------------------------------------ ping

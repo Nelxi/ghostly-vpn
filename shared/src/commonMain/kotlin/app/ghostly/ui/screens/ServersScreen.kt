@@ -196,7 +196,7 @@ private fun ServersList(
 
         if (profiles.isEmpty()) item { EmptyServers(onAdd) }
 
-        // Quick pick: the fastest server right now — but with mihomo the selectors decide, so the
+        // Quick pick: the recommended server right now (Finnish Hysteria2 first, see bestServer) — with mihomo the selectors decide, so the
         // groups right below are the whole story and no quick-pick card is needed.
         if (query.isBlank() && mihomoGroups.isEmpty()) controller.bestServer()?.let { best ->
             item { BestRow(best, pings[best.id]?.ms) { pick(best) } }
@@ -407,7 +407,7 @@ private fun BestRow(server: Server, ms: Long?, onClick: () -> Unit) {
         Icon(Icons.Rounded.AutoAwesome, null, tint = c.accent, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text("Самый быстрый сейчас", style = MaterialTheme.typography.titleSmall)
+            Text("Лучший сейчас", style = MaterialTheme.typography.titleSmall)
             val t = server.title()
             Row(verticalAlignment = Alignment.CenterVertically) {
                 t.flag?.let { app.ghostly.ui.components.FlagIcon(it, 11.dp); Spacer(Modifier.width(6.dp)) }
