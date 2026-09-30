@@ -612,7 +612,12 @@ fun SubscriptionCard(profile: Profile, now: Long, controller: GhostlyController,
             }
         }
 
-        // The provider's note lives on the subscription page (a tap on this card).
+        // The provider's note lives on the subscription page (a tap on this card); its info block
+        // (trial countdown, expired, renew soon) is shown right here, where it gets acted on.
+        profile.notice?.let { n ->
+            Spacer(Modifier.height(12.dp))
+            ProviderNoticeBlock(n, controller)
+        }
 
         val actions = buildList<Triple<ImageVector, String, () -> Unit>> {
             if (profile.url != null) add(Triple(Icons.Rounded.Refresh, "Обновить") { controller.haptic(); controller.refresh(profile.id, manual = true) })

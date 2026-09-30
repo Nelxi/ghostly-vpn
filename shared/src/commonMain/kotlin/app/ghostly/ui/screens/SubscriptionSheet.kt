@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.ghostly.core.GhostlyController
 import app.ghostly.core.model.Profile
+import app.ghostly.core.model.ProviderNotice
 import app.ghostly.ui.Format
 import app.ghostly.ui.components.AccentButton
 import app.ghostly.ui.components.FlagText
@@ -68,6 +69,27 @@ val LocalSubscriptionNav = staticCompositionLocalOf { SubscriptionNav({}, {}) }
  * link, which for most providers is the bot that sells the subscription.
  */
 fun Profile.renewLink(): String? = renewUrl ?: supportUrl
+
+/** The provider's info block (Happ `sub-info-*`), coloured as asked, with its button. */
+@Composable
+fun ProviderNoticeBlock(n: ProviderNotice, controller: GhostlyController, modifier: Modifier = Modifier) {
+    val c = Ghost.colors
+    val tone = when (n.color) { "red" -> c.bad; "green" -> c.ok; "blue" -> Color(0xFF6EA8FF); else -> c.accent }
+    Column(
+        modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(tone.copy(alpha = 0.10f))
+            .border(1.dp, tone.copy(alpha = 0.28f), RoundedCornerShape(20.dp)).padding(14.dp),
+    ) {
+        FlagText(n.text, style = MaterialTheme.typography.bodyMedium)
+        n.buttonUrl?.let { url ->
+            Spacer(Modifier.height(10.dp))
+            Text(
+                n.buttonText ?: "Открыть", style = MaterialTheme.typography.labelLarge, color = tone,
+                modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(tone.copy(alpha = 0.14f))
+                    .hoverSound().clickable { controller.haptic(); controller.platform.openUrl(url) }.padding(horizontal = 14.dp, vertical = 8.dp),
+            )
+        }
+    }
+}
 
 /** Profiles that count as subscriptions (a URL or provider info), in list order. */
 fun List<Profile>.subscriptions() = filter { it.url != null || it.info != null }
@@ -176,24 +198,9 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
             }
         }
 
-        // The provider's info block (Happ `sub-info-*`), coloured as asked, with its button.
         profile.notice?.let { n ->
-            val tone = when (n.color) { "red" -> c.bad; "green" -> c.ok; "blue" -> Color(0xFF6EA8FF); else -> c.accent }
             Spacer(Modifier.height(12.dp))
-            Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(tone.copy(alpha = 0.10f))
-                    .border(1.dp, tone.copy(alpha = 0.28f), RoundedCornerShape(20.dp)).padding(14.dp),
-            ) {
-                FlagText(n.text, style = MaterialTheme.typography.bodyMedium)
-                n.buttonUrl?.let { url ->
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        n.buttonText ?: "Открыть", style = MaterialTheme.typography.labelLarge, color = tone,
-                        modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(tone.copy(alpha = 0.14f))
-                            .hoverSound().clickable { controller.platform.openUrl(url) }.padding(horizontal = 14.dp, vertical = 8.dp),
-                    )
-                }
-            }
+            ProviderNoticeBlock(n, controller)
         }
 
         // Facts from the headers (links are the buttons below, not repeated here)
