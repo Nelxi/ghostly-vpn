@@ -19,6 +19,7 @@ import kotlinx.coroutines.runBlocking
 import javax.imageio.ImageIO
 
 fun main(args: Array<String>) {
+    app.ghostly.core.vpn.LoopbackAuthenticator.install()
     val platform = DesktopPlatform()
     var controller: GhostlyController? = null
     val raise = androidx.compose.runtime.mutableIntStateOf(0)

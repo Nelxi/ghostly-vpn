@@ -119,9 +119,11 @@ data class AppSettings(
     val blockQuic: Boolean = false,
     /** TCP Fast Open on proxy connections: one round-trip less per new connection. */
     val tcpFastOpen: Boolean = false,
-    // --- per-app (Android)
-    val splitMode: SplitMode = SplitMode.OFF,
-    val splitApps: Set<String> = emptySet(),
+    // --- per-app (Android): Russian apps go around the VPN out of the box (see [RuApps])
+    val splitMode: SplitMode = SplitMode.BYPASS_SELECTED,
+    val splitApps: Set<String> = RuApps.PACKAGES,
+    /** Set once 0.3.18 put [RuApps] around the VPN for everyone; later choices stick. */
+    val ruAppsBypassApplied: Boolean = false,
     // --- desktop
     val desktopMode: DesktopMode = DesktopMode.SYSTEM_PROXY,
     val socksPort: Int = 10808,
@@ -177,6 +179,22 @@ data class AppSettings(
     val reduceMotion: Boolean = false,
     val language: String = "system",
 ) {
+
+    /** One-time move to [RuApps] around the VPN. An "only these apps" list is the user's own and stays. */
+    fun withRuAppsBypass(): AppSettings = when (splitMode) {
+        // apps left in the list from an earlier mode were inactive — don't revive them
+        SplitMode.OFF -> copy(splitMode = SplitMode.BYPASS_SELECTED, splitApps = RuApps.PACKAGES, ruAppsBypassApplied = true)
+        SplitMode.BYPASS_SELECTED -> copy(splitApps = splitApps + RuApps.PACKAGES, ruAppsBypassApplied = true)
+        SplitMode.ONLY_SELECTED -> copy(ruAppsBypassApplied = true)
+    }
+
+    /** Switching the per-app mode: Russian apps are "around the VPN" picks, never "only through VPN" ones. */
+    fun withSplitMode(mode: SplitMode): AppSettings = when {
+        mode == splitMode -> this
+        mode == SplitMode.ONLY_SELECTED -> copy(splitMode = mode, splitApps = splitApps - RuApps.PACKAGES)
+        mode == SplitMode.BYPASS_SELECTED -> copy(splitMode = mode, splitApps = splitApps + RuApps.PACKAGES)
+        else -> copy(splitMode = mode)
+    }
 
     fun pingMethodOf(core: CoreType) = if (core == CoreType.MIHOMO) mihomoPingMethod else pingMethod
     fun pingUrlOf(core: CoreType) = if (core == CoreType.MIHOMO) mihomoPingUrl else pingUrl

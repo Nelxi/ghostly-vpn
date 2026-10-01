@@ -3,11 +3,9 @@ package app.ghostly.vpn.service
 import app.ghostly.core.JsonX
 import app.ghostly.core.vpn.Probe
 import app.ghostly.core.vpn.UnifiedDelay
+import app.ghostly.core.xray.XrayConfigBuilder
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonObject
 import libv2ray.CoreCallbackHandler
 import libv2ray.Libv2ray
 import java.net.InetSocketAddress
@@ -28,12 +26,7 @@ object AndroidHttpProbe {
     fun viaXray(pingConfig: JsonObject, url: String): Long {
         val port = ServerSocket(0).use { it.localPort }
         val config = JsonObject(
-            pingConfig + ("inbounds" to JsonArray(listOf(buildJsonObject {
-                put("listen", "127.0.0.1")
-                put("port", port)
-                put("protocol", "socks")
-                putJsonObject("settings") { put("udp", false) }
-            }))),
+            pingConfig + ("inbounds" to JsonArray(listOf(XrayConfigBuilder.pingInbound(port)))),
         )
         val core = Libv2ray.newCoreController(object : CoreCallbackHandler {
             override fun startup(): Long = 0

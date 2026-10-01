@@ -91,6 +91,7 @@ import app.ghostly.core.model.DesktopMode
 import app.ghostly.core.model.DnsPreset
 import app.ghostly.core.model.PingMethod
 import app.ghostly.core.model.RoutingMode
+import app.ghostly.core.model.RuApps
 import app.ghostly.core.model.SplitMode
 import app.ghostly.core.model.ThemeAccent
 import app.ghostly.core.vpn.AppEntry
@@ -229,7 +230,14 @@ private fun MainSettings(controller: GhostlyController, contentPadding: PaddingV
                 SettingRow("Приложения", when (s.splitMode) {
                     SplitMode.OFF -> "Все приложения через VPN"
                     SplitMode.ONLY_SELECTED -> "Только выбранные: ${s.splitApps.size}"
-                    SplitMode.BYPASS_SELECTED -> "В обход VPN: ${s.splitApps.size}"
+                    SplitMode.BYPASS_SELECTED -> {
+                        val extra = (s.splitApps - RuApps.PACKAGES).size
+                        when {
+                            !s.splitApps.containsAll(RuApps.PACKAGES) -> "В обход VPN: ${s.splitApps.size}"
+                            extra == 0 -> "Российские — в обход VPN"
+                            else -> "Российские и ещё $extra — в обход VPN"
+                        }
+                    }
                 }, Icons.AutoMirrored.Rounded.CallSplit, onClick = { open(Page.APPS) }) { Chevron() }
             }
             if (controller.platform.isDesktop) {
@@ -529,13 +537,13 @@ private fun AppsPage(controller: GhostlyController, contentPadding: PaddingValue
                 }
                 Segmented(
                     listOf(SplitMode.OFF to "Все", SplitMode.ONLY_SELECTED to "Только эти", SplitMode.BYPASS_SELECTED to "Кроме этих"),
-                    s.splitMode, { m -> controller.updateSettings { it.copy(splitMode = m) } },
+                    s.splitMode, { m -> controller.updateSettings { it.withSplitMode(m) } },
                 )
                 Text(
                     when (s.splitMode) {
                         SplitMode.OFF -> "Все приложения работают через VPN."
                         SplitMode.ONLY_SELECTED -> "Через VPN пойдут только отмеченные приложения."
-                        SplitMode.BYPASS_SELECTED -> "Отмеченные приложения будут работать напрямую — например, банки."
+                        SplitMode.BYPASS_SELECTED -> "Отмеченные приложения работают напрямую. Российские (банки, Госуслуги, MAX, маркетплейсы) отмечены сразу: так они видят твой обычный IP, а не адрес VPN."
                     },
                     style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(6.dp, 10.dp),
                 )

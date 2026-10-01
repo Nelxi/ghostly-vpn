@@ -166,6 +166,8 @@ class GhostlyController(
         if (!_settings.value.coreXrayRestored) {
             updateSettings { it.copy(core = app.ghostly.core.model.CoreType.XRAY, coreXrayRestored = true) }
         }
+        // 0.3.18: Russian apps (banks, Gosuslugi, MAX, marketplaces) go around the VPN for everyone, once.
+        if (!_settings.value.ruAppsBypassApplied) updateSettings { it.withRuAppsBypass() }
         (backend as? app.ghostly.core.mihomo.DualCoreBackend)?.profileOf = ::profileOf
         (backend as? app.ghostly.core.mihomo.DualCoreBackend)?.picksOf = { id -> _mihomoPicks.value[id] ?: emptyMap() }
         app.ghostly.core.vpn.Probe.method = _settings.value.let { it.pingMethodOf(it.core) }

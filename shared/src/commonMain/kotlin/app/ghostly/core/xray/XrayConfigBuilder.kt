@@ -4,6 +4,7 @@ import app.ghostly.core.model.AppSettings
 import app.ghostly.core.model.DnsPreset
 import app.ghostly.core.model.RoutingMode
 import app.ghostly.core.model.Server
+import app.ghostly.core.vpn.LoopbackAuth
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -31,8 +32,8 @@ sealed interface Ingress {
     val proxy: LocalProxy?
 
     /**
-     * Loopback SOCKS port without auth for the app's own requests (subscription updates, pings)
-     * through the tunnel when the direct route is blocked. 0 = none.
+     * Loopback SOCKS port for the app's own requests (subscription updates, pings) through the
+     * tunnel when the direct route is blocked, guarded by [app.ghostly.core.vpn.LoopbackAuth]. 0 = none.
      */
     val appPort: Int
 
@@ -217,7 +218,20 @@ object XrayConfigBuilder {
             add(socks("socks-in", p.listen, p.socksPort, p.user, p.pass))
             add(http("http-in", p.listen, p.httpPort, p.user, p.pass))
         }
-        if (ingress.appPort > 0) add(socks("app-in", "127.0.0.1", ingress.appPort, null, null))
+        if (ingress.appPort > 0) add(socks("app-in", "127.0.0.1", ingress.appPort, LoopbackAuth.user, LoopbackAuth.pass))
+    }
+
+    /** Loopback SOCKS inbound of a throwaway ping core, behind [LoopbackAuth] like `app-in`. */
+    fun pingInbound(port: Int, tag: String? = null): JsonObject = buildJsonObject {
+        if (tag != null) put("tag", tag)
+        put("listen", "127.0.0.1")
+        put("port", port)
+        put("protocol", "socks")
+        putJsonObject("settings") {
+            put("udp", false)
+            put("auth", "password")
+            putJsonArray("accounts") { add(buildJsonObject { put("user", LoopbackAuth.user); put("pass", LoopbackAuth.pass) }) }
+        }
     }
 
     /** The user's local proxy from settings (auth applied when enabled). */

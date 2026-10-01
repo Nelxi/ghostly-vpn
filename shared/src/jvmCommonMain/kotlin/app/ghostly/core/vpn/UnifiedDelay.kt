@@ -25,6 +25,8 @@ object UnifiedDelay {
     private const val MAX_HEAD = 16 * 1024
     private const val MAX_BODY = 256 * 1024
 
+    init { LoopbackAuthenticator.install() }
+
     /** Through a loopback SOCKS port of a core, ms; negative on failure. */
     fun viaSocks(port: Int, url: String, method: String = Probe.httpMethod): Long =
         measure(Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port)), url, method)

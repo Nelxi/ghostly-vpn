@@ -270,12 +270,7 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
         if (!exe.isFile) return@withContext -1L
         val port = freePort()
         val config = JsonObject(
-            base + ("inbounds" to JsonArray(listOf(buildJsonObject {
-                put("listen", "127.0.0.1")
-                put("port", port)
-                put("protocol", "socks")
-                putJsonObject("settings") { put("udp", false) }
-            }))),
+            base + ("inbounds" to JsonArray(listOf(XrayConfigBuilder.pingInbound(port)))),
         )
         val file = File.createTempFile("ghostly-ping", ".json")
         file.writeText(JsonX.encodeToString(JsonObject.serializer(), config))
@@ -310,12 +305,7 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
         val ports = batch.map { freePort() }
         val config = buildJsonObject {
             putJsonObject("log") { put("loglevel", "none") }
-            put("inbounds", JsonArray(batch.indices.map { i ->
-                buildJsonObject {
-                    put("tag", "in$i"); put("listen", "127.0.0.1"); put("port", ports[i]); put("protocol", "socks")
-                    putJsonObject("settings") { put("udp", false) }
-                }
-            }))
+            put("inbounds", JsonArray(batch.indices.map { i -> XrayConfigBuilder.pingInbound(ports[i], "in$i") }))
             put("outbounds", JsonArray(batch.mapIndexed { i, (_, ob) -> JsonObject(ob + ("tag" to JsonPrimitive("out$i"))) }))
             putJsonObject("routing") {
                 put("rules", JsonArray(batch.indices.map { i ->

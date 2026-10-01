@@ -6,6 +6,7 @@ import app.ghostly.core.model.DnsPreset
 import app.ghostly.core.model.Profile
 import app.ghostly.core.model.RoutingMode
 import app.ghostly.core.model.Server
+import app.ghostly.core.vpn.LoopbackAuth
 import app.ghostly.core.xray.LocalProxy
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -98,7 +99,7 @@ object MihomoConfigBuilder {
         "port", "socks-port", "redir-port", "tproxy-port", "mixed-port", "authentication", "listeners",
         "external-controller", "external-controller-tls", "external-controller-unix", "external-controller-pipe",
         "external-ui", "external-ui-url", "external-ui-name", "secret", "tun", "interface-name", "routing-mark",
-        "allow-lan", "bind-address", "lan-allowed-ips", "lan-disallowed-ips",
+        "allow-lan", "bind-address", "skip-auth-prefixes", "lan-allowed-ips", "lan-disallowed-ips",
     )
 
     private fun fromProvider(provided: JsonObject, server: Server, settings: AppSettings, ingress: MihomoIngress, stored: Map<String, String>): MihomoPlan {
@@ -230,8 +231,10 @@ object MihomoConfigBuilder {
         cfg["secret"] = JsonPrimitive(ingress.secret)
         if (cfg["profile"] == null) cfg["profile"] = buildJsonObject { put("store-selected", false); put("store-fake-ip", true) }
 
+        // mihomo lets loopback clients skip auth when this list says so; nobody may skip ours.
+        cfg["skip-auth-prefixes"] = JsonArray(emptyList())
         cfg["listeners"] = buildJsonArray {
-            if (ingress.appPort > 0) add(listener("app-in", "mixed", "127.0.0.1", ingress.appPort, null))
+            if (ingress.appPort > 0) add(listener("app-in", "mixed", "127.0.0.1", ingress.appPort, LocalProxy(0, 0, user = LoopbackAuth.user, pass = LoopbackAuth.pass)))
             if (ingress.osHttpPort > 0) add(listener("os-http-in", "http", "127.0.0.1", ingress.osHttpPort, null))
             ingress.proxy?.let { p ->
                 add(listener("socks-in", "socks", p.listen, p.socksPort, p))

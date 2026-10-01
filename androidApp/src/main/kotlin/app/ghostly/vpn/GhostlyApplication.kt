@@ -32,6 +32,7 @@ class GhostlyApplication : Application() {
             com.github.kr328.clash.common.Global.init(this)
             return
         }
+        app.ghostly.core.vpn.LoopbackAuthenticator.install()
         AndroidVpn.init(this)
         app.ghostly.vpn.service.AndroidMihomo.init(this)
         platform.preloadSounds()
