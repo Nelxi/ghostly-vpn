@@ -26,10 +26,17 @@ data class DesignTokens(
     val parallax: Float = 1f,
     /** Glow around the connect orb, 1 = default. */
     val halo: Float = 1f,
+    /** How much dark songs on the stage dim the window and the aurora: 0 = never, 1 = full (pre-0.3.19 look). */
+    val stageDim: Float = 0f,
+    /** Darkness of the shadows under cards and buttons: 1 = the old heavy shadows. */
+    val shadow: Float = 0.45f,
+    /** How far the shadows spread (bigger = softer edge): 1 = the old tight shadows. */
+    val shadowSoft: Float = 1.6f,
     /** "#RRGGBB": replaces the default violet accent (users who picked their own colour keep it). */
     val accent: String? = null,
     val banner: Banner? = null,
 ) {
+    /** Shadows/dim from a design.json without these keys (or a saved pre-0.3.19 one) use the defaults above. */
     fun accentArgb(): Long? = accent?.removePrefix("#")?.takeIf { it.length == 6 }?.toLongOrNull(16)?.let { 0xFF000000L or it }
 }
 
@@ -65,6 +72,9 @@ class RemoteDesign(private val store: FileStore, private val userAgent: String) 
                 aurora = t.aurora.coerceIn(0f, 2.5f),
                 parallax = t.parallax.coerceIn(0f, 3f),
                 halo = t.halo.coerceIn(0f, 2.5f),
+                stageDim = t.stageDim.coerceIn(0f, 1f),
+                shadow = t.shadow.coerceIn(0f, 1.5f),
+                shadowSoft = t.shadowSoft.coerceIn(0.5f, 3f),
             )
             store.save(FILE, DesignTokens.serializer(), _tokens.value)
             return

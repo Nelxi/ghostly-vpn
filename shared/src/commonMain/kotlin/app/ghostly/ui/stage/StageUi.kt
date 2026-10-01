@@ -87,81 +87,32 @@ fun rememberStage(controller: GhostlyController, enabled: Boolean): StageState? 
 }
 
 /**
- * Full-window light show on top of everything (never takes input): dark songs dim the edges,
- * bass lights the window's rims, a drop flashes the whole composition and throws sparks.
+ * Full-window light show on top of everything (never takes input): bass gently lights the window's
+ * rims; dark songs may dim the edges when design.json asks for it (`stageDim`). No flashes, no sparks.
  */
 @Composable
 fun StageOverlay(stage: StageState) {
     val c = Ghost.colors
-    val reduce = LocalReduceMotion.current
-    val sparks = remember { ArrayList<FloatArray>() } // x, y, vx, vy, life, hue(0 accent / 1 white / 2 pink)
+    val design = app.ghostly.ui.theme.LocalDesign.current
     var frame by remember { mutableLongStateOf(0L) }
-    val rnd = remember { Random(11) }
-    var lastDrop by remember { mutableStateOf(0f) }
-    LaunchedEffect(Unit) {
-        var last = 0L
-        while (true) {
-            withFrameNanos { now ->
-                val dt = if (last == 0L) 0.016f else ((now - last) / 1e9f).coerceIn(0f, 0.05f)
-                last = now
-                val a = stage.a
-                // New drop → a burst from the centre; strong kicks during a drop keep it sparkling.
-                if (!reduce && a.drop > 0.95f && lastDrop < 0.95f) repeat(90) { sparks += spark(rnd, 1.6f) }
-                if (!reduce && a.drop > 0.2f && a.beat > 0.8f && sparks.size < 260) repeat((a.drop * 14).toInt()) { sparks += spark(rnd, 0.9f) }
-                lastDrop = a.drop
-                val it = sparks.iterator()
-                while (it.hasNext()) {
-                    val p = it.next()
-                    p[0] += p[2] * dt; p[1] += p[3] * dt
-                    p[3] += 0.22f * dt // gentle gravity
-                    p[4] -= dt / 1.8f
-                    if (p[4] <= 0f) it.remove()
-                }
-                frame = now
-            }
-        }
-    }
+    LaunchedEffect(Unit) { while (true) withFrameNanos { frame = it } }
     Canvas(Modifier.fillMaxSize()) {
         frame // redraw every frame
         val a = stage.a
         val w = size.width
         val h = size.height
-        // Dark songs: the composition sinks into shadow at the edges.
-        val dim = (a.mood * 0.85f * (1f - a.drop * 0.45f)).coerceIn(0f, 0.8f)
+        val dim = (a.mood * 0.85f * design.stageDim).coerceIn(0f, 0.8f)
         if (dim > 0.01f) drawRect(
             Brush.radialGradient(listOf(Color.Transparent, Color.Black.copy(alpha = dim)), Offset(w / 2, h * 0.42f), max(w, h) * 0.72f),
         )
         // Bass lights the rims of the window like stage wash lights.
-        val rim = (a.bass * 0.22f + a.beat * 0.08f) * (1f - a.mood * 0.9f) + a.drop * 0.3f * (1f - 0.6f * a.mood)
+        val rim = (a.bass * 0.22f + a.beat * 0.08f) * (1f - a.mood * 0.9f)
         if (rim > 0.01f) {
-            val col = lerp(c.accent, Color(0xFFFF9AC8), a.drop)
-            drawRect(Brush.verticalGradient(listOf(col.copy(alpha = rim), Color.Transparent), startY = h, endY = h * 0.7f))
-            drawRect(Brush.horizontalGradient(listOf(col.copy(alpha = rim * 0.6f), Color.Transparent), startX = 0f, endX = w * 0.18f))
-            drawRect(Brush.horizontalGradient(listOf(Color.Transparent, col.copy(alpha = rim * 0.6f)), startX = w * 0.82f, endX = w))
-        }
-        // The drop itself: a white-violet flash through the whole window.
-        if (a.drop > 0.01f) drawRect(
-            Brush.radialGradient(
-                listOf(
-                    Color.White.copy(alpha = 0.22f * a.drop * a.drop * (1f - 0.6f * a.mood)),
-                    c.accent.copy(alpha = 0.18f * a.drop * (1f - 0.4f * a.mood)),
-                    Color.Transparent,
-                ),
-                Offset(w / 2, h * 0.4f), max(w, h) * (0.4f + 0.5f * (1f - a.drop)),
-            ),
-        )
-        for (p in sparks) {
-            val col = when (p[5].toInt()) { 0 -> c.accent; 1 -> Color.White; else -> Color(0xFFFF9AC8) }
-            val life = p[4].coerceIn(0f, 1f)
-            drawCircle(col.copy(alpha = life * 0.9f), (1.2f + 2.4f * life).dp.toPx(), Offset(p[0] * w, p[1] * h))
+            drawRect(Brush.verticalGradient(listOf(c.accent.copy(alpha = rim), Color.Transparent), startY = h, endY = h * 0.7f))
+            drawRect(Brush.horizontalGradient(listOf(c.accent.copy(alpha = rim * 0.6f), Color.Transparent), startX = 0f, endX = w * 0.18f))
+            drawRect(Brush.horizontalGradient(listOf(Color.Transparent, c.accent.copy(alpha = rim * 0.6f)), startX = w * 0.82f, endX = w))
         }
     }
-}
-
-private fun spark(r: Random, speed: Float): FloatArray {
-    val ang = r.nextFloat() * 2 * PI.toFloat()
-    val v = (0.08f + r.nextFloat() * 0.35f) * speed
-    return floatArrayOf(0.5f + (r.nextFloat() - 0.5f) * 0.1f, 0.4f, cos(ang) * v, sin(ang) * v - 0.1f, 0.6f + r.nextFloat() * 0.4f, r.nextInt(3).toFloat())
 }
 
 /**
@@ -245,7 +196,7 @@ private fun TypedLine(text: String, start: Long, end: Long, stage: StageState) {
         modifier = Modifier.widthIn(max = 560.dp).graphicsLayer {
             val a = stage.a
             translationY = -a.beat * 2.dp.toPx()
-            val k = 1f + a.vocal * 0.03f + a.drop * 0.06f
+            val k = 1f + a.vocal * 0.03f
             scaleX = k; scaleY = k
         },
     )

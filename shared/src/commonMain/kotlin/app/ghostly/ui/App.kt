@@ -112,6 +112,10 @@ fun GhostlyApp(controller: GhostlyController) {
     val state by controller.state.collectAsState()
 
     val design by controller.design.tokens.collectAsState()
+    androidx.compose.runtime.SideEffect {
+        app.ghostly.ui.components.ShadowLook.strength = design.shadow
+        app.ghostly.ui.components.ShadowLook.spread = design.shadowSoft
+    }
     // A seasonal accent from the server applies only while the user keeps the default colour.
     // Monet (the wallpaper's colour) wins over both when the user turned it on.
     val accent = settings.monet.takeIf { it }?.let { controller.platform.systemAccent() }
@@ -209,7 +213,7 @@ fun GhostlyApp(controller: GhostlyController) {
                 }
                 SideEffect { wideLayout = wide }
             }
-            // Music on the PC: the whole composition plays along (dimming, rim lights, drop flash, sparks).
+            // Music on the PC: the whole composition plays along (rim lights with the bass).
             stage?.let { app.ghostly.ui.stage.StageOverlay(it) }
 
             // Server picker: our own sheet (see PickerSheet for why not ModalBottomSheet).

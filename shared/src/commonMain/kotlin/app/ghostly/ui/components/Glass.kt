@@ -104,15 +104,14 @@ fun AuroraBackground(energy: Float, modifier: Modifier = Modifier, content: @Com
             val m = maxOf(w, h)
             val px = -par.x * 46.dp.toPx() * remote.parallax
             val py = -par.y * 34.dp.toPx() * remote.parallax
-            // Stage: the aurora breathes with the bass, sinks with dark songs, blazes on a drop.
+            // Stage: the aurora breathes with the bass (dark songs dim it only with design `stageDim`).
             val sa = stage?.a
-            // Darkness dominates: bass/beat only brighten bright songs, a drop flares less in a dark one.
             val glow = remote.aurora * (1f + (sa?.let {
-                (it.bass * 0.6f + it.beat * 0.2f) * (1f - it.mood) + it.drop * 1.2f * (1f - 0.6f * it.mood) - it.mood * 0.9f
+                (it.bass * 0.6f + it.beat * 0.2f) * (1f - it.mood) - it.mood * 0.9f * remote.stageDim
             } ?: 0f)).coerceAtLeast(0.12f)
             fun blob(cx0: Float, cy0: Float, r0: Float, color: Color, alpha0: Float) {
                 val cx = cx0 + px; val cy = cy0 + py
-                val r = r0 * (1f + (sa?.let { it.bass * 0.10f + it.drop * 0.18f } ?: 0f))
+                val r = r0 * (1f + (sa?.let { it.bass * 0.10f } ?: 0f))
                 val alpha = (alpha0 * glow).coerceIn(0f, 1f)
                 drawCircle(
                     Brush.radialGradient(
@@ -130,7 +129,7 @@ fun AuroraBackground(energy: Float, modifier: Modifier = Modifier, content: @Com
             // Ghost dust: tiny stars drifting up and twinkling.
             stars.forEach { s ->
                 val y = ((s[1] - drift * s[4] * 0.35f) % 1f + 1f) % 1f
-                val tw = (0.5f + 0.5f * sin(phase * 3f * s[4] + s[3])) * (1f + (sa?.let { it.treble * 1.2f + it.drop * 2f } ?: 0f))
+                val tw = (0.5f + 0.5f * sin(phase * 3f * s[4] + s[3])) * (1f + (sa?.let { it.treble * 1.2f } ?: 0f))
                 val depth = 1.2f + s[4] * 1.4f
                 drawCircle(Color.White.copy(alpha = (0.10f + 0.35f * tw) * (0.7f + 0.3f * e)), s[2].dp.toPx() * 0.8f, Offset(s[0] * w + px * depth, y * h + py * depth))
             }
@@ -172,13 +171,13 @@ fun GlassCard(
         )
     if (glow != null) m = m.background(Brush.radialGradient(listOf(glow.copy(alpha = 0.16f), Color.Transparent)))
     // Soft inner depth: edges of the glass sink a little, and a thin light line catches the top edge.
-    m = m.innerShadow(shape, androidx.compose.ui.graphics.shadow.Shadow(radius = 18.dp, color = Color.Black.copy(alpha = 0.32f)))
+    m = m.innerShadow(shape, androidx.compose.ui.graphics.shadow.Shadow(radius = 18.dp, color = Color.Black.copy(alpha = 0.32f * LocalDesign.current.shadow.coerceAtMost(1f))))
         .innerShadow(shape, androidx.compose.ui.graphics.shadow.Shadow(radius = 2.dp, color = Color.White.copy(alpha = 0.07f), offset = androidx.compose.ui.unit.DpOffset(0.dp, 1.dp)))
     val stageForCard = app.ghostly.ui.stage.LocalStage.current
     if (stageForCard != null) m = m.drawWithContent {
         drawContent()
         val a = stageForCard.a
-        val k = (a.beat * 0.35f + a.drop * 0.5f) * (1f - a.mood * 0.6f)
+        val k = a.beat * 0.35f * (1f - a.mood * 0.6f)
         if (k > 0.02f) drawRect(Brush.verticalGradient(listOf(c.accent.copy(alpha = 0.22f * k), Color.Transparent), endY = size.height * 0.5f))
     }
     m = m.spotlight(c.accent)
@@ -332,15 +331,24 @@ fun Hairline(modifier: Modifier = Modifier) {
  * the platform's blurred DropShadowPainter and the shape itself is cut out of it (ClipOp.Difference).
  * Three layers: a dense rim at the edge, a soft mid shadow, a wide heavy tail below.
  */
-fun Modifier.outerShadow(shape: Shape, weight: Float = 1f): Modifier = drawBehind {
+/** Server-tunable shadow look (design.json `shadow` / `shadowSoft`); snapshot state, so a change redraws. */
+object ShadowLook {
+    var strength by androidx.compose.runtime.mutableFloatStateOf(app.ghostly.core.design.DesignTokens().shadow)
+    var spread by androidx.compose.runtime.mutableFloatStateOf(app.ghostly.core.design.DesignTokens().shadowSoft)
+}
+
+fun Modifier.outerShadow(shape: Shape, weight0: Float = 1f): Modifier = drawBehind {
+    val weight = weight0 * ShadowLook.strength
+    val s = ShadowLook.spread
+    if (weight <= 0.001f) return@drawBehind
     // Blur-free soft shadow: each layer is the shape grown step by step with a falling alpha, so the sum
     // fades smoothly like a gaussian. Pure geometry, no cached blur bitmaps: stable on every device
     // (the blurred painter flickered on Android while it re-rendered its cache).
     val cut = androidx.compose.ui.graphics.Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawBehind)) }
     clipPath(cut, androidx.compose.ui.graphics.ClipOp.Difference) {
-        softLayer(shape, radius = 10.dp.toPx(), dy = 2.dp.toPx(), alpha = 0.5f * weight)
-        softLayer(shape, radius = 22.dp.toPx(), dy = 8.dp.toPx(), alpha = 0.45f * weight)
-        softLayer(shape, radius = 44.dp.toPx(), dy = 18.dp.toPx(), alpha = 0.5f * weight)
+        softLayer(shape, radius = 10.dp.toPx() * s, dy = 2.dp.toPx() * s, alpha = 0.5f * weight)
+        softLayer(shape, radius = 22.dp.toPx() * s, dy = 8.dp.toPx() * s, alpha = 0.45f * weight)
+        softLayer(shape, radius = 44.dp.toPx() * s, dy = 18.dp.toPx() * s, alpha = 0.5f * weight)
     }
 }
 
