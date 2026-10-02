@@ -300,6 +300,10 @@ class AndroidPlatform(private val context: Context) : PlatformInfo {
     override suspend fun downloadVerified(urls: List<String>, sha256: String, size: Long, onProgress: (Float) -> Unit): String =
         downloadVerifiedTo(java.io.File(context.cacheDir, "updates/$updateAsset"), urls, sha256, size, onProgress)
 
+    override fun clearDownloadedUpdate() {
+        java.io.File(context.cacheDir, "updates").deleteRecursively()
+    }
+
     override fun canAutoInstall(): Boolean =
         Build.VERSION.SDK_INT < 26 || context.packageManager.canRequestPackageInstalls()
 

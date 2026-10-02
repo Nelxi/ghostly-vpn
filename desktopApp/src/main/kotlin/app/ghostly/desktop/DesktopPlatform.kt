@@ -59,6 +59,10 @@ class DesktopPlatform : PlatformInfo {
     override suspend fun downloadVerified(urls: List<String>, sha256: String, size: Long, onProgress: (Float) -> Unit): String =
         downloadVerifiedTo(File(System.getProperty("java.io.tmpdir"), "ghostly-update/Ghostly-Windows.exe"), urls, sha256, size, onProgress)
 
+    override fun clearDownloadedUpdate() {
+        File(System.getProperty("java.io.tmpdir"), "ghostly-update").deleteRecursively()
+    }
+
     override fun installUpdate(path: String) {
         // Silent Inno Setup over the current install; its [Run] entry starts Ghostly again when done.
         // It must not start while we are still closing: the JVM holds its jars and the core is still

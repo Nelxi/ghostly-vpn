@@ -135,6 +135,9 @@ interface PlatformInfo {
     /** Hands a verified update to the OS installer (Android package installer / Windows setup). */
     fun installUpdate(path: String) {}
 
+    /** Removes a downloaded update once it's no longer needed (the app is already up to date). */
+    fun clearDownloadedUpdate() {}
+
     /** Local time zone offset from UTC, minutes (greetings, local clock). */
     fun utcOffsetMinutes(): Int = 180
 

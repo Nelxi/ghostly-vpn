@@ -90,6 +90,9 @@ class Updater(private val platform: PlatformInfo, private val isDismissed: (Stri
         _lastCheck.value = "${stamp()}: на сервере $latest, у тебя ${platform.appVersion}" +
             if (compareVersions(latest, platform.appVersion) > 0) " — есть обновление" else " — всё свежее"
         val newer = compareVersions(latest, platform.appVersion) > 0
+        // Up to date: the installer that got us here (66–180 MB) has done its job. While an update is
+        // still pending it stays, so a failed install is retried without downloading it again.
+        if (!newer) runCatching { platform.clearDownloadedUpdate() }
         // offer.version also picks the download folder (/dl/<version>/, GitHub v<version>): a reused file lives in its own.
         val offer = if (newer && (force || !isDismissed(latest))) UpdateOffer(latest, asset, file.sha256, file.size) else null
         _offer.value = offer
