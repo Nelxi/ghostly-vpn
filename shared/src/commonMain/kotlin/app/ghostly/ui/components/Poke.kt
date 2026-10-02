@@ -149,7 +149,7 @@ fun PokeGhost(modifier: Modifier = Modifier, happy: Float = 1f) {
             rotate(tilt.value + dizzyWobble, Offset(s / 2, s * 0.8f)) {
                 // Squash & stretch around the hem: wider and flatter right after a poke.
                 scale(1f + 0.16f * sq, 1f - 0.16f * sq, Offset(s / 2, s * 0.82f)) {
-                    drawGhost(s, 1f, maxOf(happy, hoverA * 0.8f), 0f, c.accent, sleepy = 0f, look = look * (0.5f + 0.5f * hoverA), expr = expr)
+                    drawGhost(s, 1f, maxOf(happy, hoverA * 0.8f), 0f, c.accent, sleepy = 0f, look = look * (0.5f + 0.5f * hoverA), expr = expr, phase = ghostPhase(), waveR = hoverA)
                 }
             }
         }
