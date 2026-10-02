@@ -68,7 +68,8 @@ object XrayConfigBuilder {
 
     /** Ghostly's server domains with their addresses (see [dns]). */
     val OWN_HOSTS = mapOf(
-        "srv.ghostlinknex.online" to "78.17.1.122",
+        // the Estonia front door: FI and NL are reached through it (their own IPs are cut in Russia)
+        "srv.ghostlinknex.online" to "13.143.239.51",
         "de.ghostlinknex.online" to "179.254.127.78",
     )
     private const val FRAGMENT = "fragment"
