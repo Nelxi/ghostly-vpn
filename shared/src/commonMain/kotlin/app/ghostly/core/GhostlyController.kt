@@ -450,6 +450,16 @@ class GhostlyController(
                 }
                 // Selection is id-based (profile id + index), so it survives; fall back if the server vanished.
                 if (server(_selected.value) == null) parsed.servers.firstOrNull()?.let { select(it.id) }
+                // The provider changed what the running tunnel is built from (an entry address moved, a node
+                // was added): apply it now. Otherwise the core keeps the old config until the user reconnects.
+                else if (backend.state.value is VpnState.Connected && tunnelChanged(profile, parsed)) {
+                    val t = now()
+                    if (t - (appliedAt[profileId] ?: 0L) > 10 * 60_000L) {
+                        appliedAt[profileId] = t
+                        _events.emit("Провайдер обновил серверы — переподключаюсь на свежие настройки")
+                        reconnect()
+                    }
+                }
                 if (manual) _events.emit("Подписка «${parsed.title ?: profile.name}» обновлена · ${serverCount(parsed.servers.size)}")
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -458,6 +468,20 @@ class GhostlyController(
                 _refreshing.update { it - profileId }
             }
         }
+    }
+
+    /** Last time a refreshed subscription was applied to the running tunnel, per profile (no reconnect loops). */
+    private val appliedAt = mutableMapOf<String, Long>()
+
+    /** Did the refresh change anything the connected server's tunnel is built from? Labels don't count. */
+    private fun tunnelChanged(old: Profile, parsed: app.ghostly.core.sub.ParsedSubscription): Boolean {
+        val cur = _selected.value ?: return false
+        val before = old.servers.firstOrNull { it.id == cur } ?: return false
+        val after = parsed.servers.firstOrNull { it.id == cur } ?: return false
+        if (_settings.value.core == app.ghostly.core.model.CoreType.MIHOMO && old.mihomo != parsed.mihomo) return true
+        fun JsonObject?.bare() = this?.let { JsonObject(it - "remarks") }
+        return before.config.bare() != after.config.bare() || before.outbound != after.outbound ||
+            before.host != after.host || before.port != after.port
     }
 
     private fun serverCount(n: Int): String {
