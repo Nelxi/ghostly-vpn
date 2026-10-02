@@ -61,7 +61,20 @@ class DesktopPlatform : PlatformInfo {
 
     override fun installUpdate(path: String) {
         // Silent Inno Setup over the current install; its [Run] entry starts Ghostly again when done.
-        ProcessBuilder(path, "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS").start()
+        // It must not start while we are still closing: the JVM holds its jars and the core is still
+        // running, Inno finds files in use and (message boxes suppressed) cancels — no update, no relaunch.
+        // So a hidden helper waits for this process and our cores to be gone, then runs the installer.
+        val dir = exeDir ?: return run {
+            ProcessBuilder(path, "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS").start()
+            quitForUpdate?.invoke()
+        }
+        val log = File(dataDir, "run/update-install.log").apply { parentFile.mkdirs() }
+        val script = updateHandoffScript(ProcessHandle.current().pid(), dir.absolutePath, path, log.absolutePath)
+        val encoded = java.util.Base64.getEncoder().encodeToString(script.toByteArray(Charsets.UTF_16LE))
+        ProcessBuilder("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-EncodedCommand", encoded)
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            .redirectError(ProcessBuilder.Redirect.DISCARD)
+            .start()
         quitForUpdate?.invoke()
     }
 
@@ -265,4 +278,34 @@ internal fun exec(vararg cmd: String): String {
     val out = p.inputStream.bufferedReader().readText()
     p.waitFor()
     return out
+}
+
+/**
+ * PowerShell for the update hand-off: wait until Ghostly ([pid]) has exited and nothing runs from
+ * [appDir] any more (cores, helpers; stragglers are stopped after 20 s), then run the installer. A
+ * failed attempt is retried once; if both fail, the old Ghostly is started again so the user is never
+ * left without the app.
+ */
+internal fun updateHandoffScript(pid: Long, appDir: String, installer: String, log: String): String {
+    fun q(s: String) = "'" + s.replace("'", "''") + "'"
+    val app = q(appDir.trimEnd('\\', '/'))
+    return """
+        ${'$'}ErrorActionPreference = 'SilentlyContinue'
+        ${'$'}app = $app
+        ${'$'}setup = ${q(installer)}
+        ${'$'}log = ${q(log)}
+        function Ours { Get-Process | Where-Object { ${'$'}_.Path -and ${'$'}_.Path.StartsWith(${'$'}app + '\', [StringComparison]::OrdinalIgnoreCase) } }
+        Wait-Process -Id $pid -Timeout 60
+        ${'$'}deadline = (Get-Date).AddSeconds(20)
+        while ((Ours) -and (Get-Date) -lt ${'$'}deadline) { Start-Sleep -Milliseconds 300 }
+        Ours | Stop-Process -Force
+        Start-Sleep -Milliseconds 700
+        for (${'$'}i = 0; ${'$'}i -lt 2; ${'$'}i++) {
+            ${'$'}p = Start-Process -FilePath ${'$'}setup -ArgumentList @('/SILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CLOSEAPPLICATIONS', ('/LOG="' + ${'$'}log + '"')) -PassThru -Wait
+            if (${'$'}p -and ${'$'}p.ExitCode -eq 0) { exit 0 }
+            Start-Sleep -Seconds 3
+            Ours | Stop-Process -Force
+        }
+        Start-Process -FilePath (Join-Path ${'$'}app 'Ghostly.exe')
+    """.trimIndent()
 }
