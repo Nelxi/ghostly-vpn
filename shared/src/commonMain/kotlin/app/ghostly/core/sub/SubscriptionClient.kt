@@ -64,20 +64,23 @@ class SubscriptionClient(private val platform: PlatformInfo) {
                 if (tunnelPort != null) add(Attempt(m, viaTunnel(tunnelPort), 1200L + i * 600))
             }
         }
-        val results = Channel<Result<ParsedSubscription>>(attempts.size)
+        val results = Channel<Pair<Attempt, Result<ParsedSubscription>>>(attempts.size)
         val jobs = attempts.map { a ->
             launch {
                 delay(a.delayMs)
-                results.send(runCatching { fetchOnce(a.client, a.url, idPrefix, if (mihomo) mihomoUserAgent else userAgent) })
+                results.send(a to runCatching { fetchOnce(a.client, a.url, idPrefix, if (mihomo) mihomoUserAgent else userAgent) })
             }
         }
+        val ownTotal = attempts.count { it.url == url }
+        var ownFailed = 0
         var error: Throwable? = null
         repeat(attempts.size) {
-            val r = results.receive()
+            val (a, r) = results.receive()
             r.onSuccess { parsed ->
                 jobs.forEach { it.cancel() }
-                return@coroutineScope parsed
+                return@coroutineScope parsed.copy(ownAddressFailed = a.url != url && ownFailed == ownTotal)
             }
+            if (a.url == url) ownFailed++
             val e = r.exceptionOrNull()
             // A real answer from the provider (e.g. "trial used", 404) beats network noise.
             if (error == null || (e as? SubscriptionException)?.definitive == true) error = e

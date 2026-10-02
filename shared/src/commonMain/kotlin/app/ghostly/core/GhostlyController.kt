@@ -280,10 +280,11 @@ class GhostlyController(
             _refreshing.update { it + id }
             try {
                 val parsed = subs.fetch(url, id, backend.appPort, mihomo = _settings.value.core == app.ghostly.core.model.CoreType.MIHOMO)
+                val saved = app.ghostly.core.sub.GhostlyDomains.linkToSave(url, parsed.fetchedFrom, parsed.ownAddressFailed)
                 val profile = Profile(
                     id = id,
-                    name = parsed.title ?: hostOf(url),
-                    url = url,
+                    name = parsed.title ?: hostOf(saved),
+                    url = saved,
                     info = parsed.info,
                     supportUrl = parsed.supportUrl,
                     webPageUrl = parsed.webPageUrl,

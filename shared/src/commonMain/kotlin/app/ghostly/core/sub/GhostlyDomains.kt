@@ -30,4 +30,12 @@ object GhostlyDomains {
         val own = host.lowercase().removePrefix("www.")
         return ALL.filter { it != own }.map { "$scheme://$it" + rest.removePrefix(host) }
     }
+
+    /**
+     * The link to save for a subscription that is being added: when the pasted address itself
+     * couldn't be reached (DNS broken by the provider, domain blocked) but a mirror answered, the
+     * profile keeps the mirror right away instead of a link that doesn't work on this network.
+     */
+    fun linkToSave(url: String, fetchedFrom: String?, ownAddressFailed: Boolean): String =
+        if (ownAddressFailed && fetchedFrom != null && isOurs(url) && isOurs(fetchedFrom)) fetchedFrom else url
 }

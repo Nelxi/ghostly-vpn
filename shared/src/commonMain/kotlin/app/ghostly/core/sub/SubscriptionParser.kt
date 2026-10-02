@@ -31,6 +31,8 @@ data class ParsedSubscription(
     val mihomo: JsonObject? = null,
     /** The address that actually answered (the link itself or one of Ghostly's mirror domains). */
     val fetchedFrom: String? = null,
+    /** Every attempt on the link's own address failed (DNS, block, timeout) before a mirror answered. */
+    val ownAddressFailed: Boolean = false,
 )
 
 object SubscriptionParser {

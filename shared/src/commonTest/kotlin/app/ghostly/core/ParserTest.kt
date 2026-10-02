@@ -182,4 +182,19 @@ class GhostlyDomainsTest {
         )
         kotlin.test.assertTrue(d.mirrorsOf("https://example.com/sub/abc").isEmpty())
     }
+
+    @kotlin.test.Test
+    fun addedSubscriptionKeepsTheMirrorOnlyWhenItsOwnAddressFailed() {
+        val d = app.ghostly.core.sub.GhostlyDomains
+        val link = "https://srv.ghostlinknex.online/sub/sub_6d0a6b02f44f29b1#Ghostly%20VPN%F0%9F%91%BB"
+        val backup = "https://ghostlynex.fun/sub/sub_6d0a6b02f44f29b1#Ghostly%20VPN%F0%9F%91%BB"
+        kotlin.test.assertEquals(backup, d.mirrorsOf(link).last())
+        // srv didn't resolve, the backup answered: the profile is saved with the working link.
+        kotlin.test.assertEquals(backup, d.linkToSave(link, backup, ownAddressFailed = true))
+        // The backup was merely faster: keep what the user pasted.
+        kotlin.test.assertEquals(link, d.linkToSave(link, backup, ownAddressFailed = false))
+        kotlin.test.assertEquals(link, d.linkToSave(link, link, ownAddressFailed = false))
+        // Someone else's subscription is never rewritten.
+        kotlin.test.assertEquals("https://example.com/s", d.linkToSave("https://example.com/s", "https://other.net/s", ownAddressFailed = true))
+    }
 }
