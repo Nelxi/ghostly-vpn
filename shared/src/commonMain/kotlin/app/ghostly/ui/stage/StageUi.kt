@@ -135,7 +135,8 @@ fun SungLine(stage: StageState, modifier: Modifier = Modifier) {
         while (true) {
             val t = stage.track.value
             if (t != null) {
-                val i = t.lineAt(stage.positionMs())
+                // lineFor, not lineAt: a dip in the player's position must not send the text a line back.
+                val i = t.lineFor(stage.positionMs(), index)
                 if (i != index) index = i
             }
             withFrameNanos { }
@@ -145,8 +146,10 @@ fun SungLine(stage: StageState, modifier: Modifier = Modifier) {
         AnimatedContent(
             index,
             transitionSpec = {
-                (fadeIn(tween(260)) + slideInVertically(spring(0.8f, 300f)) { it / 2 } + scaleIn(initialScale = 0.96f)) togetherWith
-                    (fadeOut(tween(300)) + slideOutVertically(tween(420)) { -it } + scaleOut(targetScale = 0.9f))
+                // The outgoing line clears in ~0.2 s: it used to linger ~0.4 s, so right after a change
+                // the previous line was still on screen — read as a jump back to it for half a second.
+                (fadeIn(tween(240)) + slideInVertically(spring(0.8f, 320f)) { it / 2 } + scaleIn(initialScale = 0.96f)) togetherWith
+                    (fadeOut(tween(140)) + slideOutVertically(tween(220)) { -it } + scaleOut(targetScale = 0.94f))
             },
         ) { i ->
             val line = track.lines.getOrNull(i)
@@ -167,10 +170,15 @@ private fun TypedLine(text: String, start: Long, end: Long, stage: StageState) {
     // Type across most of the line's slot, but never slower than a natural singing pace.
     val span = min((end - start) * 0.8f, text.length * 95f + 500f).coerceAtLeast(300f)
     // Typed position in "letters × 8" steps: recomposes only this line, ~a few dozen times per line.
-    var typed by remember(text) { mutableStateOf(0) }
-    LaunchedEffect(text) {
+    // Keyed by the line's own timestamp, not its text: a repeated chorus line must type afresh.
+    var typed by remember(start) { mutableStateOf(0) }
+    LaunchedEffect(start) {
+        // The player's clock can dip mid-line; letters already sung must never un-type.
+        var high = start
         while (true) {
-            val p = ((stage.positionMs() - start) / span).coerceIn(0f, 1f)
+            val pos = stage.positionMs()
+            if (pos > high) high = pos
+            val p = ((high - start) / span).coerceIn(0f, 1f)
             val v = (p * text.length * 8).toInt()
             if (v != typed) typed = v
             withFrameNanos { }

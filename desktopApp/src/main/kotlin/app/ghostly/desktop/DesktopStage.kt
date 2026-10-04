@@ -77,8 +77,10 @@ class DesktopStage(dataDir: String) : StageSource {
     override fun positionMs(): Long {
         val t = _track.value ?: return 0L
         // Players report position late (and a line starts typing at its first letter), so lines ran a hair
-        // behind the voice: run the lyric clock a little ahead.
-        val p = clock.update(System.currentTimeMillis(), trackKey, basePos, advancing) + if (advancing) LYRIC_LEAD_MS else 0L
+        // behind the voice: run the lyric clock a little ahead. A constant phase shift, never tied to the
+        // transient play flag — toggling it (a player briefly re-reporting a pause) used to yank the text
+        // ~0.6 s back and re-show the previous line for a moment.
+        val p = clock.update(System.currentTimeMillis(), trackKey, basePos, advancing) + LYRIC_LEAD_MS
         return if (t.durationMs > 0) p.coerceIn(0, t.durationMs) else max(0, p)
     }
 

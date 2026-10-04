@@ -161,6 +161,18 @@ class GhostlyController(
     private var failoverAttempts = 0
     private var userWantsConnection = false
 
+    /** The running tunnel follows server/mode changes; a burst of taps collapses into one reconnect onto the last state. */
+    private val applier = app.ghostly.core.vpn.TunnelApplier(
+        scope, APPLY_DEBOUNCE_MS,
+        live = { userWantsConnection && backend.state.value.let { it is VpnState.Connected || it == VpnState.Connecting } },
+        desired = { selectedServer()?.id to tunnelAffecting(_settings.value) },
+        reapply = { reconnect() },
+    )
+
+    /** Every (re)connect goes through here: one at a time, remembering what the tunnel was built from. */
+    private suspend fun connectTo(server: Server) =
+        applier.connect(server.id to tunnelAffecting(_settings.value)) { backend.connect(server, _settings.value) }
+
     init {
         // 0.2.1 switched everyone to mihomo; Xray is the default again — move back once, later choices stick.
         if (!_settings.value.coreXrayRestored) {
@@ -457,7 +469,7 @@ class GhostlyController(
                     if (t - (appliedAt[profileId] ?: 0L) > 10 * 60_000L) {
                         appliedAt[profileId] = t
                         _events.emit("Провайдер обновил серверы — переподключаюсь на свежие настройки")
-                        reconnect()
+                        applier.request(force = true)
                     }
                 }
                 if (manual) _events.emit("Подписка «${parsed.title ?: profile.name}» обновлена · ${serverCount(parsed.servers.size)}")
@@ -554,11 +566,17 @@ class GhostlyController(
             if (target != null && profile != null) rememberPicks(profile, picksAsChoices(target, profile))
         }
         saveUi()
-        if (serverId != null && serverId != previous && backend.state.value is VpnState.Connected) {
-            scope.launch {
+        if (serverId != null && serverId != previous) {
+            if (backend.state.value is VpnState.Connected) scope.launch {
                 // mihomo: same profile → just move the selector, no reconnect.
                 val target = server(serverId)
-                if (target == null || !backend.switchInPlace(target)) reconnect()
+                if (target != null && applier.inPlace { backend.switchInPlace(target) }) {
+                    applier.markApplied(serverId to tunnelAffecting(_settings.value))
+                } else {
+                    applier.request()
+                }
+            } else {
+                applier.request()
             }
         }
     }
@@ -863,7 +881,7 @@ class GhostlyController(
             _selected.value = target.id
             saveUi()
         }
-        runCatching { backend.connect(target, _settings.value) }
+        runCatching { connectTo(target) }
             .onFailure { _events.emit(it.message ?: "Не удалось подключиться") }
     }
 
@@ -911,7 +929,7 @@ class GhostlyController(
 
     private suspend fun reconnect() {
         val server = selectedServer() ?: return
-        runCatching { backend.connect(server, _settings.value) }
+        runCatching { connectTo(server) }
             .onFailure { _events.emit(it.message ?: "Не удалось переподключиться") }
     }
 
@@ -930,7 +948,7 @@ class GhostlyController(
         _events.emit("«${server(current)?.name}» не отвечает — пробую «${next.name}»")
         _selected.value = next.id
         saveUi()
-        runCatching { backend.connect(next, _settings.value) }
+        runCatching { connectTo(next) }
     }
 
     // ------------------------------------------------------------------ connection guard
@@ -1150,9 +1168,8 @@ class GhostlyController(
                 saveUi()
             }
         }
-        if (backend.state.value is VpnState.Connected && tunnelAffecting(before) != tunnelAffecting(after)) {
-            scope.launch { reconnect() }
-        }
+        // Also while a reconnect is still running: the applier lands on whatever was picked last.
+        if (tunnelAffecting(before) != tunnelAffecting(after)) applier.request()
     }
 
     /** Settings that only change the look don't require a reconnect. */
@@ -1238,6 +1255,8 @@ class GhostlyController(
 
         /** First look at the freshly raised tunnel — long enough to be a real check, short enough to matter. */
         private const val FIRST_GUARD_DELAY_MS = 1_500L
+        /** Quiet time after the last mode/server tap before the tunnel is rebuilt. */
+        private const val APPLY_DEBOUNCE_MS = 350L
 
         fun now(): Long = Clock.System.now().toEpochMilliseconds()
     }

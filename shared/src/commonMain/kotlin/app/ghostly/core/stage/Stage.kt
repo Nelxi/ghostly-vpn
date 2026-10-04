@@ -80,4 +80,22 @@ data class NowPlaying(
         }
         return found
     }
+
+    /**
+     * Line to show at [positionMs], biased to stay on [current]: players jitter their position
+     * backwards by a few hundred ms (a re-published playback state, a poll rounding down, a brief
+     * pause flag), and that must never send the sung text back to the previous line. A real rewind —
+     * the position clearly before the current line — is followed, as is a fresh track ([current] not
+     * one of [lines]).
+     */
+    fun lineFor(positionMs: Long, current: Int, rewindMs: Long = REWIND_MS): Int {
+        val at = lineAt(positionMs)
+        if (current !in lines.indices) return at
+        return if (positionMs < lines[current].timeMs - rewindMs) at else maxOf(current, at)
+    }
+
+    companion object {
+        /** A dip further behind the current line than this is a real rewind, not clock jitter. */
+        const val REWIND_MS = 1_000L
+    }
 }

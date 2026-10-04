@@ -62,9 +62,11 @@ class AndroidStage(private val context: Context) : StageSource {
 
     override fun positionMs(): Long {
         val st = controller?.playbackState ?: return 0L
-        var p = st.position
+        // The lyric phase shift is constant, not tied to STATE_PLAYING: that flag flickers (players
+        // re-publish their state), and dropping the shift yanked the text back a line for a moment.
+        var p = st.position + LYRIC_LEAD_MS
         if (st.state == PlaybackState.STATE_PLAYING) {
-            p += ((SystemClock.elapsedRealtime() - st.lastPositionUpdateTime) * st.playbackSpeed).toLong() + LYRIC_LEAD_MS
+            p += ((SystemClock.elapsedRealtime() - st.lastPositionUpdateTime) * st.playbackSpeed).toLong()
         }
         val dur = _track.value?.durationMs ?: 0L
         return if (dur > 0) p.coerceIn(0, dur) else max(0, p)
