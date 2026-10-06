@@ -1,5 +1,6 @@
 package app.ghostly.core.sub
 
+import app.ghostly.core.trial.TrialKeys
 import app.ghostly.core.vpn.PlatformInfo
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.ProxyBuilder
@@ -20,7 +21,18 @@ class SubscriptionException(message: String, val definitive: Boolean = false) : 
  * the direct request, the provider's mirror domain and — when our tunnel is up — the same request
  * through the tunnel race each other (staggered, happy-eyeballs style). The first good answer wins.
  */
-class SubscriptionClient(private val platform: PlatformInfo) {
+class SubscriptionClient(
+    private val platform: PlatformInfo,
+    /**
+     * Trial challenge transport (Android 0.3.26+ only, wired by the app).
+     * The actual attestation chain travels via TrialClient.claim; here we
+     * only tag the subscription fetch with the challenge id so the server
+     * can bind them. Null on desktop/old builds: no tag, and after the
+     * server gate rollout that means NO trial. Paid/link subscriptions
+     * never depend on this.
+     */
+    private val trialKeys: TrialKeys? = null,
+) {
 
     private fun newClient(socksPort: Int? = null) = HttpClient {
         install(HttpTimeout) {
@@ -101,6 +113,14 @@ class SubscriptionClient(private val platform: PlatformInfo) {
             header("x-device-os", platform.os)
             header("x-ver-os", platform.osVersion)
             header("x-device-model", platform.deviceModel)
+            // Trial gate: an honest Android 0.3.26+ build tells OUR trial
+            // endpoint which challenge its attestation key carries (the chain
+            // itself travels via TrialClient.claim). Transport only — the
+            // server decides; missing/forged key means NO trial.
+            // Paid/link subscriptions ignore this header.
+            trialKeys?.forTrialHost(url)?.let { id ->
+                header("x-trial-challenge-id", id)
+            }
         }
         val body = response.bodyAsText()
         if (!response.status.isSuccess()) {
