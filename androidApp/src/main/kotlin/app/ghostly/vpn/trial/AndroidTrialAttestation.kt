@@ -37,7 +37,6 @@ object AndroidTrialAttestation {
         val alias = ALIAS_PREFIX + challengeId.take(16).filter { it.isLetterOrDigit() }
         val kpg = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore")
         val spec = KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_SIGN)
-            .setAlgorithm(KeyProperties.KEY_ALGORITHM_EC)
             .setDigests(KeyProperties.DIGEST_SHA256)
             .setAttestationChallenge(challenge)
             .setUserAuthenticationRequired(false)
