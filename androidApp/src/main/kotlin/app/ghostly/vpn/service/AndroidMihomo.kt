@@ -121,6 +121,7 @@ object AndroidMihomo : MihomoCore {
                 .putExtra(MihomoVpnService.EXTRA_SPLIT_MODE, settings.splitMode.name)
                 .putExtra(MihomoVpnService.EXTRA_SPLIT_APPS, settings.splitApps.toTypedArray())
             ContextCompat.startForegroundService(app, intent)
+            watchStart()
             Unit
         } catch (e: Exception) {
             mutableState.value = VpnState.Failed("Mihomo: ${e.message ?: "не удалось подготовить конфиг"}")
@@ -162,6 +163,8 @@ object AndroidMihomo : MihomoCore {
                 mutableState.value = VpnState.Failed(intent.getStringExtra(MihomoVpnService.EXTRA_MESSAGE) ?: "Mihomo не запустился")
             }
             MihomoVpnService.STATE_IDLE -> {
+                // "Idle" of the session that was just replaced: a new connect is already under way.
+                if (state.value == VpnState.Connecting) return
                 stopLocal()
                 if (state.value !is VpnState.Failed) mutableState.value = VpnState.Idle
             }
@@ -184,6 +187,23 @@ object AndroidMihomo : MihomoCore {
             }
         }
     }
+
+    private var startWatch: kotlinx.coroutines.Job? = null
+
+    /** The service lives in another process; if it never answers, don't sit on "connecting" forever. */
+    private fun watchStart() {
+        startWatch?.cancel()
+        startWatch = scope.launch {
+            delay(START_TIMEOUT_MS)
+            if (state.value == VpnState.Connecting) {
+                log("no answer from the service in ${START_TIMEOUT_MS / 1000} s")
+                stopLocal()
+                mutableState.value = VpnState.Failed("Mihomo не ответил — пробую ещё раз")
+            }
+        }
+    }
+
+    private const val START_TIMEOUT_MS = 30_000L
 
     private fun stopLocal() {
         trafficJob?.cancel()

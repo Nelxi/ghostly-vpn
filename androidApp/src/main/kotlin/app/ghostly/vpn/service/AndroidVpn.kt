@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import libv2ray.Libv2ray
 import java.io.File
@@ -112,7 +113,18 @@ object AndroidVpn : VpnBackend {
         mutableState.value = VpnState.Connecting
         val intent = Intent(app, GhostlyVpnService::class.java).setAction(GhostlyVpnService.ACTION_START)
         ContextCompat.startForegroundService(app, intent)
+        // Wait for the service's verdict, so reconnects queue behind a start that is really over and a
+        // start the system never delivered doesn't leave the app on "connecting" forever.
+        val done = kotlinx.coroutines.withTimeoutOrNull(START_TIMEOUT_MS) {
+            state.first { it !is VpnState.Connecting }
+        }
+        if (done == null && state.value is VpnState.Connecting) {
+            log("no answer from the service in ${START_TIMEOUT_MS / 1000} s")
+            mutableState.value = VpnState.Failed("Сервис VPN не ответил — пробую ещё раз")
+        }
     }
+
+    private const val START_TIMEOUT_MS = 30_000L
 
     override suspend fun disconnect() {
         if (state.value == VpnState.Idle) return

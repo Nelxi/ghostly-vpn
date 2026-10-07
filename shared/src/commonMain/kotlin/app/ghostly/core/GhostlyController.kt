@@ -131,6 +131,35 @@ class GhostlyController(
         }
     }
 
+    // ------------------------------------------------------------------ Ghostly account
+
+    private val account = app.ghostly.core.account.GhostlyAccount(platform) { subs.userAgent }
+
+    /** Ghostly's own subscription (the one in use first), or null: the account section is only for ours. */
+    fun ghostlyProfile(): Profile? {
+        val ours = _profiles.value.filter { p -> p.url?.let { app.ghostly.core.sub.GhostlyDomains.isOurs(it) } == true }
+        return ours.firstOrNull { p -> p.servers.any { it.id == _selected.value } } ?: ours.firstOrNull()
+    }
+
+    /**
+     * Opens the site cabinet on [section] ("cabinet", "renew", "notices"), signed in when the server
+     * allows it for this device (see [app.ghostly.core.account.GhostlyAccount]).
+     */
+    fun openAccount(section: String = "cabinet") {
+        val url = ghostlyProfile()?.url ?: return
+        scope.launch(Dispatchers.IO) {
+            val link = runCatching { account.cabinet(url, section, backend.appPort) }.getOrNull()
+            platform.openUrl(link?.url ?: app.ghostly.core.account.GhostlyAccount.fallback(url, section))
+            when {
+                link == null -> _events.emit("Сервер не ответил — открываю сайт, войдите там в аккаунт")
+                link.login -> Unit
+                link.reason == "totp" -> _events.emit("У аккаунта двухэтапная защита — войдите на сайте с кодом")
+                link.reason == "not_first_device" -> _events.emit("Вход без пароля работает на устройстве, где подписку добавили первой. Здесь войдите на сайте сами")
+                else -> _events.emit("Открываю сайт — войдите в аккаунт")
+            }
+        }
+    }
+
     fun dismissUpdate() {
         dismissedUpdate = updater.offer.value?.version
         updater.hide()
@@ -160,6 +189,10 @@ class GhostlyController(
 
     private var failoverAttempts = 0
     private var userWantsConnection = false
+
+    /** Tries on the same server after a failure (see [app.ghostly.core.vpn.ConnectRetry]). */
+    private var retryAttempts = 0
+    private var retryJob: kotlinx.coroutines.Job? = null
 
     /** The running tunnel follows server/mode changes; a burst of taps collapses into one reconnect onto the last state. */
     private val applier = app.ghostly.core.vpn.TunnelApplier(
@@ -195,17 +228,17 @@ class GhostlyController(
                     is VpnState.Connected -> {
                         if (userWantsConnection) haptic(app.ghostly.core.vpn.Haptic.SUCCESS)
                         failoverAttempts = 0
+                        retryAttempts = 0
                         releaseKillSwitch()
                         startGuard()
                         // Fresh traffic numbers right after connecting (and through the tunnel if direct is blocked).
                         if (_settings.value.autoUpdateSubs) launch(Dispatchers.IO) { kotlinx.coroutines.delay(3_000); refreshAll() }
                     }
                     is VpnState.Failed -> {
-                        if (userWantsConnection) haptic(app.ghostly.core.vpn.Haptic.ERROR)
                         stopGuard()
                         if (userWantsConnection) {
                             engageKillSwitch()
-                            onConnectionFailed(s.message)
+                            onConnectionFailed(s)
                         }
                     }
                     else -> stopGuard()
@@ -278,6 +311,12 @@ class GhostlyController(
     private suspend fun importInternal(text: String): Boolean {
         if (text.isEmpty()) {
             _events.emit("Буфер обмена пуст")
+            return false
+        }
+        // happ://crypt…: the address inside is encrypted with keys that only the Happ app holds — it
+        // cannot be read here. Say so instead of the vague "not a link".
+        if (app.ghostly.core.link.HappLinks.isEncrypted(text)) {
+            _events.emit(app.ghostly.core.link.HappLinks.ENCRYPTED_HINT)
             return false
         }
         unwrapDeepLink(text)?.let { return importInternal(it) }
@@ -711,18 +750,14 @@ class GhostlyController(
 
     /**
      * The server to recommend (the «Лучший сейчас» card, failover): among those that answer, regular
-     * servers before white lists (the scarce pool), inside them Hysteria2 and the Finnish node first
-     * ([app.ghostly.core.model.regularPreference]); the lowest ping only decides within that group.
+     * servers before white lists (the scarce pool), the lowest ping inside the pool. No protocol or
+     * country is favoured: the measured ping is the only thing that ranks servers.
      */
     fun bestServer(exclude: Set<String> = emptySet()): Server? {
         val p = _pings.value
         val alive = allServers().filter { !it.isAuto && it.id !in exclude && p[it.id]?.ok == true }
         val regular = alive.filter { !it.isWhitelist }
-        val pool = regular.ifEmpty { alive }
-        val score: (Server) -> Int = if (regular.isNotEmpty()) { s -> app.ghostly.core.model.regularPreference(s) }
-        else { s -> app.ghostly.core.model.whitelistPreference(s) }
-        val top = pool.maxOfOrNull(score) ?: return null
-        return pool.filter { score(it) == top }.minByOrNull { p[it.id]!!.ms }
+        return regular.ifEmpty { alive }.minByOrNull { p[it.id]!!.ms }
     }
 
     // ------------------------------------------------------------------ ping
@@ -873,6 +908,9 @@ class GhostlyController(
             return
         }
         userWantsConnection = true
+        retryJob?.cancel()
+        retryAttempts = 0
+        failoverAttempts = 0
         resolvePortConflicts()
         // «Авто» from the subscription is an Xray balancer that already includes white-list servers:
         // switching away from it would just fight the balancer.
@@ -904,6 +942,7 @@ class GhostlyController(
 
     suspend fun disconnect() {
         userWantsConnection = false
+        retryJob?.cancel()
         platform.killSwitch?.takeIf { it.engaged }?.release()
         backend.disconnect()
     }
@@ -933,22 +972,42 @@ class GhostlyController(
             .onFailure { _events.emit(it.message ?: "Не удалось переподключиться") }
     }
 
-    private suspend fun onConnectionFailed(message: String) {
+    /**
+     * The tunnel failed while the user wants it up. First the same server again, up to
+     * [app.ghostly.core.vpn.ConnectRetry.MAX] times with a growing pause; then, with «Автосмена сервера»
+     * on, the best other server (which gets its own tries); only then the error stays on screen.
+     */
+    private suspend fun onConnectionFailed(failure: VpnState.Failed) {
+        val retry = app.ghostly.core.vpn.ConnectRetry
+        if (retry.shouldRetry(retryAttempts, failure.retryable)) {
+            val attempt = ++retryAttempts
+            if (attempt == 1) _events.emit("Не подключилось — пробую ещё раз")
+            retryJob?.cancel()
+            retryJob = scope.launch {
+                kotlinx.coroutines.delay(retry.delayMs(attempt))
+                // Still wanted and still down: the user may have pressed the button meanwhile.
+                if (userWantsConnection && backend.state.value is VpnState.Failed) reconnect()
+            }
+            return
+        }
+        haptic(app.ghostly.core.vpn.Haptic.ERROR)
         val current = _selected.value
-        if (!_settings.value.autoFailover || failoverAttempts >= 3) {
-            _events.emit(message)
+        if (!failure.retryable || !_settings.value.autoFailover || failoverAttempts >= 3) {
+            _events.emit(failure.message)
             return
         }
         failoverAttempts++
         val next = bestServer(exclude = setOfNotNull(current)) ?: allServers().firstOrNull { it.id != current && !it.isAuto }
         if (next == null) {
-            _events.emit(message)
+            _events.emit(failure.message)
             return
         }
         _events.emit("«${server(current)?.name}» не отвечает — пробую «${next.name}»")
         _selected.value = next.id
         saveUi()
-        runCatching { connectTo(next) }
+        retryAttempts = 0
+        // Not inline: this runs inside the state collector, which must stay free to see the result.
+        scope.launch { runCatching { connectTo(next) } }
     }
 
     // ------------------------------------------------------------------ connection guard
@@ -1048,28 +1107,11 @@ class GhostlyController(
     private fun regularServers() = allServers().filter { !it.isAuto && !it.isWhitelist }
     private fun hasWhitelistServers() = whitelistServers().isNotEmpty()
 
-    /**
-     * The regular server to move to: the highest [app.ghostly.core.model.regularPreference] wins
-     * (Hysteria2, and the Finnish node above all), the lowest ping decides inside that group. A
-     * provider whose servers all score zero keeps the old plain-lowest-ping behaviour.
-     */
-    private fun preferredRegular(list: List<Server>): Server? {
-        if (list.isEmpty()) return null
-        val top = list.maxOf { app.ghostly.core.model.regularPreference(it) }
-        if (top <= 0) return bestOf(list)
-        return bestOf(list.filter { app.ghostly.core.model.regularPreference(it) == top })
-    }
+    /** The regular server to move to: the lowest ping among those that answer. */
+    private fun preferredRegular(list: List<Server>): Server? = bestOf(list)
 
-    /**
-     * The white-list server to move to: «Белые списки 2» on Hysteria2, the Finnish node first
-     * ([app.ghostly.core.model.whitelistPreference]); the lowest ping decides inside that group.
-     */
-    private fun preferredWhitelist(list: List<Server>): Server? {
-        if (list.isEmpty()) return null
-        val top = list.maxOf { app.ghostly.core.model.whitelistPreference(it) }
-        if (top <= 0) return bestOf(list)
-        return bestOf(list.filter { app.ghostly.core.model.whitelistPreference(it) == top })
-    }
+    /** The white-list server to move to: the lowest ping among those that answer. */
+    private fun preferredWhitelist(list: List<Server>): Server? = bestOf(list)
 
     /**
      * Pick the pool for the current network before connecting (rules from real-life testing):
@@ -1140,8 +1182,6 @@ class GhostlyController(
             (platform.networkType() == NetType.CELLULAR || !regularReachable())
         val pool = if (whitelistMode) others.filter { it.isWhitelist } else others.filter { !it.isWhitelist }.ifEmpty { others }
         val candidates = pool.filter { it.name != cur.name }
-        // Both ways the Finnish Hysteria2 wins: «Белые списки 2» onto the white lists, plain
-        // Hysteria2 coming off them (see [preferredWhitelist] / [preferredRegular]).
         val next = (if (whitelistMode) preferredWhitelist(candidates) else preferredRegular(candidates)) ?: return
         _events.emit(
             if (whitelistMode) "Похоже, включились белые списки — перешла на «${next.name}»"

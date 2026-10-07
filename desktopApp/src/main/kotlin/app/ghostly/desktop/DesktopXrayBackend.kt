@@ -97,53 +97,72 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
             killOrphanCores(exe)
             _state.value = VpnState.Connecting
             if (!exe.isFile) {
-                _state.value = VpnState.Failed("Не найдено ядро Xray (${exe.absolutePath})")
+                _state.value = VpnState.Failed("Не найдено ядро Xray (${exe.absolutePath})", retryable = false)
                 return@withContext
             }
             val tun = settings.desktopMode == DesktopMode.TUN
             if (!tun) clearLeftoverTun()
             tunMode = tun
             if (tun && !isElevated()) {
-                _state.value = VpnState.Failed("Режиму TUN нужны права администратора. Запусти Ghostly от имени администратора или выбери «Системный прокси» в настройках.")
+                _state.value = VpnState.Failed("Режиму TUN нужны права администратора. Запусти Ghostly от имени администратора или выбери «Системный прокси» в настройках.", retryable = false)
                 return@withContext
             }
             val proxy = XrayConfigBuilder.localProxy(settings)
-            val appPort0 = freePort()
-            val osPort = if (settings.desktopMode == DesktopMode.SYSTEM_PROXY) freePort() else 0
-            val ingress = if (tun) Ingress.TunSystem(settings.mtu, if (hostOs == HostOs.MACOS) "utun99" else TUN_NAME, proxy, appPort0)
-            else Ingress.Proxy(proxy, osPort, appPort0)
+            // The core is started up to START_TRIES times: right after a mode switch the Wintun adapter of
+            // the previous session may still be closing, and a port picked a moment ago may be taken —
+            // both end the first start with an error that is gone half a second later.
+            var appPort0 = 0
+            var osPort = 0
+            var p: Process? = null
+            var failure = "Ядро не запустилось"
+            for (attempt in 1..START_TRIES) {
+                appPort0 = freePort()
+                osPort = if (settings.desktopMode == DesktopMode.SYSTEM_PROXY) freePort() else 0
+                val ingress = if (tun) Ingress.TunSystem(settings.mtu, if (hostOs == HostOs.MACOS) "utun99" else TUN_NAME, proxy, appPort0)
+                else Ingress.Proxy(proxy, osPort, appPort0)
 
-            apiPort = freePort()
-            val config = withStatsApi(XrayConfigBuilder.build(server, settings, ingress), apiPort)
-            val file = File(platform.dataDir, "run").apply { mkdirs() }.resolve("config.json")
-            file.writeText(JsonX.encodeToString(JsonObject.serializer(), config))
+                apiPort = freePort()
+                val config = withStatsApi(XrayConfigBuilder.build(server, settings, ingress), apiPort)
+                val file = File(platform.dataDir, "run").apply { mkdirs() }.resolve("config.json")
+                file.writeText(JsonX.encodeToString(JsonObject.serializer(), config))
 
-            val p = try {
-                ProcessBuilder(exe.absolutePath, "run", "-c", file.absolutePath)
-                    .directory(coreDir)
-                    .redirectErrorStream(true)
-                    .apply { environment()["XRAY_LOCATION_ASSET"] = coreDir.absolutePath }
-                    .start()
-            } catch (e: Exception) {
-                _state.value = VpnState.Failed("Не удалось запустить ядро: ${e.message}")
-                return@withContext
-            }
-            WindowsJob.adopt(p)  // the core ends with Ghostly, even if the app crashes
-            process = p
-            synchronized(log) { log.clear() }
-            Thread {
-                p.inputStream.bufferedReader().forEachLine { line ->
-                    synchronized(log) { log.addLast(line); while (log.size > 2000) log.removeFirst() }
+                val started = try {
+                    ProcessBuilder(exe.absolutePath, "run", "-c", file.absolutePath)
+                        .directory(coreDir)
+                        .redirectErrorStream(true)
+                        .apply { environment()["XRAY_LOCATION_ASSET"] = coreDir.absolutePath }
+                        .start()
+                } catch (e: Exception) {
+                    _state.value = VpnState.Failed("Не удалось запустить ядро: ${e.message}")
+                    return@withContext
                 }
-            }.apply { isDaemon = true }.start()
+                WindowsJob.adopt(started)  // the core ends with Ghostly, even if the app crashes
+                process = started
+                synchronized(log) { if (attempt == 1) log.clear() else log.addLast("[app] start attempt $attempt") }
+                Thread {
+                    started.inputStream.bufferedReader().forEachLine { line ->
+                        synchronized(log) { log.addLast(line); while (log.size > 2000) log.removeFirst() }
+                    }
+                }.apply { isDaemon = true }.start()
 
-            // Ready as soon as the local inbound answers (usually ~100 ms); Xray dies fast on a bad config.
-            val ready = waitForPort(appPort0, 5000) { p.isAlive }
-            if (!p.isAlive || !ready) {
-                if (p.isAlive) p.destroyForcibly()
-                val tail = synchronized(log) { log.takeLast(4).joinToString("\n") }
-                _state.value = VpnState.Failed(tail.ifBlank { "Ядро не запустилось" }.take(300))
+                // Ready as soon as the local inbound answers (usually ~100 ms); Xray dies fast on a bad config.
+                // TUN gets longer: creating the Wintun adapter (and, the first time, its driver) takes seconds.
+                val ready = waitForPort(appPort0, if (tun) 15_000 else 6_000) { started.isAlive }
+                if (started.isAlive && ready) {
+                    p = started
+                    break
+                }
+                if (started.isAlive) started.destroyForcibly()
+                started.waitFor(2, TimeUnit.SECONDS)
                 process = null
+                val tail = synchronized(log) { log.takeLast(6) }
+                failure = app.ghostly.core.vpn.CoreErrors.describe(tail, tun)
+                if (!app.ghostly.core.vpn.CoreErrors.transient(tail) || attempt == START_TRIES) break
+                if (tun) clearLeftoverTun(force = true)
+                delay(600L * attempt)
+            }
+            if (p == null) {
+                _state.value = VpnState.Failed(failure)
                 return@withContext
             }
             if (!tun && settings.desktopMode == DesktopMode.SYSTEM_PROXY) {
@@ -237,9 +256,9 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
             while (isActive) {
                 delay(1000)
                 if (!p.isAlive) {
-                    val tail = synchronized(log) { log.takeLast(3).joinToString("\n") }
+                    val tail = synchronized(log) { log.takeLast(6) }
                     stopBlocking()
-                    _state.value = VpnState.Failed("Ядро остановилось" + if (tail.isNotBlank()) ":\n$tail" else "")
+                    _state.value = VpnState.Failed("Ядро остановилось: " + app.ghostly.core.vpn.CoreErrors.describe(tail, tunMode))
                     break
                 }
                 val out = runCatching {
@@ -374,6 +393,9 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
 
         /** Name of the Wintun adapter in TUN mode on Windows/Linux. */
         const val TUN_NAME = "ghostly"
+
+        /** Starts of the core per connect (see the loop in [connect]). */
+        private const val START_TRIES = 3
 
         fun freePort(): Int = ServerSocket(0).use { it.localPort }
 

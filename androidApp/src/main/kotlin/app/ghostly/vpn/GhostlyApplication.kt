@@ -18,6 +18,7 @@ import android.provider.Settings
 import app.ghostly.core.GhostlyController
 import app.ghostly.core.vpn.AppEntry
 import app.ghostly.core.vpn.PlatformInfo
+import app.ghostly.vpn.trial.AndroidTrialAttestation
 import app.ghostly.vpn.service.AndroidVpn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -68,6 +69,12 @@ class AndroidPlatform(private val context: Context) : PlatformInfo {
     @SuppressLint("HardwareIds")
     override val hwid: String = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
         ?.takeIf { it.length >= 8 } ?: "ghostly-${Build.FINGERPRINT.hashCode().toUInt()}"
+
+    override suspend fun attestKey(challenge: ByteArray): List<String>? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        AndroidTrialAttestation.attest(challenge)
+    }
+
+    override fun rootSigns(): List<String> = AndroidTrialAttestation.rootSigns(context)
 
     override val appVersion: String = BuildConfig.VERSION_NAME
     override val dataDir: String = context.filesDir.absolutePath

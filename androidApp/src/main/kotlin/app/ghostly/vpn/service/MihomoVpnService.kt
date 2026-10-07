@@ -75,13 +75,20 @@ class MihomoVpnService : VpnService() {
         when (intent?.action) {
             ACTION_STOP -> scope.launch { stop() }
             ACTION_START -> {
+                // A start right after a stop: the stop's delayed process kill must not take this start with it.
+                killJob?.cancel()
+                killJob = null
                 serverName = intent.getStringExtra(EXTRA_NAME).orEmpty()
                 subscriptionName = intent.getStringExtra(EXTRA_SUBSCRIPTION)
                 connectedAt = null
                 goForeground(getString(R.string.notif_connecting))
                 scope.launch { start(intent) }
             }
-            ACTION_PING -> scope.launch { pingCore(intent) }
+            ACTION_PING -> {
+                killJob?.cancel()
+                killJob = null
+                scope.launch { pingCore(intent) }
+            }
             ACTION_PING_DONE -> scope.launch { pingDone() }
             // Restarted by the system without our request (START_STICKY after a kill): nothing to resume.
             else -> scope.launch { stop() }
@@ -211,7 +218,7 @@ class MihomoVpnService : VpnService() {
         runCatching { Clash.reset() }
         runCatching { Clash.clearOverride(Clash.OverrideSlot.Session) }
         stopSelf()
-        scope.launch {
+        killJob = scope.launch {
             delay(300)
             if (!running) android.os.Process.killProcess(android.os.Process.myPid())
         }
@@ -239,7 +246,7 @@ class MihomoVpnService : VpnService() {
         running = false
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
-        scope.launch {
+        killJob = scope.launch {
             delay(300)
             android.os.Process.killProcess(android.os.Process.myPid())
         }
@@ -343,6 +350,9 @@ class MihomoVpnService : VpnService() {
     )
 
     companion object {
+        /** The pending "end this process" of the last stop; a new start cancels it. */
+        @Volatile private var killJob: kotlinx.coroutines.Job? = null
+
         const val ACTION_START = "app.ghostly.vpn.MIHOMO_START"
         const val ACTION_STOP = "app.ghostly.vpn.MIHOMO_STOP"
         const val ACTION_STATE = "app.ghostly.vpn.MIHOMO_STATE"

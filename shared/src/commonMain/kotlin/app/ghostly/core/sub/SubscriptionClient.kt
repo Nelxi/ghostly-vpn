@@ -1,7 +1,12 @@
 package app.ghostly.core.sub
 
-import app.ghostly.core.trial.TrialKeys
 import app.ghostly.core.vpn.PlatformInfo
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.ProxyBuilder
 import io.ktor.client.plugins.HttpTimeout
@@ -21,18 +26,7 @@ class SubscriptionException(message: String, val definitive: Boolean = false) : 
  * the direct request, the provider's mirror domain and — when our tunnel is up — the same request
  * through the tunnel race each other (staggered, happy-eyeballs style). The first good answer wins.
  */
-class SubscriptionClient(
-    private val platform: PlatformInfo,
-    /**
-     * Trial challenge transport (Android 0.3.26+ only, wired by the app).
-     * The actual attestation chain travels via TrialClient.claim; here we
-     * only tag the subscription fetch with the challenge id so the server
-     * can bind them. Null on desktop/old builds: no tag, and after the
-     * server gate rollout that means NO trial. Paid/link subscriptions
-     * never depend on this.
-     */
-    private val trialKeys: TrialKeys? = null,
-) {
+class SubscriptionClient(private val platform: PlatformInfo) {
 
     private fun newClient(socksPort: Int? = null) = HttpClient {
         install(HttpTimeout) {
@@ -104,7 +98,7 @@ class SubscriptionClient(
         throw error ?: SubscriptionException("Не удалось загрузить подписку")
     }
 
-    private suspend fun fetchOnce(client: HttpClient, url: String, idPrefix: String, ua: String): ParsedSubscription {
+    private suspend fun fetchOnce(client: HttpClient, url: String, idPrefix: String, ua: String, attested: Boolean = false): ParsedSubscription {
         val response = client.get(url.trim()) {
             header("User-Agent", ua)
             header("Accept", "*/*")
@@ -113,13 +107,13 @@ class SubscriptionClient(
             header("x-device-os", platform.os)
             header("x-ver-os", platform.osVersion)
             header("x-device-model", platform.deviceModel)
-            // Trial gate: an honest Android 0.3.26+ build tells OUR trial
-            // endpoint which challenge its attestation key carries (the chain
-            // itself travels via TrialClient.claim). Transport only — the
-            // server decides; missing/forged key means NO trial.
-            // Paid/link subscriptions ignore this header.
-            trialKeys?.forTrialHost(url)?.let { id ->
-                header("x-trial-challenge-id", id)
+        }
+        // Ghostly's server wants proof that this is the real app (trials on Android): answer once and ask again.
+        if (!attested) Attest.parse(response.headers[Attest.HEADER])?.let { ask ->
+            // The second request carries a one-off query: a caching mirror in front of the server must
+            // not hand back the "prove it" answer it stored a moment ago.
+            if (answerAttest(client, url, ua, ask)) {
+                return fetchOnce(client, Attest.again(url, ask), idPrefix, ua, attested = true).copy(fetchedFrom = url)
             }
         }
         val body = response.bodyAsText()
@@ -135,6 +129,42 @@ class SubscriptionClient(
         if (parsed.servers.isEmpty()) throw SubscriptionException("В подписке нет поддерживаемых серверов", definitive = true)
         return parsed.copy(fetchedFrom = url)
     }
+
+    private val attestLock = Mutex()
+
+    /**
+     * Makes the attested key for [ask] and posts its chain next to the subscription. True when the
+     * server took an answer (accepted or refused — either way the next fetch shows the result).
+     * One at a time: the parallel attempts of [fetch] must not each burn a key and a challenge.
+     */
+    private suspend fun answerAttest(client: HttpClient, url: String, ua: String, ask: Attest.Ask): Boolean = attestLock.withLock {
+        val endpoint = Attest.endpoint(url) ?: return@withLock false
+        val challenge = decodeBase64(ask.challenge) ?: return@withLock false
+        val chain = runCatching { platform.attestKey(challenge) }
+        val signs = runCatching { platform.rootSigns() }.getOrDefault(emptyList())
+        val answer = Attest.Answer(
+            challenge = ask.id,
+            chain = chain.getOrNull().orEmpty(),
+            root = signs.isNotEmpty(),
+            rootSigns = signs.joinToString(","),
+            app = platform.appVersion,
+            error = if (chain.getOrNull() == null) (chain.exceptionOrNull()?.let { it::class.simpleName + ": " + it.message } ?: "unsupported").take(200) else null,
+        )
+        runCatching {
+            client.post(endpoint) {
+                header("User-Agent", ua)
+                header("x-hwid", platform.hwid)
+                header("x-device-os", platform.os)
+                header("x-ver-os", platform.osVersion)
+                header("x-device-model", platform.deviceModel)
+                contentType(ContentType.Application.Json)
+                setBody(app.ghostly.core.JsonX.encodeToString(Attest.Answer.serializer(), answer))
+            }.status.isSuccess()
+        }.getOrDefault(false)
+    }
+
+    @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
+    private fun decodeBase64(text: String): ByteArray? = runCatching { kotlin.io.encoding.Base64.decode(text) }.getOrNull()
 
     /** Ghostly's other addresses of the same subscription, in the order they are tried. */
     fun mirrorsOf(url: String): List<String> = GhostlyDomains.mirrorsOf(url)

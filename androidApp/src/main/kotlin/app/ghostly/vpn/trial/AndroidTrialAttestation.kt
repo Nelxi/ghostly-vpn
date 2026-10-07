@@ -5,79 +5,63 @@ import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
-import app.ghostly.core.trial.TrialClaimRequest
-import app.ghostly.core.trial.TrialPolicy
+import java.io.File
 import java.security.KeyPairGenerator
 import java.security.KeyStore
 
 /**
- * Android side of trial Key Attestation.
+ * The phone's half of the trial check (see tools/trial/ghostlink_attest.py for the server's).
  *
- * No secrets, no integrity checks, no root detection here: this code just
- * mints a throwaway EC key with the server challenge and returns the
- * certificate chain. A patched APK can lie about everything in this process —
- * that is why the server re-checks package/cert/challenge/securityLevel
- * and why the server is the only thing that decides.
+ * Nothing is decided here and there are no secrets: the Keystore makes a throwaway key bound to the
+ * server's challenge, and the secure hardware signs a certificate for it that names the package and
+ * the certificate the APK is signed with. A re-packed APK gets its own signer written there by the
+ * system, and that is what the server refuses.
  */
 object AndroidTrialAttestation {
 
-    /** Alias prefix for one-shot trial keys (deleted right after the claim). */
-    private const val ALIAS_PREFIX = "ghostly-trial-"
-
-    data class Attested(val chainPem: List<String>, val alias: String)
+    private const val ALIAS = "ghostly-trial-attest"
 
     /**
-     * Generates a Keystore key bound to [challengeB64] and returns its chain as PEM.
-     * Throws on devices without Keystore attestation (then the caller must
-     * surface the neutral "trial unavailable" text).
+     * Certificate chain (DER, base64, leaf first) of a fresh key bound to [challenge].
+     * Throws where the device can't attest keys (very old Android, broken Keystore).
      */
-    fun attest(context: Context, challengeId: String, challengeB64: String): Attested {
-        if (Build.VERSION.SDK_INT < 28) throw TrialUnavailable()
-        val challenge = Base64.decode(challengeB64, Base64.DEFAULT)
-        val alias = ALIAS_PREFIX + challengeId.take(16).filter { it.isLetterOrDigit() }
-        val kpg = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore")
-        val spec = KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_SIGN)
-            .setDigests(KeyProperties.DIGEST_SHA256)
-            .setAttestationChallenge(challenge)
-            .setUserAuthenticationRequired(false)
-            .build()
-        // On some firmwares a stale alias survives: drop it so re-claims don't fail locally.
-        runCatching {
-            val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-            if (ks.containsAlias(alias)) ks.deleteEntry(alias)
-        }
-        kpg.initialize(spec)
-        kpg.generateKeyPair()
-        val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        val chain = ks.getCertificateChain(alias) ?: throw TrialUnavailable()
-        val pem = chain.map { cert ->
-            val b64 = Base64.encodeToString(cert.encoded, Base64.NO_WRAP)
-            "-----BEGIN CERTIFICATE-----\n" + b64.chunked(64).joinToString("\n") +
-                "\n-----END CERTIFICATE-----"
-        }
-        return Attested(pem, alias)
-    }
-
-    /** Best-effort cleanup of the one-shot key; the key is useless after the claim anyway. */
-    fun wipe(alias: String) {
-        runCatching {
-            val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-            ks.deleteEntry(alias)
+    fun attest(challenge: ByteArray): List<String> {
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        // One alias, reused: a key left behind by an interrupted run must not pile up or get in the way.
+        runCatching { keyStore.deleteEntry(ALIAS) }
+        try {
+            val spec = KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_SIGN)
+                .setDigests(KeyProperties.DIGEST_SHA256)
+                .setAttestationChallenge(challenge)
+                .build()
+            KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore").apply { initialize(spec) }.generateKeyPair()
+            val chain = keyStore.getCertificateChain(ALIAS)?.takeIf { it.size >= 2 }
+                ?: throw IllegalStateException("no attestation chain")
+            return chain.map { Base64.encodeToString(it.encoded, Base64.NO_WRAP) }
+        } finally {
+            runCatching { keyStore.deleteEntry(ALIAS) }
         }
     }
 
-    fun buildClaim(
-        challengeId: String,
-        attested: Attested,
-        appVersion: String,
-        hwidHint: String?,
-    ): TrialClaimRequest = TrialClaimRequest(
-        challengeId = challengeId,
-        chainPem = attested.chainPem,
-        packageName = TrialPolicy.PACKAGE,
-        appVersion = appVersion,
-        hwidHint = hwidHint,
-    )
-
-    class TrialUnavailable : Exception("trial unavailable for this device")
+    /**
+     * Signs of root that a genuine build reports honestly (the server believes them only after the
+     * attestation proved the build is genuine; the hardware's own "bootloader unlocked" needs no help).
+     */
+    fun rootSigns(context: Context): List<String> {
+        val signs = mutableListOf<String>()
+        val dirs = listOf(
+            "/system/bin", "/system/xbin", "/sbin", "/su/bin", "/system/sbin", "/vendor/bin",
+            "/data/local/bin", "/data/local/xbin", "/data/local", "/system/bin/failsafe", "/debug_ramdisk",
+        )
+        if (dirs.any { runCatching { File(it, "su").exists() }.getOrDefault(false) }) signs += "su"
+        if (listOf("/sbin/.magisk", "/data/adb/magisk", "/data/adb/ksu", "/data/adb/ap").any { runCatching { File(it).exists() }.getOrDefault(false) }) signs += "magisk"
+        if (Build.TAGS?.contains("test-keys") == true) signs += "test-keys"
+        val managers = listOf(
+            "com.topjohnwu.magisk", "io.github.vvb2060.magisk", "me.weishu.kernelsu", "me.bmax.apatch",
+            "eu.chainfire.supersu", "com.koushikdutta.superuser",
+        )
+        val pm = context.packageManager
+        if (managers.any { runCatching { pm.getPackageInfo(it, 0) }.isSuccess }) signs += "root-manager"
+        return signs
+    }
 }

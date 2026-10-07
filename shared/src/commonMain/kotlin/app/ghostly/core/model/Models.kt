@@ -120,9 +120,6 @@ data class Server(
 /** Pseudo server for a mihomo profile whose proxies come only from proxy-providers. */
 const val MIHOMO_PROFILE = "mihomo"
 
-/** 🇫🇮 as regional indicator symbols — a name check can't look for the letters "FI". */
-const val FI_FLAG = "\uD83C\uDDEB\uD83C\uDDEE"
-
 /** Guess the pool of a server from its name when the provider doesn't say. */
 fun guessPool(name: String): String? {
     val n = name.lowercase()
@@ -132,38 +129,6 @@ fun guessPool(name: String): String? {
     // check needs the protocol in it, otherwise the CDN «Белые списки 2» would be mistaken for it.
     // Providers that care send an explicit `meta.pool` instead of relying on names at all.
     return if ("hysteria" in n || "hy2" in n) POOL_WL2 else POOL_WL
-}
-
-/**
- * How much we want a *regular* server right after leaving the white lists. The bigger the better;
- * the guard picks among the highest score by ping (see `GhostlyController.preferredRegular`).
- *
- * Hysteria2 on the Finnish node is what actually feels fast there: UDP survives what mobile
- * operators do to TCP, and that node is the one the provider measured best. It is a preference,
- * not a rule — a node with a bad ping still loses to a healthy one inside the same score.
- */
-fun regularPreference(server: Server): Int {
-    var score = 0
-    if (server.isHysteria) score += 2
-    if (isFinnish(server)) score += 1
-    return score
-}
-
-/**
- * The same idea for the white-list pool: «Белые списки 2» (Hysteria2) keeps working on mobile
- * networks where the CDN route stalls, and the Finnish node is the one to be on. The guard picks
- * among the highest score by ping (see `GhostlyController.preferredWhitelist`).
- */
-fun whitelistPreference(server: Server): Int {
-    var score = 0
-    if (server.isWhitelistHysteria || server.isHysteria) score += 2
-    if (isFinnish(server)) score += 1
-    return score
-}
-
-private fun isFinnish(server: Server): Boolean {
-    val n = server.name.lowercase()
-    return n.contains("финлянд") || n.contains("finland") || server.name.contains(FI_FLAG)
 }
 
 /** A latency result: millis, or a negative code. */

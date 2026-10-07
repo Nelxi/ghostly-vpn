@@ -58,21 +58,21 @@ class GhostlyVpnService : VpnService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_STOP -> scope.launch { stop(userInitiated = true) }
+            ACTION_STOP -> scope.launch { stop(userInitiated = true, startId) }
             else -> {
                 // ACTION_START from the app, or android.net.VpnService from always-on VPN / reboot.
                 goForeground(getString(R.string.notif_connecting))
-                scope.launch { start() }
+                scope.launch { start(startId) }
             }
         }
         return START_STICKY
     }
 
-    private suspend fun start() = lock.withLock {
+    private suspend fun start(startId: Int) = lock.withLock {
         val request = AndroidVpn.request ?: restoreRequest()
         if (request == null) {
-            AndroidVpn.mutableState.value = VpnState.Failed("Нет выбранного сервера")
-            stopSelf()
+            AndroidVpn.mutableState.value = VpnState.Failed("Нет выбранного сервера", retryable = false)
+            stopSelfResult(startId)
             return@withLock
         }
         AndroidVpn.mutableState.value = VpnState.Connecting
@@ -145,8 +145,10 @@ class GhostlyVpnService : VpnService() {
             AndroidVpn.log("start failed: ${e.message ?: e::class.simpleName}")
             shutdownCore()
             AndroidVpn.mutableState.value = VpnState.Failed(humanError(e))
-            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
-            stopSelf()
+            // Only when no newer command is waiting: a quick off-on (or a retry) queues its start behind
+            // this one, and a plain stopSelf() would destroy the service with that start still pending —
+            // the app then sat on "disconnected" although the user had asked to connect.
+            if (stopSelfResult(startId)) ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         }
     }
 
@@ -157,13 +159,17 @@ class GhostlyVpnService : VpnService() {
         return TunnelRequest(server, controller.settings.value).also { AndroidVpn.request = it }
     }
 
-    private suspend fun stop(userInitiated: Boolean) = lock.withLock {
+    /** [startId]: the command that asked for the stop; null = stop whatever is running (revoked by the system). */
+    private suspend fun stop(userInitiated: Boolean, startId: Int? = null) = lock.withLock {
         shutdownCore()
-        AndroidVpn.mutableState.value = VpnState.Idle
         AndroidVpn.mutableTraffic.value = Traffic()
+        // A start that arrived after this stop (quick off-on) is already waiting for the lock: leave the
+        // service and the "connecting" state to it instead of tearing both down under its feet.
+        if (startId != null && !stopSelfResult(startId)) return@withLock
+        AndroidVpn.mutableState.value = VpnState.Idle
         if (userInitiated) AndroidVpn.request = null
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
-        stopSelf()
+        if (startId == null) stopSelf()
     }
 
     private fun shutdownCore() {

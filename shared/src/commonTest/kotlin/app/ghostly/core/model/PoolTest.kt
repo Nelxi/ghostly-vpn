@@ -6,8 +6,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Traffic pools: the CDN white lists, «Белые списки 2» over Hysteria2, and the preference applied
- * when the app leaves the white lists for a regular server.
+ * Traffic pools: the CDN white lists and «Белые списки 2» over Hysteria2.
  */
 class PoolTest {
 
@@ -36,41 +35,6 @@ class PoolTest {
         // What the Ghostly server actually sends: pool "wl" plus the Hysteria2 protocol.
         assertTrue(server("🇫🇮 Белые списки 2 · Hysteria2", protocol = "hysteria", pool = POOL_WL).isWhitelistHysteria)
         assertFalse(server("🇫🇮 Hysteria2", protocol = "hysteria", pool = POOL_REG).isWhitelistHysteria)
-    }
-
-    @Test
-    fun hysteriaOnTheFinnishNodeWinsAsARegularServer() {
-        val fiHy2 = server("🇫🇮 Hysteria2", protocol = "hysteria")
-        val fiVision = server("🇫🇮 ⚡ Vision")
-        val deHy2 = server("🇩🇪 Hysteria2", protocol = "hysteria")
-        val dePlain = server("🇩🇪 Обычный")
-
-        assertTrue(regularPreference(fiHy2) > regularPreference(fiVision))
-        assertTrue(regularPreference(fiHy2) > regularPreference(deHy2))
-        assertTrue(regularPreference(deHy2) > regularPreference(dePlain))
-        assertEquals(0, regularPreference(dePlain))
-    }
-
-    @Test
-    fun aliasesForFinlandAlsoCount() {
-        assertEquals(regularPreference(server("Hysteria2", protocol = "hysteria")), regularPreference(server("Finland Hysteria2", protocol = "hysteria")) - 1)
-        assertEquals(1, regularPreference(server("Финляндия · Обычный")))
-    }
-
-    @Test
-    fun finnishWhiteList2WinsInsideTheWhiteLists() {
-        val fiWl2 = server("🇫🇮 Белые списки 2 · Hysteria2", protocol = "hysteria", pool = POOL_WL2)
-        val deWl2 = server("🇩🇪 Белые списки 2 · Hysteria2", protocol = "hysteria", pool = POOL_WL2)
-        val fiWl = server("🇫🇮 Белые списки", protocol = "vless", pool = POOL_WL)
-        val deWl = server("🇩🇪 Белые списки", protocol = "vless", pool = POOL_WL)
-
-        assertTrue(whitelistPreference(fiWl2) > whitelistPreference(deWl2))
-        assertTrue(whitelistPreference(deWl2) > whitelistPreference(fiWl))
-        assertTrue(whitelistPreference(fiWl) > whitelistPreference(deWl))
-        assertEquals(0, whitelistPreference(deWl))
-        // Same ranking with the pool the server really sends for «Белые списки 2».
-        val fiWl2AsWl = server("🇫🇮 Белые списки 2 · Hysteria2", protocol = "hysteria", pool = POOL_WL)
-        assertEquals(whitelistPreference(fiWl2), whitelistPreference(fiWl2AsWl))
     }
 
     @Test

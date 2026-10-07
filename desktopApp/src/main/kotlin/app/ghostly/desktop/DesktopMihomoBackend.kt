@@ -84,13 +84,13 @@ class DesktopMihomoBackend(private val platform: DesktopPlatform, private val xr
             killOrphanCores(exe)
             _state.value = VpnState.Connecting
             if (!exe.isFile) {
-                _state.value = VpnState.Failed("Не найдено ядро Mihomo (${exe.absolutePath})")
+                _state.value = VpnState.Failed("Не найдено ядро Mihomo (${exe.absolutePath})", retryable = false)
                 return@withContext
             }
             val tun = settings.desktopMode == DesktopMode.TUN
             tunMode = tun
             if (tun && !xray.isElevated()) {
-                _state.value = VpnState.Failed("Режиму TUN нужны права администратора. Запусти Ghostly от имени администратора или выбери «Системный прокси» в настройках.")
+                _state.value = VpnState.Failed("Режиму TUN нужны права администратора. Запусти Ghostly от имени администратора или выбери «Системный прокси» в настройках.", retryable = false)
                 return@withContext
             }
             val appPort0 = DesktopXrayBackend.freePort()
@@ -141,8 +141,8 @@ class DesktopMihomoBackend(private val platform: DesktopPlatform, private val xr
             if (!p.isAlive || !ready) {
                 if (p.isAlive) p.destroyForcibly()
                 client.close()
-                val tail = synchronized(log) { log.takeLast(4).joinToString("\n") }
-                _state.value = VpnState.Failed(tail.ifBlank { "Mihomo не запустился" }.take(300))
+                val tail = synchronized(log) { log.takeLast(6) }
+                _state.value = VpnState.Failed(app.ghostly.core.vpn.CoreErrors.describe(tail, tun))
                 process = null
                 return@withContext
             }
@@ -206,9 +206,9 @@ class DesktopMihomoBackend(private val platform: DesktopPlatform, private val xr
             while (isActive) {
                 delay(1000)
                 if (!p.isAlive) {
-                    val tail = synchronized(log) { log.takeLast(3).joinToString("\n") }
+                    val tail = synchronized(log) { log.takeLast(6) }
                     stopBlocking()
-                    _state.value = VpnState.Failed("Mihomo остановился" + if (tail.isNotBlank()) ":\n$tail" else "")
+                    _state.value = VpnState.Failed("Mihomo остановился: " + app.ghostly.core.vpn.CoreErrors.describe(tail, tunMode))
                     break
                 }
             }

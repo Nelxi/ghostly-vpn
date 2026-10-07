@@ -11,7 +11,16 @@ sealed interface VpnState {
     data object Connecting : VpnState
     data class Connected(val since: Long, val serverId: String) : VpnState
     data object Disconnecting : VpnState
-    data class Failed(val message: String) : VpnState
+    /**
+     * [retryable]: false when trying again can't help (no admin rights for TUN, the core binary is
+     * missing). [nonce] makes every failure a distinct value: the same message twice in a row must still
+     * reach collectors of the state flow, or a retry chain would stall on the second identical error.
+     */
+    data class Failed(
+        val message: String,
+        val retryable: Boolean = true,
+        val nonce: Long = kotlin.random.Random.nextLong(),
+    ) : VpnState
 }
 
 /** Bytes per second through the proxy (sum over proxy outbounds) and totals for the session. */
@@ -89,6 +98,16 @@ interface PlatformInfo {
     val appVersion: String
     val dataDir: String
     val supportsPerAppSplit: Boolean get() = false
+
+    /**
+     * Hardware key attestation (Android): the certificate chain (DER in base64, leaf first) of a fresh
+     * key bound to [challenge]. Null where the platform has nothing of the kind; throws when the
+     * device should be able to but can't.
+     */
+    suspend fun attestKey(challenge: ByteArray): List<String>? = null
+
+    /** Signs of a rooted device, reported as they are (empty: none found, or not applicable). */
+    fun rootSigns(): List<String> = emptyList()
     val isDesktop: Boolean get() = false
 
     /**
