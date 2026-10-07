@@ -27,7 +27,7 @@ import app.ghostly.resources.onest_regular
 import app.ghostly.resources.onest_semibold
 import org.jetbrains.compose.resources.Font
 
-/** Palette from the ghostlinknex.online site (core.css tokens). */
+/** Palette from the Ghostly site (core.css tokens). */
 @Immutable
 data class GhostColors(
     val bg: Color = Color(0xFF07050B),

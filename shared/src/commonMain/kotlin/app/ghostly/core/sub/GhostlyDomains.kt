@@ -1,18 +1,21 @@
 package app.ghostly.core.sub
 
 /**
- * Ghostly publishes every subscription (and the app updates) on several domains:
- * - ghostlinknex.online — main, through a Russian CDN;
- * - srv.ghostlinknex.online — straight to the server (works from abroad);
- * - ghostlynex.fun — backup: another CDN → the DE node, which also keeps a cached copy of every
- *   subscription, so it answers even while the main server is down or its domain is blocked by RKN.
+ * Ghostly's own addresses. The service lives on ghostlynex.fun (through a CDN). The domain it used
+ * before, ghostlinknex.online, runs out in November 2026: subscriptions saved with it are still
+ * recognised as ours and are moved to the current one (see [current]), and while it is alive it
+ * serves as a second address for the same requests.
  */
 object GhostlyDomains {
-    const val MAIN = "ghostlinknex.online"
-    const val DIRECT = "srv.ghostlinknex.online"
-    const val BACKUP = "ghostlynex.fun"
+    const val MAIN = "ghostlynex.fun"
 
-    private val ALL = listOf(MAIN, DIRECT, BACKUP)
+    /** The one name of the previous domain that may still answer (its direct-to-server name does not). */
+    const val LEGACY_ALIVE = "ghostlinknex.online"
+
+    /** The previous domain's names: still ours, no longer handed out. */
+    private val LEGACY = listOf(LEGACY_ALIVE, "srv.ghostlinknex.online")
+
+    private val ALL = listOf(MAIN) + LEGACY
 
     /** How long the link's own domain must stay dead before the app moves the subscription to a mirror. */
     const val SWITCH_AFTER_MS = 3 * 60_000L
@@ -21,21 +24,37 @@ object GhostlyDomains {
 
     fun isOurs(url: String): Boolean = hostOf(url).let { h -> ALL.any { h == it || h == "www.$it" } }
 
-    /** The same link on Ghostly's other domains; empty for anyone else's subscription. */
+    private fun withHost(url: String, newHost: String): String {
+        val scheme = url.substringBefore("://", "")
+        val rest = url.substringAfter("://")
+        val host = rest.substringBefore('/').substringBefore(':')
+        return "$scheme://$newHost" + rest.removePrefix(host)
+    }
+
+    /** The same link on Ghostly's other addresses, in the order they are tried; empty for anyone else's. */
     fun mirrorsOf(url: String): List<String> {
         val scheme = url.substringBefore("://", "")
         if (scheme.isEmpty() || !isOurs(url)) return emptyList()
-        val rest = url.substringAfter("://")
-        val host = rest.substringBefore('/').substringBefore(':')
-        val own = host.lowercase().removePrefix("www.")
-        return ALL.filter { it != own }.map { "$scheme://$it" + rest.removePrefix(host) }
+        val own = hostOf(url).removePrefix("www.")
+        return listOf(MAIN, LEGACY_ALIVE).filter { it != own }.map { withHost(url, it) }
     }
 
     /**
-     * The link to save for a subscription that is being added: when the pasted address itself
-     * couldn't be reached (DNS broken by the provider, domain blocked) but a mirror answered, the
-     * profile keeps the mirror right away instead of a link that doesn't work on this network.
+     * A subscription link on the current domain: links saved with a previous domain are rewritten,
+     * everything else (the current domain, other providers) comes back untouched.
      */
-    fun linkToSave(url: String, fetchedFrom: String?, ownAddressFailed: Boolean): String =
-        if (ownAddressFailed && fetchedFrom != null && isOurs(url) && isOurs(fetchedFrom)) fetchedFrom else url
+    fun current(url: String): String {
+        val host = hostOf(url).removePrefix("www.")
+        return if (host in LEGACY) withHost(url, MAIN) else url
+    }
+
+    /**
+     * The link to save for a subscription that is being added: ours always on the current domain;
+     * and when the pasted address itself couldn't be reached but a mirror answered, the profile keeps
+     * the mirror right away instead of a link that doesn't work on this network.
+     */
+    fun linkToSave(url: String, fetchedFrom: String?, ownAddressFailed: Boolean): String {
+        val picked = if (ownAddressFailed && fetchedFrom != null && isOurs(url) && isOurs(fetchedFrom)) fetchedFrom else url
+        return current(picked)
+    }
 }

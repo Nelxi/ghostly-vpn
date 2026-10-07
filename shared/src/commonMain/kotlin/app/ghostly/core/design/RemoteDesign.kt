@@ -90,7 +90,7 @@ class RemoteDesign(private val store: FileStore, private val userAgent: String) 
         const val FILE = "design.json"
         const val DISMISSED = "banners.dismissed"
         val URLS = listOf(
-            "https://srv.ghostlinknex.online/dl/design.json",
+            "https://ghostlynex.fun/dl/design.json",
             "https://ghostlinknex.online/dl/design.json",
         )
     }

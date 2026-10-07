@@ -211,6 +211,11 @@ class GhostlyController(
         if (!_settings.value.coreXrayRestored) {
             updateSettings { it.copy(core = app.ghostly.core.model.CoreType.XRAY, coreXrayRestored = true) }
         }
+        // 0.3.28: Ghostly moved to another domain; subscriptions saved with the previous one follow it.
+        if (_profiles.value.any { p -> p.url != null && app.ghostly.core.sub.GhostlyDomains.current(p.url) != p.url }) {
+            _profiles.update { list -> list.map { p -> p.url?.let { p.copy(url = app.ghostly.core.sub.GhostlyDomains.current(it)) } ?: p } }
+            saveProfiles()
+        }
         // 0.3.18: Russian apps (banks, Gosuslugi, MAX, marketplaces) go around the VPN for everyone, once.
         if (!_settings.value.ruAppsBypassApplied) updateSettings { it.withRuAppsBypass() }
         (backend as? app.ghostly.core.mihomo.DualCoreBackend)?.profileOf = ::profileOf

@@ -73,7 +73,11 @@ class Updater(private val platform: PlatformInfo, private val isDismissed: (Stri
             MANIFESTS.map { url ->
                 async {
                     runCatching {
-                        val r = http.get(url) { header("User-Agent", "GhostlyVPN/${platform.appVersion} (${platform.os})") }
+                        // A changing query: the CDN keeps files under /dl/ for a long time, and a manifest
+                        // it stored before a release must not hide that release.
+                        val r = http.get("$url?t=${kotlin.time.Clock.System.now().toEpochMilliseconds() / 60_000}") {
+                            header("User-Agent", "GhostlyVPN/${platform.appVersion} (${platform.os})")
+                        }
                         if (r.status.isSuccess()) JsonX.decodeFromString(ReleaseManifest.serializer(), r.bodyAsText()) else null
                     }.getOrNull()
                 }
@@ -146,20 +150,18 @@ class Updater(private val platform: PlatformInfo, private val isDismissed: (Stri
     }
 
     companion object {
+        // ghostlinknex.online is the previous domain: asked too while it is alive (it ends in November 2026).
         private val MANIFESTS = listOf(
-            "https://ghostlinknex.online/dl/latest.json",
-            "https://srv.ghostlinknex.online/dl/latest.json",
             "https://ghostlynex.fun/dl/latest.json",
+            "https://ghostlinknex.online/dl/latest.json",
         )
         private val SERVERS = listOf(
-            "https://srv.ghostlinknex.online/dl/",
-            "https://ghostlinknex.online/dl/",
             "https://ghostlynex.fun/dl/",
+            "https://ghostlinknex.online/dl/",
         )
         private val MIRRORS = listOf(
-            "https://ghostlinknex.online/dl/",
-            "https://srv.ghostlinknex.online/dl/",
             "https://ghostlynex.fun/dl/",
+            "https://ghostlinknex.online/dl/",
             "https://github.com/Nelxi/ghostly-vpn/releases/latest/download/",
         )
 

@@ -24,7 +24,7 @@ Ghostly VPN $version — портативная версия
 Запуск: Ghostly.exe. Установка не нужна, права администратора не нужны
 (кроме режима TUN). Подписки и настройки хранятся рядом, в папке data —
 папку можно носить на флешке. Новую версию скачивайте с сайта
-ghostlinknex.online или https://github.com/Nelxi/ghostly-vpn/releases
+ghostlynex.fun или https://github.com/Nelxi/ghostly-vpn/releases
 "@
     $zip = "build\release\Ghostly-Windows-Portable.zip"
     if (Test-Path $zip) { Remove-Item $zip -Force }

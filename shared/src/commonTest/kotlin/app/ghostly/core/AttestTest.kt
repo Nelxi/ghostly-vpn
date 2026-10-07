@@ -25,11 +25,11 @@ class AttestTest {
     @Test
     fun theAnswerGoesNextToTheSubscription() {
         assertEquals(
-            "https://ghostlinknex.online/sub/sub_ec3df87ca5d81fc8/attest",
-            Attest.endpoint("https://ghostlinknex.online/sub/sub_ec3df87ca5d81fc8#Ghostly%20VPN"),
+            "https://ghostlynex.fun/sub/sub_ec3df87ca5d81fc8/attest",
+            Attest.endpoint("https://ghostlynex.fun/sub/sub_ec3df87ca5d81fc8#Ghostly%20VPN"),
         )
         assertEquals("https://ghostlynex.fun/sub/sub_1/attest", Attest.endpoint("https://ghostlynex.fun/sub/sub_1?fmt=xray"))
-        assertEquals("https://srv.ghostlinknex.online/sub/sub_1/attest", Attest.endpoint(" https://srv.ghostlinknex.online/sub/sub_1/ "))
+        assertEquals("https://ghostlynex.fun/sub/sub_1/attest", Attest.endpoint(" https://ghostlynex.fun/sub/sub_1/ "))
     }
 
     @Test

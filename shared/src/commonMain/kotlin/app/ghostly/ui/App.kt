@@ -100,7 +100,7 @@ import app.ghostly.ui.theme.Motion
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-const val SITE_URL = "https://ghostlinknex.online"
+const val SITE_URL = "https://ghostlynex.fun"
 
 internal enum class Tab(val title: String) { HOME("Главная"), SERVERS("Серверы"), SETTINGS("Настройки") }
 

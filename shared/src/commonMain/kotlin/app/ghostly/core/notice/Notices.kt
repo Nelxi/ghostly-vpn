@@ -117,7 +117,7 @@ class Notices(private val store: FileStore, private val platform: PlatformInfo, 
 
     internal companion object {
         private const val SEEN = "notices.seen"
-        private val HOSTS = listOf(GhostlyDomains.DIRECT, GhostlyDomains.MAIN)
+        private val HOSTS = listOf(GhostlyDomains.MAIN, GhostlyDomains.LEGACY_ALIVE)
         private val SUB_ID = Regex("/sub/(sub_[A-Za-z0-9]+)")
 
         /** `https://…/sub/sub_abc#Name` → `sub_abc`. */

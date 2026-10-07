@@ -858,7 +858,7 @@ private fun AboutPage(controller: GhostlyController, contentPadding: PaddingValu
                 SettingRow("Проверить обновления", last ?: "Скачиваются с нашего сервера и проверяются по SHA-256", Icons.Rounded.Refresh, onClick = { controller.checkUpdates(manual = true) }) { Chevron() }
             }
             SettingRow("Исходный код", "Открытый проект на GitHub · GPL-3.0", Icons.Rounded.Code, onClick = { controller.platform.openUrl(GITHUB_URL) }) { Chevron() }
-            SettingRow("Сайт", "ghostlinknex.online", Icons.Rounded.Language, onClick = { controller.platform.openUrl("https://ghostlinknex.online") }) { Chevron() }
+            SettingRow("Сайт", "ghostlynex.fun", Icons.Rounded.Language, onClick = { controller.platform.openUrl("https://ghostlinknex.online") }) { Chevron() }
         }
         Spacer(Modifier.height(18.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {

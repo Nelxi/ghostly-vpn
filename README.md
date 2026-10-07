@@ -23,7 +23,7 @@
 | Windows 10/11 | [Ghostly-Windows.exe](https://github.com/Nelxi/ghostly-vpn/releases/latest/download/Ghostly-Windows.exe) — обычный установщик, без прав администратора и без MSI |
 | macOS · iPhone · Linux | скоро |
 
-Подписку можно купить на [ghostlinknex.online](https://ghostlinknex.online), но приложение работает с любой подпиской VLESS / VMess / Trojan / Shadowsocks / Hysteria2.
+Подписку можно купить на [ghostlynex.fun](https://ghostlynex.fun), но приложение работает с любой подпиской VLESS / VMess / Trojan / Shadowsocks / Hysteria2.
 
 ---
 

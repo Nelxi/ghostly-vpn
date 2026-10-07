@@ -172,28 +172,30 @@ class GhostlyDomainsTest {
     @kotlin.test.Test
     fun mirrorsCoverEveryOwnDomain() {
         val d = app.ghostly.core.sub.GhostlyDomains
+        // A link on the previous domain is tried on the current one too…
+        kotlin.test.assertEquals(listOf("https://ghostlynex.fun/sub/abc"), d.mirrorsOf("https://ghostlinknex.online/sub/abc"))
         kotlin.test.assertEquals(
-            listOf("https://srv.ghostlinknex.online/sub/abc", "https://ghostlynex.fun/sub/abc"),
-            d.mirrorsOf("https://ghostlinknex.online/sub/abc"),
+            listOf("https://ghostlynex.fun/sub/abc", "https://ghostlinknex.online/sub/abc"),
+            d.mirrorsOf("https://srv.ghostlinknex.online/sub/abc"),
         )
-        kotlin.test.assertEquals(
-            listOf("https://ghostlinknex.online/sub/x?y=1", "https://srv.ghostlinknex.online/sub/x?y=1"),
-            d.mirrorsOf("https://ghostlynex.fun/sub/x?y=1"),
-        )
+        // …and the current one falls back to the previous while that is alive.
+        kotlin.test.assertEquals(listOf("https://ghostlinknex.online/sub/x?y=1"), d.mirrorsOf("https://ghostlynex.fun/sub/x?y=1"))
         kotlin.test.assertTrue(d.mirrorsOf("https://example.com/sub/abc").isEmpty())
     }
 
     @kotlin.test.Test
     fun addedSubscriptionKeepsTheMirrorOnlyWhenItsOwnAddressFailed() {
         val d = app.ghostly.core.sub.GhostlyDomains
-        val link = "https://srv.ghostlinknex.online/sub/sub_6d0a6b02f44f29b1#Ghostly%20VPN%F0%9F%91%BB"
-        val backup = "https://ghostlynex.fun/sub/sub_6d0a6b02f44f29b1#Ghostly%20VPN%F0%9F%91%BB"
-        kotlin.test.assertEquals(backup, d.mirrorsOf(link).last())
-        // srv didn't resolve, the backup answered: the profile is saved with the working link.
-        kotlin.test.assertEquals(backup, d.linkToSave(link, backup, ownAddressFailed = true))
-        // The backup was merely faster: keep what the user pasted.
-        kotlin.test.assertEquals(link, d.linkToSave(link, backup, ownAddressFailed = false))
-        kotlin.test.assertEquals(link, d.linkToSave(link, link, ownAddressFailed = false))
+        val old = "https://srv.ghostlinknex.online/sub/sub_6d0a6b02f44f29b1#Ghostly%20VPN%F0%9F%91%BB"
+        val now = "https://ghostlynex.fun/sub/sub_6d0a6b02f44f29b1#Ghostly%20VPN%F0%9F%91%BB"
+        kotlin.test.assertEquals(now, d.mirrorsOf(old).first())
+        // A link on the previous domain is always saved on the current one.
+        kotlin.test.assertEquals(now, d.linkToSave(old, now, ownAddressFailed = true))
+        kotlin.test.assertEquals(now, d.linkToSave(old, old, ownAddressFailed = false))
+        kotlin.test.assertEquals(now, d.current(old))
+        kotlin.test.assertEquals(now, d.current(now))
+        kotlin.test.assertEquals("https://ghostlynex.fun/sub/x?fmt=xray", d.current("https://www.ghostlinknex.online/sub/x?fmt=xray"))
+        kotlin.test.assertEquals(now, d.linkToSave(now, now, ownAddressFailed = false))
         // Someone else's subscription is never rewritten.
         kotlin.test.assertEquals("https://example.com/s", d.linkToSave("https://example.com/s", "https://other.net/s", ownAddressFailed = true))
     }
