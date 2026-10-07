@@ -360,6 +360,7 @@ fun HomeHero(m: HomeModel, controller: GhostlyController, orbSize: Dp) {
             beat = { stage?.a?.let { it.beat * (1f - 0.6f * it.mood) } ?: 0f },
             flare = { 0f },
             music = { stage?.track?.value?.playing == true },
+            trackKey = { stage?.track?.value?.let { it.artist + "|" + it.title } ?: "" },
         )
         Spacer(Modifier.height(14.dp))
         KineticText(

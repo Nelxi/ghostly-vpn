@@ -69,6 +69,8 @@ fun ConnectOrb(
     /** Stage mode, read only while drawing (60 fps audio must not recompose): mouth, beat pulse, drop light. */
     sing: () -> Float = { 0f }, beat: () -> Float = { 0f }, flare: () -> Float = { 0f },
     music: () -> Boolean = { false },
+    /** What is playing ("artist|title", "" for nothing): a new one makes the stage outfit come on again. */
+    trackKey: () -> String = { "" },
 ) {
     val c = Ghost.colors
     val reduce = LocalReduceMotion.current
@@ -86,8 +88,30 @@ fun ConnectOrb(
 
     val on by animateFloatAsState(if (state == OrbState.CONNECTED) 1f else 0f, tween(900, easing = Motion.Ease))
     val musicOn by remember { androidx.compose.runtime.derivedStateOf { music() } }
-    // Springy on purpose: the shades bounce onto the face, the arm swings up.
-    val showtime by animateFloatAsState(if (musicOn) 1f else 0f, spring(dampingRatio = 0.5f, stiffness = 90f))
+    // A new track: the outfit is taken off for a moment and comes back with the same entrance as when
+    // music starts. The pause comes from design.json (outfitReplayMs, 0 = keep it on).
+    val song by remember { androidx.compose.runtime.derivedStateOf { trackKey() } }
+    val replayMs = if (reduce) 0 else app.ghostly.ui.theme.LocalDesign.current.outfitReplayMs
+    var outfitOff by remember { mutableStateOf(false) }
+    var lastSong by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(song) {
+        val previous = lastSong
+        lastSong = song
+        // Only a change from one track to another while music is on — not the first track, not silence.
+        if (previous.isNullOrEmpty() || song.isEmpty() || previous == song || replayMs <= 0 || !musicOn) return@LaunchedEffect
+        try {
+            outfitOff = true
+            kotlinx.coroutines.delay(replayMs.toLong())
+        } finally {
+            outfitOff = false
+        }
+    }
+    // Springy on purpose: the shades bounce onto the face, the arm swings up. Taken off for a new track
+    // they leave fast, so the whole entrance is seen again.
+    val showtime by animateFloatAsState(
+        if (musicOn && !outfitOff) 1f else 0f,
+        if (outfitOff) tween(220, easing = Motion.Ease) else spring(dampingRatio = 0.5f, stiffness = 90f),
+    )
     val busy by animateFloatAsState(if (state == OrbState.CONNECTING) 1f else 0f, Motion.quick(400))
     val err by animateFloatAsState(if (state == OrbState.ERROR) 1f else 0f, Motion.quick(400))
 

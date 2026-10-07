@@ -32,6 +32,11 @@ data class DesignTokens(
     val shadow: Float = 0.45f,
     /** How far the shadows spread (bigger = softer edge): 1 = the old tight shadows. */
     val shadowSoft: Float = 1.6f,
+    /**
+     * A new track: the ghost's shades and microphone go away for this long (ms) and come back the way
+     * they do when music starts. 0 = they stay on through a track change.
+     */
+    val outfitReplayMs: Int = 320,
     /** "#RRGGBB": replaces the default violet accent (users who picked their own colour keep it). */
     val accent: String? = null,
     val banner: Banner? = null,
@@ -75,6 +80,7 @@ class RemoteDesign(private val store: FileStore, private val userAgent: String) 
                 stageDim = t.stageDim.coerceIn(0f, 1f),
                 shadow = t.shadow.coerceIn(0f, 1.5f),
                 shadowSoft = t.shadowSoft.coerceIn(0.5f, 3f),
+                outfitReplayMs = t.outfitReplayMs.coerceIn(0, 2000),
             )
             store.save(FILE, DesignTokens.serializer(), _tokens.value)
             return
