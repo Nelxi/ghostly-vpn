@@ -60,16 +60,25 @@ class AndroidStage(private val context: Context) : StageSource {
 
     @Volatile private var controller: MediaController? = null
 
+    private val lyricTime = app.ghostly.core.stage.LyricTime()
+
+    /**
+     * The time the lines are typed by. Android gives the position with its update time and speed, so
+     * the player's position is exact at any moment; it still goes through the shared lyric clock
+     * (app.ghostly.core.stage.LyricTime, the Kasane media bar's): players re-publish their state with
+     * a position a little off or a flickering play flag, and the text must not follow those.
+     */
     override fun positionMs(): Long {
         val st = controller?.playbackState ?: return 0L
-        // The lyric phase shift is constant, not tied to STATE_PLAYING: that flag flickers (players
-        // re-publish their state), and dropping the shift yanked the text back a line for a moment.
-        var p = st.position + LYRIC_LEAD_MS
-        if (st.state == PlaybackState.STATE_PLAYING) {
-            p += ((SystemClock.elapsedRealtime() - st.lastPositionUpdateTime) * st.playbackSpeed).toLong()
+        val t = _track.value ?: return 0L
+        val playing = st.state == PlaybackState.STATE_PLAYING
+        var p = st.position
+        if (playing) p += ((SystemClock.elapsedRealtime() - st.lastPositionUpdateTime) * st.playbackSpeed).toLong()
+        val now = System.currentTimeMillis()
+        return synchronized(lyricTime) {
+            lyricTime.report(t.artist + "|" + t.title, max(0L, p), playing, now)
+            lyricTime.nowMs(now, t.durationMs)
         }
-        val dur = _track.value?.durationMs ?: 0L
-        return if (dur > 0) p.coerceIn(0, dur) else max(0, p)
     }
 
     override fun start() {
@@ -201,10 +210,5 @@ class AndroidStage(private val context: Context) : StageSource {
         val end = t.lines.getOrNull(i + 1)?.timeMs ?: (t.lines[i].timeMs + 4000)
         if (pos > end - 250) return 0f
         return 0.45f + 0.35f * kotlin.math.abs(kotlin.math.sin(ms / 110.0)).toFloat()
-    }
-
-    private companion object {
-        /** A line starts typing at its first letter; a hair early keeps it with the voice. */
-        const val LYRIC_LEAD_MS = 200L
     }
 }

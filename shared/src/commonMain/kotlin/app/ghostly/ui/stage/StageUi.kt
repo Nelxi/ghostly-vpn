@@ -1,17 +1,7 @@
 package app.ghostly.ui.stage
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,9 +17,10 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -46,6 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.ghostly.core.GhostlyController
+import app.ghostly.core.stage.LyricLayout
 import app.ghostly.core.stage.NowPlaying
 import app.ghostly.core.stage.StageAudio
 import app.ghostly.ui.theme.Ghost
@@ -53,7 +45,6 @@ import app.ghostly.ui.theme.LocalReduceMotion
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -116,47 +107,47 @@ fun StageOverlay(stage: StageState) {
 }
 
 /**
- * The line the ghost is singing: letters appear with the song (typed across the line's own time),
- * each one popping in; when the next line starts the old one floats up and away.
+ * The line the ghost is singing — drawn the way the Kasane media bar draws it.
+ *
+ * One clock ([StageState.positionMs], the lyric clock) is read once per frame, and everything on
+ * screen is a plain function of that number: which line is the current one, how many of its letters
+ * are typed, where it sits and how bright it is, and the same for the line that is leaving. Nothing
+ * is remembered between frames, so a line cannot "come back": there is no stored current line to
+ * fall out of step with the clock, and no enter/exit animation running on its own time.
  */
 @Composable
 fun SungLine(stage: StageState, modifier: Modifier = Modifier) {
     val c = Ghost.colors
     val track = stage.track.value ?: return
-    if (track.lines.isEmpty() || !track.playing) {
+    if (track.lines.isEmpty()) {
         // Playing but nothing to sing: show what's on, quietly.
         if (track.playing) NowPlayingTag(track, modifier)
         return
     }
-    // Keyed by the song itself: the track object is re-emitted on every poll and must not reset the line.
+    // Keyed by the song itself: the track object is re-emitted on every poll and must not reset anything.
     val songKey = track.artist + "|" + track.title + "|" + track.lines.size
-    var index by remember(songKey) { mutableStateOf(-1) }
+    val lines = track.lines
+    val clock = remember(songKey) { mutableLongStateOf(stage.positionMs()) }
     LaunchedEffect(songKey) {
-        while (true) {
-            val t = stage.track.value
-            if (t != null) {
-                // lineFor, not lineAt: a dip in the player's position must not send the text a line back.
-                val i = t.lineFor(stage.positionMs(), index)
-                if (i != index) index = i
-            }
-            withFrameNanos { }
-        }
+        while (true) withFrameNanos { clock.longValue = stage.positionMs() }
     }
+    // Recomposes only when the clock crosses into another line.
+    val active by remember(songKey) { derivedStateOf { lineIndexAt(lines, clock.longValue) } }
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        AnimatedContent(
-            index,
-            transitionSpec = {
-                // The outgoing line clears in ~0.2 s: it used to linger ~0.4 s, so right after a change
-                // the previous line was still on screen — read as a jump back to it for half a second.
-                (fadeIn(tween(240)) + slideInVertically(spring(0.8f, 320f)) { it / 2 } + scaleIn(initialScale = 0.96f)) togetherWith
-                    (fadeOut(tween(140)) + slideOutVertically(tween(220)) { -it } + scaleOut(targetScale = 0.94f))
-            },
-        ) { i ->
-            val line = track.lines.getOrNull(i)
-            if (line == null) Text("♪", style = MaterialTheme.typography.headlineSmall, color = c.ink3)
-            else {
-                val next = track.lines.getOrNull(i + 1)?.timeMs ?: (line.timeMs + 4000)
-                TypedLine(line.text, line.timeMs, next, stage)
+        Box(contentAlignment = Alignment.Center) {
+            if (active < 0) Text("♪", style = MaterialTheme.typography.headlineSmall, color = c.ink3)
+            // Only the current line and the one leaving during the change are drawn. The next line is
+            // not drawn at all until its time, so it can never show up with letters already typed.
+            else for (i in max(0, active - 1)..active) key(i) {
+                LyricLineView(
+                    text = lines[i].text,
+                    startMs = lines[i].timeMs,
+                    endMs = LyricLayout.lineEndMs(lines, i, track.durationMs),
+                    hasNext = i + 1 < lines.size,
+                    current = i == active,
+                    clock = clock,
+                    stage = stage,
+                )
             }
         }
         Spacer(Modifier.height(6.dp))
@@ -164,47 +155,63 @@ fun SungLine(stage: StageState, modifier: Modifier = Modifier) {
     }
 }
 
+private fun lineIndexAt(lines: List<app.ghostly.core.stage.LyricLine>, positionMs: Long): Int {
+    var lo = 0
+    var hi = lines.size - 1
+    var found = -1
+    while (lo <= hi) {
+        val mid = (lo + hi) ushr 1
+        if (lines[mid].timeMs <= positionMs) { found = mid; lo = mid + 1 } else hi = mid - 1
+    }
+    return found
+}
+
+/** One line: its place, brightness and typed letters all come from [clock]. */
 @Composable
-private fun TypedLine(text: String, start: Long, end: Long, stage: StageState) {
+private fun LyricLineView(
+    text: String,
+    startMs: Long,
+    endMs: Long,
+    hasNext: Boolean,
+    current: Boolean,
+    clock: androidx.compose.runtime.LongState,
+    stage: StageState,
+) {
     val c = Ghost.colors
-    // Type across most of the line's slot, but never slower than a natural singing pace.
-    val span = min((end - start) * 0.8f, text.length * 95f + 500f).coerceAtLeast(300f)
-    // Typed position in "letters × 8" steps: recomposes only this line, ~a few dozen times per line.
-    // Keyed by the line's own timestamp, not its text: a repeated chorus line must type afresh.
-    var typed by remember(start) { mutableStateOf(0) }
-    LaunchedEffect(start) {
-        // The player's clock can dip mid-line; letters already sung must never un-type.
-        var high = start
-        while (true) {
-            val pos = stage.positionMs()
-            if (pos > high) high = pos
-            val p = ((high - start) / span).coerceIn(0f, 1f)
-            val v = (p * text.length * 8).toInt()
-            if (v != typed) typed = v
-            withFrameNanos { }
+    // Typed position in "letters × 8" steps: this line recomposes a few dozen times while it types,
+    // never per frame. The line that is leaving stands complete.
+    val typed by remember(startMs, endMs, text, current) {
+        derivedStateOf {
+            if (!current) text.length * 8
+            else (LyricLayout.typedProgress(clock.longValue, startMs, endMs) * text.length * 8).toInt()
         }
     }
     val full = typed / 8
     val frac = (typed % 8) / 8f
     val size = if (text.length > 42) 17.sp else 21.sp
+    val lineHeight = size * 1.25f
+    val ink = if (current) c.ink else c.ink2
     Text(
         // Unsung letters stay in the layout but invisible, so the centred line never jumps.
         androidx.compose.ui.text.buildAnnotatedString {
             text.forEachIndexed { i, ch ->
                 val col = when {
-                    i < full -> c.ink
+                    i < full -> ink
                     i == full -> c.accent.copy(alpha = frac)
                     else -> Color.Transparent
                 }
                 withStyle(androidx.compose.ui.text.SpanStyle(color = col)) { append(ch) }
             }
         },
-        style = MaterialTheme.typography.headlineSmall.copy(fontSize = size, fontWeight = FontWeight.Bold, lineHeight = size * 1.25f),
+        style = MaterialTheme.typography.headlineSmall.copy(fontSize = size, fontWeight = FontWeight.Bold, lineHeight = lineHeight),
         textAlign = TextAlign.Center,
         modifier = Modifier.widthIn(max = 560.dp).graphicsLayer {
+            // Read in the draw phase: the line moves and fades every frame without recomposing.
+            val pose = LyricLayout.pose(clock.longValue, startMs, endMs, hasNext)
+            alpha = if (pose.visible) pose.alpha else 0f
             val a = stage.a
-            translationY = -a.beat * 2.dp.toPx()
-            val k = 1f + a.vocal * 0.03f
+            translationY = pose.offset * lineHeight.toPx() - (if (current) a.beat * 2.dp.toPx() else 0f)
+            val k = if (current) 1f + a.vocal * 0.03f else 1f
             scaleX = k; scaleY = k
         },
     )

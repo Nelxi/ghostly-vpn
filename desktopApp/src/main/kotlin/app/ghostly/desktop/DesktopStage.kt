@@ -58,30 +58,19 @@ class DesktopStage(dataDir: String) : StageSource {
     private val _track = MutableStateFlow<NowPlaying?>(null)
     override val track: StateFlow<NowPlaying?> = _track.asStateFlow()
 
-    // Position: last reported value + wall clock while playing (players report ~every poll).
-    @Volatile private var basePos = 0L
-    @Volatile private var baseAt = 0L
-    @Volatile private var advancing = false
+    // What the player reports (whole seconds, once a poll) goes into the shared lyric time; the UI
+    // reads only that (see app.ghostly.core.stage.LyricTime — the Kasane media bar's clock).
     @Volatile private var msFactor = 1000.0
     private var lastRawPos = -1L
     private var quietPolls = 0
 
-    private val clock = PlaybackClock()
+    private val lyricTime = app.ghostly.core.stage.LyricTime()
     @Volatile private var trackKey = ""
 
-    /**
-     * Smooth playback time for typing the lines. SMTC reports whole seconds, and only every poll,
-     * so typing straight from it stutters; the clock runs on its own and only steers towards it.
-     */
-    @Synchronized
+    /** The time the lines are typed by: smooth, at the track's pace, steered by the player's position. */
     override fun positionMs(): Long {
         val t = _track.value ?: return 0L
-        // Players report position late (and a line starts typing at its first letter), so lines ran a hair
-        // behind the voice: run the lyric clock a little ahead. A constant phase shift, never tied to the
-        // transient play flag — toggling it (a player briefly re-reporting a pause) used to yank the text
-        // ~0.6 s back and re-show the previous line for a moment.
-        val p = clock.update(System.currentTimeMillis(), trackKey, basePos, advancing) + LYRIC_LEAD_MS
-        return if (t.durationMs > 0) p.coerceIn(0, t.durationMs) else max(0, p)
+        return synchronized(lyricTime) { lyricTime.nowMs(System.currentTimeMillis(), t.durationMs) }
     }
 
     override fun start() {
@@ -175,9 +164,7 @@ class DesktopStage(dataDir: String) : StageSource {
                         val title = m.title; val artist = m.artist; val dur = m.duration
                         scope.launch(Dispatchers.IO) { loadLines(newKey, title, artist, dur) }
                     }
-                    basePos = (raw * msFactor).toLong()
-                    baseAt = now
-                    advancing = playing
+                    synchronized(lyricTime) { lyricTime.report(newKey, (raw * msFactor).toLong(), playing, now) }
                     _track.value = _track.value?.copy(playing = playing, durationMs = (m.duration * msFactor).toLong())
                 }.isSuccess
                 // The helper paces the loop (one line per poll); a failure backs off before it is restarted.
@@ -362,54 +349,6 @@ class DesktopStage(dataDir: String) : StageSource {
 
     private companion object {
         const val POLL_MS = 1200L
-        const val LYRIC_LEAD_MS = 620L
     }
 }
 
-/**
- * Lyric clock, ported from the Kasane media bar (LyricPlaybackClock): runs on frame time at the
- * track's pace and only uses the player's position as a phase reference.
- * - drift under 350 ms: untouched, typing goes 1:1;
- * - more: steer the rate by at most ±12% (fractions of a ms per frame — invisible);
- * - 2.5 s or more: that's a seek or a new track, jump;
- * - position stopped moving: paused, the clock waits instead of running ahead.
- */
-private class PlaybackClock {
-    private var key = ""
-    private var ready = false
-    private var clockMs = 0L
-    private var frameAt = 0L
-    private var reference = Long.MIN_VALUE
-    private var referenceMovedAt = 0L
-
-    fun update(now: Long, trackKey: String, referenceMs: Long, advancing: Boolean): Long {
-        if (!ready || trackKey != key) {
-            key = trackKey; ready = true
-            clockMs = referenceMs; frameAt = now; reference = referenceMs; referenceMovedAt = now
-            return clockMs
-        }
-        val frameDelta = (now - frameAt).coerceIn(0L, 200L)
-        frameAt = now
-        if (referenceMs != reference) {
-            reference = referenceMs
-            referenceMovedAt = now
-        }
-        val running = advancing || now - referenceMovedAt < 1300L
-        val error = referenceMs - clockMs
-        if (!running) {
-            if (abs(error) >= 2500L) clockMs = referenceMs
-            return clockMs
-        }
-        if (abs(error) >= 2500L) {
-            clockMs = referenceMs
-            return clockMs
-        }
-        val rate = when {
-            error > 350L -> 1.12
-            error < -350L -> 0.88
-            else -> 1.0
-        }
-        clockMs += (frameDelta * rate).toLong()
-        return clockMs
-    }
-}
