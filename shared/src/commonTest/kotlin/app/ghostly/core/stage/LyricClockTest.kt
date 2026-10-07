@@ -76,6 +76,32 @@ class LyricClockTest {
     }
 
     @Test
+    fun aPlayerThatPublishesItsPositionRarelyDoesNotPullTheLineBack() {
+        // Spotify on Windows: the position is published about once in 4.5 s; every read in between
+        // returns the same number. Reported with the moment it was published, it is carried forward.
+        val track = NowPlaying("t", "a", 0, true, lines = (0 until 60).map { LyricLine(12_000L + it * 2_300L, "line $it") }, synced = true)
+        val time = LyricTime()
+        var now = 1_000_000L
+        var trueMs = 12_503L
+        var publishedMs = trueMs
+        var publishedAt = now
+        val seen = mutableListOf<Long>()
+        repeat(120_000 / 16) { frame ->
+            if (now - publishedAt >= 4_500) { publishedMs = trueMs; publishedAt = now }
+            if (frame % 75 == 0) time.report("song", publishedMs, true, publishedAt) // a poll every 1.2 s
+            seen += time.nowMs(now, 0)
+            now += 16
+            trueMs += 16
+        }
+        val steps = seen.zipWithNext { a, b -> b - a }
+        assertTrue(steps.all { it >= 0 }, "the clock went back: ${steps.filter { it < 0 }.take(5)}")
+        assertTrue(steps.all { it in 13..19 }, "a frame stalled or leapt: ${steps.filter { it !in 13..19 }.take(5)}")
+        val shown = seen.map { track.lineAt(it) }
+        assertTrue(shown.zipWithNext().all { (a, b) -> b >= a }, "a line came back")
+        assertTrue(abs(trueMs - seen.last()) < 400, "off by ${trueMs - seen.last()} ms")
+    }
+
+    @Test
     fun aPauseStopsTheClockAndPlayingOnResumesIt() {
         val s = Sim().apply { trueMs = 30_000; run(10_000, report = { it }) }
         s.playing = false

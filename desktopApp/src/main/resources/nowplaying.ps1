@@ -1,7 +1,10 @@
 # Ghostly now-playing helper: prints the current system media session (SMTC) as one JSON line per poll.
 # Runs as its own process so a misbehaving media session can only end this helper, never the app.
-# Output: {"t":title,"a":artist,"pos":seconds,"dur":seconds,"play":bool}, {} when nothing plays,
-# {"err":1} when a read failed.
+# Output: {"t":title,"a":artist,"pos":seconds,"pms":milliseconds,"age":milliseconds,"dur":seconds,"play":bool},
+# {} when nothing plays, {"err":1} when a read failed.
+# "pos"/"pms" is the position as the player last published it and "age" how long ago that was (-1 when the
+# player gives no usable time). Players publish rarely — Spotify about once in 4.5 s — so the position alone
+# stands still between two publications while the track goes on.
 param([int]$PollMs = 1200)
 
 $ErrorActionPreference = 'Stop'
@@ -31,10 +34,16 @@ while ($true) {
             if ($p -and ($p.Title -or $p.Artist)) {
                 $tl = $s.GetTimelineProperties()
                 $pb = $s.GetPlaybackInfo()
+                $age = ([DateTimeOffset]::UtcNow - $tl.LastUpdatedTime).TotalMilliseconds
+                # No publication time (year 1601) or a clock that disagrees: the app then treats the
+                # position as fresh, as before.
+                if ($age -lt 0 -or $age -gt 86400000) { $age = -1 }
                 $line = @{
                     t    = [string]$p.Title
                     a    = [string]$p.Artist
                     pos  = [math]::Floor($tl.Position.TotalSeconds)
+                    pms  = [math]::Floor($tl.Position.TotalMilliseconds)
+                    age  = [math]::Floor($age)
                     dur  = [math]::Floor($tl.EndTime.TotalSeconds)
                     play = ([string]$pb.PlaybackStatus -eq 'Playing')
                 } | ConvertTo-Json -Compress

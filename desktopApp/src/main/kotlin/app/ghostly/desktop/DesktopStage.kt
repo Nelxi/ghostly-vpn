@@ -88,8 +88,15 @@ class DesktopStage(dataDir: String) : StageSource {
 
     // ------------------------------------------------------------------ now playing
 
-    /** One reading of the system media session as the helper reports it; times in seconds. */
-    private class Snap(val title: String, val artist: String, val position: Long, val duration: Long, val playing: Boolean)
+    /**
+     * One reading of the system media session as the helper reports it; [position] and [duration] in
+     * seconds. [positionMs] is the same position in ms and [ageMs] how long ago the player published
+     * it (-1: unknown) — between two publications a player keeps reporting the same position.
+     */
+    private class Snap(
+        val title: String, val artist: String, val position: Long, val duration: Long, val playing: Boolean,
+        val positionMs: Long, val ageMs: Long,
+    )
 
     /**
      * Reads the Windows media session (SMTC) through a separate PowerShell process (resources/nowplaying.ps1).
@@ -111,7 +118,12 @@ class DesktopStage(dataDir: String) : StageSource {
             if (o.isEmpty()) return@runCatching null
             fun str(k: String) = o[k]?.jsonPrimitive?.contentOrNull.orEmpty()
             fun num(k: String) = o[k]?.jsonPrimitive?.doubleOrNull?.toLong() ?: 0L
-            Snap(str("t"), str("a"), num("pos"), num("dur"), o["play"]?.jsonPrimitive?.contentOrNull == "true")
+            val pos = num("pos")
+            Snap(
+                str("t"), str("a"), pos, num("dur"), o["play"]?.jsonPrimitive?.contentOrNull == "true",
+                positionMs = if (o.containsKey("pms")) num("pms") else pos * 1000,
+                ageMs = if (o.containsKey("age")) num("age") else -1L,
+            )
         }
 
         private fun start(): java.io.BufferedReader {
@@ -164,7 +176,12 @@ class DesktopStage(dataDir: String) : StageSource {
                         val title = m.title; val artist = m.artist; val dur = m.duration
                         scope.launch(Dispatchers.IO) { loadLines(newKey, title, artist, dur) }
                     }
-                    synchronized(lyricTime) { lyricTime.report(newKey, (raw * msFactor).toLong(), playing, now) }
+                    // The position is reported with the moment the player published it, not the moment it
+                    // was read: Spotify publishes about once in 4.5 s, and the same number read again a
+                    // second later is not a track standing still (the lyric clock ran ahead of it, took the
+                    // growing gap for a rewind and put the previous line back).
+                    val publishedAt = if (m.ageMs >= 0) now - m.ageMs else now
+                    synchronized(lyricTime) { lyricTime.report(newKey, m.positionMs, playing, publishedAt) }
                     _track.value = _track.value?.copy(playing = playing, durationMs = (m.duration * msFactor).toLong())
                 }.isSuccess
                 // The helper paces the loop (one line per poll); a failure backs off before it is restarted.
