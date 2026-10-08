@@ -98,6 +98,8 @@ import app.ghostly.ui.theme.Ghost
 import app.ghostly.ui.theme.Motion
 import app.ghostly.ui.title
 import app.ghostly.ui.transportLabel
+import app.ghostly.ui.section
+import app.ghostly.ui.withoutLte
 
 private enum class Sort { LIST, PING, NAME }
 
@@ -238,22 +240,26 @@ private fun ServersList(
                 // Several countries in one list: consecutive servers of a country get one header with the
                 // flag and the country's name, and the rows show the protocol instead of repeating the flag.
                 // Sorting by ping mixes countries, so there the flags stay on the rows.
-                val byCountry = sort != Sort.PING && list.mapNotNull { it.title().flag }.distinct().size > 1
-                // One section per country (order of first appearance; the provider's order inside it),
-                // so a torrent server at the end doesn't split "Финляндия" into two sections.
+                // A country comes as two sections: its regular servers, then its «LTE» group (white lists).
+                val byCountry = sort != Sort.PING && list.mapNotNull { it.section() }.distinct().size > 1
+                // One section per country and kind (order of first appearance; the provider's order inside
+                // it), so a torrent server at the end doesn't split "Финляндия" into two sections.
                 val rows = if (byCountry) {
                     val order = list.mapNotNull { it.title().flag }.distinct()
-                    list.sortedBy { srv -> srv.title().flag?.let { order.indexOf(it) } ?: -1 }
+                    list.sortedWith(compareBy({ srv -> srv.title().flag?.let { order.indexOf(it) } ?: -1 }, { it.section()?.lte == true }))
                 } else list
-                val flags = rows.map { it.title().flag }
+                val sections = rows.map { it.section() }
                 rows.forEachIndexed { i, s ->
-                    val flag = flags[i]
-                    if (byCountry && flag != null && (i == 0 || flags[i - 1] != flag)) {
-                        item(key = "country:" + profile.id + ":" + i) { CountryHeader(flag, Modifier.animateItem()) }
+                    val section = sections[i]
+                    if (byCountry && section != null && (i == 0 || sections[i - 1] != section)) {
+                        item(key = "country:" + profile.id + ":" + i) { CountryHeader(section, Modifier.animateItem()) }
                     }
                     item(key = s.id) {
                         val animate = remember(s.id) { seen.add(s.id) && i < 12 }
-                        ServerRow(s, s.id == selected, pings[s.id], s.id in pinging, s.id in favorites, controller, Modifier.appear(i, enabled = animate).animateItem(), showFlag = !(byCountry && flag != null)) { pick(s) }
+                        ServerRow(
+                            s, s.id == selected, pings[s.id], s.id in pinging, s.id in favorites, controller, Modifier.appear(i, enabled = animate).animateItem(),
+                            showFlag = !(byCountry && section != null), underLte = byCountry && section?.lte == true,
+                        ) { pick(s) }
                     }
                 }
             }
@@ -284,14 +290,18 @@ private fun SearchField(value: String, onChange: (String) -> Unit, modifier: Mod
     }
 }
 
-/** Country section inside a subscription: flag + name, quieter than the subscription header. */
+/** Country section inside a subscription: flag + name (+ «LTE» for its white-list group), quieter than the subscription header. */
 @Composable
-private fun CountryHeader(flag: String, modifier: Modifier = Modifier) {
+private fun CountryHeader(section: app.ghostly.ui.ServerSection, modifier: Modifier = Modifier) {
     val c = Ghost.colors
     Row(modifier.padding(start = LocalListPad.current + 14.dp, top = 14.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        app.ghostly.ui.components.FlagIcon(flag, 13.dp)
+        app.ghostly.ui.components.FlagIcon(section.flag, 13.dp)
         Spacer(Modifier.width(8.dp))
-        Text(app.ghostly.ui.countryName(flag), style = MaterialTheme.typography.labelMedium, color = c.ink2)
+        Text(app.ghostly.ui.countryName(section.flag), style = MaterialTheme.typography.labelMedium, color = c.ink2)
+        if (section.lte) {
+            Spacer(Modifier.width(6.dp))
+            Tag("LTE", color = c.accent)
+        }
     }
 }
 
@@ -421,7 +431,7 @@ private fun BestRow(server: Server, ms: Long?, onClick: () -> Unit) {
 @Composable
 private fun ServerRow(
     server: Server, selected: Boolean, ping: Ping?, loading: Boolean, favorite: Boolean,
-    controller: GhostlyController, modifier: Modifier = Modifier, showFlag: Boolean = true, onClick: () -> Unit,
+    controller: GhostlyController, modifier: Modifier = Modifier, showFlag: Boolean = true, underLte: Boolean = false, onClick: () -> Unit,
 ) {
     val c = Ghost.colors
     val interaction = remember { MutableInteractionSource() }
@@ -460,7 +470,7 @@ private fun ServerRow(
         ServerGlyph(server, showFlag)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            val t = server.title()
+            val t = server.title().let { if (underLte) it.withoutLte() else it }
             Row(verticalAlignment = Alignment.Bottom) {
                 // The name stays whole; the variant ("Стабильный", "Резерв") is what gets ellipsized.
                 app.ghostly.ui.components.FlagText(t.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, softWrap = false)

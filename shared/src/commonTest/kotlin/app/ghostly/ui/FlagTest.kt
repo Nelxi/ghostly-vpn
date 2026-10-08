@@ -33,6 +33,29 @@ class ServerTitleTest {
     }
 }
 
+class ServerSectionTest {
+    private fun server(name: String, pool: String?) = app.ghostly.core.model.Server(id = name, name = name, protocol = "vless", pool = pool)
+
+    @Test
+    fun countryIsSplitIntoRegularAndLte() {
+        assertEquals(ServerSection("🇫🇮", lte = false), server("🇫🇮 ⚡ Vision", "reg").section())
+        assertEquals(ServerSection("🇫🇮", lte = true), server("🇫🇮 LTE · Основной", "wl").section())
+        // The Hysteria2 white list is sent as pool "wl" too.
+        assertEquals(ServerSection("🇩🇪", lte = true), server("🇩🇪 LTE · Hysteria2", "wl").section())
+        assertNull(server("Просто сервер", null).section())
+    }
+
+    @Test
+    fun lteRowsDropThePrefixUnderTheirHeader() {
+        val t = server("🇫🇮 LTE · Резерв", "wl").title().withoutLte()
+        assertEquals("Резерв", t.title)
+        assertNull(t.subtitle)
+        // Names that don't start with it stay as they are.
+        assertEquals("Белые списки", server("🇫🇮 Белые списки", "wl").title().withoutLte().title)
+        assertEquals("LTE", server("🇫🇮 LTE", "wl").title().withoutLte().title)
+    }
+}
+
 class FlagPairTest {
     @Test
     fun findsFlagsAnywhere() {

@@ -98,6 +98,21 @@ fun Server.title(): ServerTitle {
     else ServerTitle(flag, n.ifEmpty { name }, null)
 }
 
+/**
+ * A country's part of the server list. Ghostly ships every country twice: its regular servers and an
+ * «LTE» group — the same country over the routes that pass mobile white lists.
+ */
+data class ServerSection(val flag: String, val lte: Boolean)
+
+fun Server.section(): ServerSection? = title().flag?.let { ServerSection(it, isWhitelist) }
+
+/** Under an «LTE» header the rows don't repeat it: "LTE · Резерв" → "Резерв". */
+fun ServerTitle.withoutLte(): ServerTitle {
+    if (!title.equals("LTE", ignoreCase = true) || subtitle == null) return this
+    val parts = subtitle.split(" · ")
+    return ServerTitle(flag, parts.first(), parts.drop(1).joinToString(" · ").ifEmpty { null })
+}
+
 /** A regional-indicator pair (a flag emoji) anywhere in a string. */
 private val FLAG_ANYWHERE = Regex("[\\x{1F1E6}-\\x{1F1FF}]{2}")
 
