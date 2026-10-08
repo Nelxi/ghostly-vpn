@@ -137,8 +137,10 @@ class MihomoVpnService : VpnService() {
                 .addRoute("0.0.0.0", 0)
                 .addDnsServer(TUN_DNS)
                 .setBlocking(false)
-                // Like Prizrak Box: apps that legitimately manage their own sockets may bypass.
-                .allowBypass()
+                // No allowBypass(): with it any app inside the tunnel may bind a socket to the physical
+                // network and read the real IP next to the tunnel's one (detectors report exactly this
+                // as a "VPN gateway leak"). The Xray service never allowed it either; our own sockets
+                // don't need it — the VPN's owner may always protect() and pick a network.
                 .setConfigureIntent(openAppIntent())
             if (ipv6) {
                 builder.addAddress(TUN_GATEWAY6, 126)

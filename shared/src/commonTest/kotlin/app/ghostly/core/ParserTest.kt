@@ -15,6 +15,7 @@ import kotlin.io.encoding.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ParserTest {
@@ -56,6 +57,18 @@ class ParserTest {
         val tls = s.outbound!!["streamSettings"]!!.jsonObject["tlsSettings"]!!.jsonObject
         assertEquals("b0f3f509", tls["pinnedPeerCertSha256"]!!.jsonPrimitive.content)
         assertEquals("hysteria", s.outbound["protocol"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun hysteria2Salamander() {
+        val s = assertNotNull(LinkParser.parse(hy2.replace("#", "&obfs=salamander&obfs-password=p%40ss#"), "t:3"))
+        val mask = s.outbound!!["streamSettings"]!!.jsonObject["finalmask"]!!.jsonObject["udp"]!!.jsonArray.single().jsonObject
+        assertEquals("salamander", mask["type"]!!.jsonPrimitive.content)
+        assertEquals("p@ss", mask["settings"]!!.jsonObject["password"]!!.jsonPrimitive.content)
+        // an obfuscated link without its password, or with an unknown obfuscation, is not a server
+        assertNull(LinkParser.parse(hy2.replace("#", "&obfs=salamander#"), "t:4"))
+        assertNull(LinkParser.parse(hy2.replace("#", "&obfs=other&obfs-password=x#"), "t:5"))
+        assertNull(LinkParser.parse(hy2, "t:6")!!.outbound!!["streamSettings"]!!.jsonObject["finalmask"])
     }
 
     @Test

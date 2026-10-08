@@ -202,8 +202,11 @@ object LinkParser {
 
     private fun hysteria2(link: String, id: String): Server? {
         val u = ShareUri.parse(link) ?: return null
-        // Salamander obfuscation is not supported by Xray's hysteria outbound.
-        if (u.q("obfs") != null && u.q("obfs") != "none") return null
+        // Salamander is the only obfuscation Hysteria2 has; Xray applies it as a UDP "finalmask".
+        val obfs = u.q("obfs")?.takeIf { it != "none" }
+        if (obfs != null && obfs != "salamander") return null
+        val obfsPassword = u.q("obfs-password")
+        if (obfs != null && obfsPassword.isNullOrEmpty()) return null
         val auth = u.userInfo ?: ""
         val sni = u.q("sni") ?: u.host
         val pin = u.q("pinSHA256")?.replace(":", "")?.lowercase()
@@ -227,6 +230,14 @@ object LinkParser {
                 putJsonObject("hysteriaSettings") {
                     put("version", 2)
                     put("auth", auth)
+                }
+                if (obfs != null) putJsonObject("finalmask") {
+                    putJsonArray("udp") {
+                        add(buildJsonObject {
+                            put("type", "salamander")
+                            putJsonObject("settings") { put("password", obfsPassword) }
+                        })
+                    }
                 }
             }
         }
