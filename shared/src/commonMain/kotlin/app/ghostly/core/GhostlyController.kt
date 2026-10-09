@@ -150,13 +150,7 @@ class GhostlyController(
         scope.launch(Dispatchers.IO) {
             val link = runCatching { account.cabinet(url, section, backend.appPort) }.getOrNull()
             platform.openUrl(link?.url ?: app.ghostly.core.account.GhostlyAccount.fallback(url, section))
-            when {
-                link == null -> _events.emit("Сервер не ответил — открываю сайт, войдите там в аккаунт")
-                link.login -> Unit
-                link.reason == "totp" -> _events.emit("У аккаунта двухэтапная защита — войдите на сайте с кодом")
-                link.reason == "not_first_device" -> _events.emit("Вход без пароля работает на устройстве, где подписку добавили первой. Здесь войдите на сайте сами")
-                else -> _events.emit("Открываю сайт — войдите в аккаунт")
-            }
+            app.ghostly.core.account.GhostlyAccount.hint(link)?.let { _events.emit(it) }
         }
     }
 
@@ -917,6 +911,8 @@ class GhostlyController(
         retryAttempts = 0
         failoverAttempts = 0
         resolvePortConflicts()
+        // While our own core runs it is the one holding those ports.
+        if (backend.state.value is VpnState.Idle || backend.state.value is VpnState.Failed) dropBusyExtraProxies()
         // «Авто» from the subscription is an Xray balancer that already includes white-list servers:
         // switching away from it would just fight the balancer.
         val target = if (_settings.value.saveWhitelist && !server.isAuto) chooseForNetwork(server) else server
@@ -969,6 +965,16 @@ class GhostlyController(
             updateSettings { it.copy(socksPort = socks, httpPort = http) }
             _events.emit("Порты ${s.socksPort}/${s.httpPort} заняты другой программой — Ghostly перешёл на $socks/$http")
         }
+    }
+
+    /** An additional proxy whose port another program holds would stop the whole core: it sits this connect out. */
+    private suspend fun dropBusyExtraProxies() {
+        val s = _settings.value
+        val listen = if (s.allowLan) "0.0.0.0" else "127.0.0.1"
+        val busy = s.extraProxies.filter { it.ready && !platform.isPortFree(it.port, listen) }
+        if (busy.isEmpty()) return
+        updateSettings { st -> st.copy(extraProxies = st.extraProxies.map { x -> if (busy.any { it.id == x.id }) x.copy(enabled = false) else x }) }
+        _events.emit("Порт ${busy.joinToString { it.port.toString() }} занят другой программой — дополнительный прокси на нём выключен")
     }
 
     private suspend fun reconnect() {
@@ -1262,7 +1268,10 @@ class GhostlyController(
 
     // ------------------------------------------------------------------ persistence
 
-    private fun saveProfiles() = store.save(PROFILES, ListSerializer(Profile.serializer()), _profiles.value)
+    private fun saveProfiles() {
+        store.save(PROFILES, ListSerializer(Profile.serializer()), _profiles.value)
+        syncExtraProxies()
+    }
 
     private fun saveUi() = store.save(
         STATE, UiState.serializer(),
@@ -1281,6 +1290,55 @@ class GhostlyController(
     }
 
     fun regenerateProxyCredentials() = updateSettings { it.copy(proxyUser = randomUser(), proxyPass = randomPassword()) }
+
+    // ------------------------------------------------------------------ additional proxies
+
+    /** Servers an additional proxy can be bound to: real ones the Xray core can dial («Авто» is a balancer). */
+    fun extraProxyServers(): List<Server> = _profiles.value.flatMap { it.servers }
+        .filter { app.ghostly.core.xray.XrayConfigBuilder.proxyOutbound(it) != null }
+
+    /** The server an additional proxy is bound to, if its subscription still has it. */
+    fun extraProxyServer(x: app.ghostly.core.model.ExtraProxy): Server? =
+        _profiles.value.firstOrNull { it.id == x.profileId }?.servers?.firstOrNull { it.name == x.serverName }
+
+    /** A new additional proxy: the next free port, no password, a random regular server to start with. */
+    fun addExtraProxy() {
+        val s = _settings.value
+        val used = s.extraProxies.map { it.port }.toSet() + s.socksPort + s.httpPort
+        val listen = if (s.allowLan) "0.0.0.0" else "127.0.0.1"
+        var port = 11080
+        while (port < 65000 && (port in used || !platform.isPortFree(port, listen))) port++
+        val pool = extraProxyServers().let { all -> all.filter { !it.isWhitelist && it.id != _selected.value }.ifEmpty { all } }
+        val x = app.ghostly.core.model.ExtraProxy(id = newId(), port = port, user = randomUser(), pass = randomPassword())
+        updateSettings { it.copy(extraProxies = it.extraProxies + bound(x, pool.randomOrNull())) }
+    }
+
+    fun updateExtraProxy(id: String, transform: (app.ghostly.core.model.ExtraProxy) -> app.ghostly.core.model.ExtraProxy) =
+        updateSettings { s -> s.copy(extraProxies = s.extraProxies.map { if (it.id == id) transform(it) else it }) }
+
+    fun removeExtraProxy(id: String) = updateSettings { s -> s.copy(extraProxies = s.extraProxies.filterNot { it.id == id }) }
+
+    fun bindExtraProxy(id: String, serverId: String) {
+        val server = server(serverId) ?: return
+        updateExtraProxy(id) { bound(it, server) }
+    }
+
+    private fun bound(x: app.ghostly.core.model.ExtraProxy, server: Server?) = x.copy(
+        profileId = server?.let { profileOf(it.id)?.id },
+        serverName = server?.name,
+        outbound = server?.let { app.ghostly.core.xray.XrayConfigBuilder.proxyOutbound(it) },
+    )
+
+    /** Subscriptions changed: the additional proxies follow their servers' new keys and addresses. */
+    private fun syncExtraProxies() {
+        if (_settings.value.extraProxies.isEmpty()) return
+        updateSettings { s ->
+            s.copy(extraProxies = s.extraProxies.map { x ->
+                if (x.serverName == null) x
+                else x.copy(outbound = extraProxyServer(x)?.let { app.ghostly.core.xray.XrayConfigBuilder.proxyOutbound(it) })
+            })
+        }
+    }
 
     private fun hostOf(url: String) = url.substringAfter("://").substringBefore('/').substringBefore(':')
 

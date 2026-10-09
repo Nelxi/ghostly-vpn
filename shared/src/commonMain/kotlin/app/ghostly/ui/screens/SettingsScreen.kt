@@ -220,6 +220,7 @@ private fun MainSettings(controller: GhostlyController, contentPadding: PaddingV
                 }
                 Text(
                     "Кабинет открывается в браузере уже с вашим аккаунтом — на устройстве, где подписку добавили первой. " +
+                        "На другом своём устройстве войдите на сайте один раз и подтвердите его: дальше откроется так же. " +
                         "Пароль и двухэтапная защита меняются только после обычного входа на сайте.",
                     style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
                 )
@@ -682,11 +683,13 @@ private fun ProxyPage(controller: GhostlyController, contentPadding: PaddingValu
             Text("Нажми, чтобы скопировать", style = MaterialTheme.typography.labelSmall, color = c.ink3)
             Text(shownLink, style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace, color = c.ink))
         }
+        ExtraProxiesSection(controller, if (s.allowLan) lan ?: "127.0.0.1" else "127.0.0.1")
+        Spacer(Modifier.height(24.dp))
     }
 }
 
 @Composable
-private fun PortField(label: String, value: Int, modifier: Modifier, onChange: (Int) -> Unit) {
+internal fun PortField(label: String, value: Int, modifier: Modifier, onChange: (Int) -> Unit) {
     val c = Ghost.colors
     var text by remember(value) { mutableStateOf(value.toString()) }
     val valid = text.toIntOrNull()?.let { it in 1024..65535 } == true
@@ -711,7 +714,7 @@ private fun PortField(label: String, value: Int, modifier: Modifier, onChange: (
 }
 
 @Composable
-private fun CredentialField(label: String, value: String, controller: GhostlyController, secret: Boolean = false, onChange: (String) -> Unit) {
+internal fun CredentialField(label: String, value: String, controller: GhostlyController, secret: Boolean = false, onChange: (String) -> Unit) {
     val c = Ghost.colors
     var text by remember(value) { mutableStateOf(value) }
     var shown by remember { mutableStateOf(!secret) }

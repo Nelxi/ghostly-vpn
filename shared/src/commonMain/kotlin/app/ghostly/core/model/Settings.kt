@@ -1,6 +1,37 @@
 package app.ghostly.core.model
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
+
+/** What an additional local proxy speaks. */
+@Serializable
+enum class ExtraProxyType(val title: String, val scheme: String) {
+    SOCKS("SOCKS5", "socks5"),
+    HTTP("HTTP", "http"),
+}
+
+/**
+ * An additional local proxy: its own port and login, and its own server. Everything that enters it leaves
+ * through that server, whatever the main connection uses — server auto-switching never touches it.
+ * The server is remembered by subscription and name (ids move when a subscription changes).
+ */
+@Serializable
+data class ExtraProxy(
+    val id: String,
+    val type: ExtraProxyType = ExtraProxyType.SOCKS,
+    val port: Int,
+    val enabled: Boolean = true,
+    val auth: Boolean = false,
+    val user: String = "",
+    val pass: String = "",
+    val profileId: String? = null,
+    val serverName: String? = null,
+    /** The chosen server's outbound, kept in step with the subscription by the controller; null = no such server now. */
+    val outbound: JsonObject? = null,
+) {
+    /** Up when the tunnel is: switched on, a valid port and a server that still exists. */
+    val ready: Boolean get() = enabled && outbound != null && port in 1024..65535
+}
 
 @Serializable
 enum class RoutingMode {
@@ -141,6 +172,8 @@ data class AppSettings(
     val proxyAuth: Boolean = true,
     val proxyUser: String = "",
     val proxyPass: String = "",
+    /** Additional local proxies, each bound to its own server (Xray core). */
+    val extraProxies: List<ExtraProxy> = emptyList(),
     // --- behaviour
     val autoConnect: Boolean = false,
     /** Bring the tunnel up when the device boots (Android BOOT_COMPLETED / desktop autostart). */

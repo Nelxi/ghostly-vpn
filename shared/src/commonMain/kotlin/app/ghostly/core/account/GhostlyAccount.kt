@@ -38,6 +38,12 @@ class GhostlyAccount(private val platform: PlatformInfo, private val userAgent: 
         val reason: String? = null,
         /** The subscription was bought in the Telegram bot. */
         val bot: Boolean = false,
+        /**
+         * No sign-in yet, but [url] lets the person settle it: after an ordinary sign-in the site offers to
+         * remember this device (the owner's second device), or to attach a subscription nobody is recorded
+         * as the owner of to that account. From then on the link signs in by itself.
+         */
+        val pair: Boolean = false,
     )
 
     private fun client(socksPort: Int?) = HttpClient {
@@ -93,6 +99,16 @@ class GhostlyAccount(private val platform: PlatformInfo, private val userAgent: 
 
         /** `…/sub/<id>/cabinet` next to the subscription; null for a link of another shape. */
         fun endpoint(subscriptionUrl: String): String? = Attest.endpoint(subscriptionUrl)?.removeSuffix("/attest")?.plus("/cabinet")
+
+        /** What to tell the person while the browser opens; null when the link signs in by itself. */
+        fun hint(link: Link?): String? = when {
+            link == null -> "Сервер не ответил — открываю сайт, войдите там в аккаунт"
+            link.login -> null
+            link.reason == "totp" -> "У аккаунта двухэтапная защита — войдите на сайте с кодом"
+            link.pair -> "Войдите на сайте и подтвердите это устройство — дальше кабинет будет открываться сам"
+            link.reason == "not_first_device" -> "Вход без пароля работает на устройстве, где подписку добавили первой. Здесь войдите на сайте сами"
+            else -> "Открываю сайт — войдите в аккаунт"
+        }
 
         /** Where to send the person when the server could not be asked: the site, on the same section. */
         fun fallback(subscriptionUrl: String, go: String): String {

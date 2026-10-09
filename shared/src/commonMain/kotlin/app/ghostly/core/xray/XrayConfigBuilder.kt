@@ -2,6 +2,8 @@ package app.ghostly.core.xray
 
 import app.ghostly.core.model.AppSettings
 import app.ghostly.core.model.DnsPreset
+import app.ghostly.core.model.ExtraProxy
+import app.ghostly.core.model.ExtraProxyType
 import app.ghostly.core.model.RoutingMode
 import app.ghostly.core.model.Server
 import app.ghostly.core.vpn.LoopbackAuth
@@ -85,16 +87,18 @@ object XrayConfigBuilder {
             put("loglevel", settings.logLevel)
             if (errorLog != null) { put("error", errorLog); put("access", "none") }
         }
-        cfg["inbounds"] = inbounds(ingress, settings)
+        val extras = extraProxies(settings, ingress)
+        cfg["inbounds"] = JsonArray(inbounds(ingress, settings) + extras.map { extraInbound(it, settings) })
 
         var outbounds = (cfg["outbounds"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.map { stripMeta(it) }
         outbounds = ensureService(outbounds)
+        outbounds = outbounds + extras.map { JsonObject(stripMeta(it.outbound!!) + ("tag" to JsonPrimitive(extraTag(it)))) }
         outbounds = applyMux(outbounds, settings)
         outbounds = applyFragment(outbounds, settings)
         outbounds = applyFastOpen(outbounds, settings)
         cfg["outbounds"] = JsonArray(outbounds)
 
-        cfg["routing"] = routing(cfg["routing"] as? JsonObject, settings, fromProvider = server.config != null)
+        cfg["routing"] = routing(cfg["routing"] as? JsonObject, settings, fromProvider = server.config != null, extras = extras)
         cfg["dns"] = dns(cfg["dns"] as? JsonObject, settings)
 
         cfg["stats"] = JsonObject(emptyMap())
@@ -155,7 +159,7 @@ object XrayConfigBuilder {
 
     // ------------------------------------------------------------------ pieces
 
-    private fun inbounds(ingress: Ingress, settings: AppSettings): JsonArray = buildJsonArray {
+    private fun inbounds(ingress: Ingress, settings: AppSettings): List<JsonElement> = buildJsonArray {
         val sniffing = buildJsonObject {
             put("enabled", settings.sniffing)
             putJsonArray("destOverride") { listOf("http", "tls", "quic").forEach { add(JsonPrimitive(it)) } }
@@ -220,6 +224,50 @@ object XrayConfigBuilder {
             add(http("http-in", p.listen, p.httpPort, p.user, p.pass))
         }
         if (ingress.appPort > 0) add(socks("app-in", "127.0.0.1", ingress.appPort, LoopbackAuth.user, LoopbackAuth.pass))
+    }
+
+    // ------------------------------------------------------------------ additional proxies
+
+    private fun extraTag(x: ExtraProxy) = "xp-" + x.id
+
+    /**
+     * The additional proxies that can come up with this tunnel: switched on, with a server, on a port
+     * nothing else in the config listens on (the core refuses to start on a duplicate port).
+     */
+    fun extraProxies(settings: AppSettings, ingress: Ingress): List<ExtraProxy> {
+        val taken = buildSet {
+            ingress.proxy?.let { add(it.socksPort); add(it.httpPort) }
+            if (ingress.appPort > 0) add(ingress.appPort)
+            if (ingress is Ingress.Proxy && ingress.osHttpPort > 0) add(ingress.osHttpPort)
+        }.toMutableSet()
+        return settings.extraProxies.filter { it.ready && taken.add(it.port) }
+    }
+
+    private fun extraInbound(x: ExtraProxy, settings: AppSettings): JsonObject = buildJsonObject {
+        val account = x.takeIf { it.auth && it.user.isNotBlank() && it.pass.isNotBlank() }
+        put("tag", extraTag(x))
+        put("protocol", if (x.type == ExtraProxyType.SOCKS) "socks" else "http")
+        put("listen", if (settings.allowLan) "0.0.0.0" else "127.0.0.1")
+        put("port", x.port)
+        putJsonObject("settings") {
+            if (x.type == ExtraProxyType.SOCKS) {
+                put("udp", true)
+                put("auth", if (account != null) "password" else "noauth")
+            }
+            if (account != null) putJsonArray("accounts") { add(buildJsonObject { put("user", account.user); put("pass", account.pass) }) }
+        }
+    }
+
+    /**
+     * The outbound that reaches [server] itself, for an additional proxy: a link server's own, or the
+     * main proxy of a provider config. Null for a balancer («Авто») — there is no single server in it.
+     */
+    fun proxyOutbound(server: Server): JsonObject? {
+        if (server.isAuto) return null
+        server.outbound?.let { return stripMeta(it) }
+        val all = (server.config?.get("outbounds") as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+        val main = all.firstOrNull { tag(it) == PROXY } ?: all.firstOrNull { it["protocol"]?.jsonPrimitive?.contentOrNull in PING_PROTOCOLS }
+        return main?.let(::stripMeta)
     }
 
     /** Loopback SOCKS inbound of a throwaway ping core, behind [LoopbackAuth] like `app-in`. */
@@ -310,7 +358,7 @@ object XrayConfigBuilder {
         }
     }
 
-    private fun routing(original: JsonObject?, settings: AppSettings, fromProvider: Boolean): JsonObject {
+    private fun routing(original: JsonObject?, settings: AppSettings, fromProvider: Boolean, extras: List<ExtraProxy> = emptyList()): JsonObject {
         val src = original ?: buildJsonObject { }
         var rules = (src["rules"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
 
@@ -341,7 +389,15 @@ object XrayConfigBuilder {
         val (dnsRules, rest) = rules.partition { it["port"]?.jsonPrimitive?.contentOrNull == "53" }
         val out = src.toMutableMap()
         if (out["domainStrategy"] == null) out["domainStrategy"] = JsonPrimitive("IPIfNonMatch")
-        out["rules"] = JsonArray(dnsRules + userRules + rest)
+        // An additional proxy is a straight pipe into its own server: no split rules, no balancer.
+        val extraRules = extras.map { x ->
+            buildJsonObject {
+                put("type", "field")
+                putJsonArray("inboundTag") { add(JsonPrimitive(extraTag(x))) }
+                put("outboundTag", extraTag(x))
+            }
+        }
+        out["rules"] = JsonArray(extraRules + dnsRules + userRules + rest)
         return JsonObject(out)
     }
 
