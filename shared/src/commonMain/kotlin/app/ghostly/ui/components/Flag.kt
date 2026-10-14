@@ -203,6 +203,51 @@ private val FLAGS: Map<String, FlagPainter> = mapOf(
         drawRect(Color(0xFF00AFCA))
         drawCircle(Color(0xFFFEC50C), size.height * 0.2f, Offset(size.width * 0.52f, size.height * 0.45f))
     },
+    // Flags of the app's languages (the language picker), simplified like the others.
+    "BY" to {
+        drawRect(Color(0xFFC8313E))
+        drawRect(Color(0xFF4AA657), Offset(0f, size.height * 2 / 3), Size(size.width, size.height / 3 + 1f))
+        drawRect(Color.White, size = Size(size.width * 0.16f, size.height))
+    },
+    "UZ" to {
+        h(0xFF0099B5, 0xFFFFFFFF, 0xFF1EB53A)()
+        val line = size.height * 0.04f
+        drawRect(Color(0xFFCE1126), Offset(0f, size.height / 3 - line / 2), Size(size.width, line))
+        drawRect(Color(0xFFCE1126), Offset(0f, size.height * 2 / 3 - line / 2), Size(size.width, line))
+        drawCircle(Color.White, size.height * 0.11f, Offset(size.width * 0.18f, size.height * 0.17f))
+    },
+    "IR" to {
+        h(0xFF239F40, 0xFFFFFFFF, 0xFFDA0000)()
+        drawCircle(Color(0xFFDA0000), size.height * 0.1f, center, style = Stroke(size.height * 0.04f))
+    },
+    "SA" to {
+        drawRect(Color(0xFF006C35))
+        drawRect(Color.White, Offset(size.width * 0.25f, size.height * 0.62f), Size(size.width * 0.5f, size.height * 0.05f))
+    },
+    "CN" to {
+        drawRect(Color(0xFFEE1C25))
+        drawCircle(Color(0xFFFFFF00), size.height * 0.15f, Offset(size.width * 0.2f, size.height * 0.28f))
+        drawCircle(Color(0xFFFFFF00), size.height * 0.05f, Offset(size.width * 0.38f, size.height * 0.14f))
+        drawCircle(Color(0xFFFFFF00), size.height * 0.05f, Offset(size.width * 0.42f, size.height * 0.3f))
+        drawCircle(Color(0xFFFFFF00), size.height * 0.05f, Offset(size.width * 0.38f, size.height * 0.46f))
+    },
+    "ES" to {
+        drawRect(Color(0xFFAA151B))
+        drawRect(Color(0xFFF1BF00), Offset(0f, size.height / 4), Size(size.width, size.height / 2))
+    },
+    "BR" to {
+        drawRect(Color(0xFF009C3B))
+        val path = androidx.compose.ui.graphics.Path().apply {
+            moveTo(size.width / 2, size.height * 0.1f); lineTo(size.width * 0.92f, size.height / 2)
+            lineTo(size.width / 2, size.height * 0.9f); lineTo(size.width * 0.08f, size.height / 2); close()
+        }
+        drawPath(path, Color(0xFFFFDF00))
+        drawCircle(Color(0xFF002776), size.height * 0.22f, center)
+    },
+    "IN" to {
+        h(0xFFFF9933, 0xFFFFFFFF, 0xFF138808)()
+        drawCircle(Color(0xFF000080), size.height * 0.12f, center, style = Stroke(size.height * 0.035f))
+    },
     "US" to {
         val stripe = size.height / 13
         for (i in 0 until 13) drawRect(Color(if (i % 2 == 0) 0xFFB22234 else 0xFFFFFFFF), Offset(0f, stripe * i), Size(size.width, stripe + 1f))

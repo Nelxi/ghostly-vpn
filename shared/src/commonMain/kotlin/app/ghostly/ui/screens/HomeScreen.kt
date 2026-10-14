@@ -104,6 +104,7 @@ import app.ghostly.ui.theme.Motion
 import app.ghostly.ui.title
 import app.ghostly.ui.transportLabel
 import kotlinx.coroutines.delay
+import app.ghostly.i18n.tr
 
 /** Everything the home screen shows, gathered once and shared by the phone and desktop layouts. */
 @Stable
@@ -184,8 +185,8 @@ fun HomeScreen(controller: GhostlyController, onPickServer: () -> Unit, contentP
         Spacer(Modifier.height(22.dp))
         AnimatedVisibility(m.orb == OrbState.CONNECTED, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
             Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                SpeedCard("Загрузка", Icons.Rounded.ArrowDownward, m.traffic.downSpeed, m.traffic.downTotal, m.down, c.ok, Modifier.weight(1f).appear(0))
-                SpeedCard("Отдача", Icons.Rounded.ArrowUpward, m.traffic.upSpeed, m.traffic.upTotal, m.up, c.accent, Modifier.weight(1f).appear(1))
+                SpeedCard(tr("Загрузка"), Icons.Rounded.ArrowDownward, m.traffic.downSpeed, m.traffic.downTotal, m.down, c.ok, Modifier.weight(1f).appear(0))
+                SpeedCard(tr("Отдача"), Icons.Rounded.ArrowUpward, m.traffic.upSpeed, m.traffic.upTotal, m.up, c.accent, Modifier.weight(1f).appear(1))
             }
         }
         ServerCard(m, onPickServer, Modifier.appear(2))
@@ -217,7 +218,7 @@ fun HomeDesktop(controller: GhostlyController, onAdd: () -> Unit) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     KineticText(greeting(m.now, controller.platform.utcOffsetMinutes()), style = MaterialTheme.typography.headlineMedium, color = c.ink, modifier = Modifier.clipToBounds())
-                    Text(m.profile?.name ?: "Добавь подписку, чтобы начать", style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(m.profile?.name ?: tr("Добавь подписку, чтобы начать"), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 app.ghostly.ui.components.NoticeBell(controller)
                 Spacer(Modifier.width(8.dp))
@@ -240,11 +241,11 @@ fun HomeDesktop(controller: GhostlyController, onAdd: () -> Unit) {
             ) { live ->
                 if (!live) ReadyCard(m, controller)
                 else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    SpeedCard("Загрузка", Icons.Rounded.ArrowDownward, m.traffic.downSpeed, m.traffic.downTotal, m.down, c.ok, Modifier.weight(1f).appear(0), live = true)
-                    SpeedCard("Отдача", Icons.Rounded.ArrowUpward, m.traffic.upSpeed, m.traffic.upTotal, m.up, c.accent, Modifier.weight(1f).appear(1), live = true)
+                    SpeedCard(tr("Загрузка"), Icons.Rounded.ArrowDownward, m.traffic.downSpeed, m.traffic.downTotal, m.down, c.ok, Modifier.weight(1f).appear(0), live = true)
+                    SpeedCard(tr("Отдача"), Icons.Rounded.ArrowUpward, m.traffic.upSpeed, m.traffic.upTotal, m.up, c.accent, Modifier.weight(1f).appear(1), live = true)
                     Column(Modifier.weight(0.8f).appear(2), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                        StatTile(Icons.Rounded.NetworkPing, "Пинг", m.ping?.takeIf { it > 0 }?.let { "$it мс" } ?: "—", pingColor(m.ping))
-                        StatTile(Icons.Rounded.Timer, "Сессия", (m.state as? VpnState.Connected)?.let { Format.duration(m.now - it.since) } ?: "—", c.ink)
+                        StatTile(Icons.Rounded.NetworkPing, tr("Пинг"), m.ping?.takeIf { it > 0 }?.let { tr("{0} мс", it) } ?: "—", pingColor(m.ping))
+                        StatTile(Icons.Rounded.Timer, tr("Сессия"), (m.state as? VpnState.Connected)?.let { Format.duration(m.now - it.since) } ?: "—", c.ink)
                     }
                 }
             }
@@ -257,7 +258,7 @@ fun HomeDesktop(controller: GhostlyController, onAdd: () -> Unit) {
         // Right: servers always at hand (when there is room for them).
         if (showPanel) GlassCard(Modifier.width(panel).fillMaxHeight().appear(1), padding = 0.dp, strong = true) {
             Row(Modifier.padding(start = 20.dp, end = 12.dp, top = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Серверы", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                Text(tr("Серверы"), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
             }
             ServersScreen(controller, PaddingValues(bottom = 12.dp), onAdd = onAdd, showHeader = false, compact = true)
         }
@@ -269,10 +270,10 @@ fun HomeDesktop(controller: GhostlyController, onAdd: () -> Unit) {
 private fun greeting(nowMs: Long, offsetMin: Int): String {
     val h = (((nowMs / 60_000 + offsetMin) / 60) % 24).toInt()
     return when (h) {
-        in 5..11 -> "Доброе утро"
-        in 12..17 -> "Добрый день"
-        in 18..22 -> "Добрый вечер"
-        else -> "Доброй ночи"
+        in 5..11 -> tr("Доброе утро")
+        in 12..17 -> tr("Добрый день")
+        in 18..22 -> tr("Добрый вечер")
+        else -> tr("Доброй ночи")
     }
 }
 
@@ -286,7 +287,7 @@ private fun ReadyCard(m: HomeModel, controller: GhostlyController) {
         val narrow = maxWidth < 440.dp
         val connect: @Composable (Modifier) -> Unit = { mod ->
             app.ghostly.ui.components.AccentButton(
-                if (m.orb == OrbState.CONNECTING) "Подключаю…" else "Подключить",
+                if (m.orb == OrbState.CONNECTING) tr("Подключаю…") else tr("Подключить"),
                 { controller.haptic(app.ghostly.core.vpn.Haptic.HEAVY); controller.toggle() },
                 modifier = mod,
                 icon = Icons.Rounded.Bolt,
@@ -298,8 +299,8 @@ private fun ReadyCard(m: HomeModel, controller: GhostlyController) {
             ServerAvatar(server, 52.dp)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(if (m.orb == OrbState.ERROR) "Попробуем ещё раз?" else "Готов к подключению", style = MaterialTheme.typography.labelSmall, color = c.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (server == null) Text("Сервер не выбран", style = MaterialTheme.typography.titleMedium)
+                Text(if (m.orb == OrbState.ERROR) tr("Попробуем ещё раз?") else tr("Готов к подключению"), style = MaterialTheme.typography.labelSmall, color = c.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (server == null) Text(tr("Сервер не выбран"), style = MaterialTheme.typography.titleMedium)
                 else {
                     val t = server.title()
                     app.ghostly.ui.components.FlagText(t.title + (t.subtitle?.let { " · $it" } ?: ""), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -365,10 +366,10 @@ fun HomeHero(m: HomeModel, controller: GhostlyController, orbSize: Dp) {
         Spacer(Modifier.height(14.dp))
         KineticText(
             when (m.orb) {
-                OrbState.IDLE -> "Не подключено"
-                OrbState.CONNECTING -> if (m.state == VpnState.Disconnecting) "Отключаюсь…" else "Подключаюсь…"
-                OrbState.CONNECTED -> "Ты под защитой"
-                OrbState.ERROR -> "Не удалось подключиться"
+                OrbState.IDLE -> tr("Не подключено")
+                OrbState.CONNECTING -> if (m.state == VpnState.Disconnecting) tr("Отключаюсь…") else tr("Подключаюсь…")
+                OrbState.CONNECTED -> tr("Ты под защитой")
+                OrbState.ERROR -> tr("Не удалось подключиться")
             },
             style = MaterialTheme.typography.headlineMedium,
             color = if (m.orb == OrbState.ERROR) c.bad else c.ink,
@@ -388,15 +389,15 @@ fun HomeHero(m: HomeModel, controller: GhostlyController, orbSize: Dp) {
                     maxLines = 4, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 420.dp),
                 )
                 Spacer(Modifier.height(8.dp))
-                app.ghostly.ui.components.SoftButton("Скопировать ошибку", {
+                app.ghostly.ui.components.SoftButton(tr("Скопировать ошибку"), {
                     controller.platform.copyToClipboard(st.message)
                     controller.haptic()
                 }, icon = Icons.Rounded.ContentCopy)
             }
             else -> Text(
                 when (st) {
-                    VpnState.Connecting -> "Устанавливаю туннель"
-                    else -> if (controller.platform.isDesktop) "Нажми на призрака, чтобы включить" else "Коснись призрака, чтобы включить"
+                    VpnState.Connecting -> tr("Устанавливаю туннель")
+                    else -> if (controller.platform.isDesktop) tr("Нажми на призрака, чтобы включить") else tr("Коснись призрака, чтобы включить")
                 },
                 style = MaterialTheme.typography.bodyMedium, color = c.ink3, textAlign = TextAlign.Center, maxLines = 3,
                 modifier = Modifier.widthIn(max = 420.dp),
@@ -426,7 +427,7 @@ fun SpeedCard(
             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"),
             color = if (dim) c.ink3 else c.ink,
         )
-        Text(if (dim) "нет соединения" else "всего ${Format.bytes(total)}", style = MaterialTheme.typography.bodySmall)
+        Text(if (dim) tr("нет соединения") else tr("всего {0}", Format.bytes(total)), style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(8.dp))
         Sparkline(history, color, Modifier.fillMaxWidth().height(36.dp))
     }
@@ -464,10 +465,10 @@ fun ServerCard(m: HomeModel, onClick: () -> Unit, modifier: Modifier = Modifier)
                 }
                 Spacer(Modifier.width(13.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Селекторы", style = MaterialTheme.typography.labelSmall, color = c.ink3)
-                    Text("Выбор через селекторы", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(tr("Селекторы"), style = MaterialTheme.typography.labelSmall, color = c.ink3)
+                    Text(tr("Выбор через селекторы"), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(4.dp))
-                    Text("Группы решают, куда идёт трафик", style = MaterialTheme.typography.bodySmall, color = c.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(tr("Группы решают, куда идёт трафик"), style = MaterialTheme.typography.bodySmall, color = c.ink3, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Text("${m.mihomoGroups}", style = MaterialTheme.typography.labelMedium, color = c.ink3, modifier = Modifier.padding(horizontal = 4.dp))
                 Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = c.ink3)
@@ -480,9 +481,9 @@ fun ServerCard(m: HomeModel, onClick: () -> Unit, modifier: Modifier = Modifier)
             ServerAvatar(server, 46.dp)
             Spacer(Modifier.width(13.dp))
             Column(Modifier.weight(1f)) {
-                Text("Сервер", style = MaterialTheme.typography.labelSmall, color = c.ink3)
+                Text(tr("Сервер"), style = MaterialTheme.typography.labelSmall, color = c.ink3)
                 if (server == null) {
-                    Text("Не выбран", style = MaterialTheme.typography.titleMedium)
+                    Text(tr("Не выбран"), style = MaterialTheme.typography.titleMedium)
                 } else {
                     val t = server.title()
                     app.ghostly.ui.components.FlagText(t.title + (t.subtitle?.let { " · $it" } ?: ""), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -547,10 +548,10 @@ fun SubscriptionCard(profile: Profile, now: Long, controller: GhostlyController,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            if (subs.size > 1) "${subs.indexOfFirst { it.id == profile.id } + 1} из ${subs.size}" else "Подписки",
+                            if (subs.size > 1) tr("{0} из {1}", subs.indexOfFirst { it.id == profile.id } + 1, subs.size) else tr("Подписки"),
                             style = MaterialTheme.typography.labelMedium, color = c.ink2,
                         )
-                        Icon(Icons.Rounded.UnfoldMore, "Сменить подписку", tint = c.ink3, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Rounded.UnfoldMore, tr("Сменить подписку"), tint = c.ink3, modifier = Modifier.size(18.dp))
                     }
                     androidx.compose.material3.DropdownMenu(open, { open = false }) {
                         subs.forEach { p ->
@@ -558,7 +559,7 @@ fun SubscriptionCard(profile: Profile, now: Long, controller: GhostlyController,
                                 text = {
                                     Column {
                                         app.ghostly.ui.components.FlagText(p.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        val sub = p.info?.let { i -> if (i.unlimitedTime) "бессрочно" else Format.expiryPhrase(i.expire, now).lowercase() }
+                                        val sub = p.info?.let { i -> if (i.unlimitedTime) tr("бессрочно") else Format.expiryPhrase(i.expire, now).lowercase() }
                                             ?: "${p.servers.size} ${Format.plural(p.servers.size.toLong(), "сервер", "сервера", "серверов")}"
                                         Text(sub, style = MaterialTheme.typography.bodySmall, color = c.ink3)
                                     }
@@ -569,7 +570,7 @@ fun SubscriptionCard(profile: Profile, now: Long, controller: GhostlyController,
                         }
                         androidx.compose.material3.HorizontalDivider(color = c.line)
                         androidx.compose.material3.DropdownMenuItem(
-                            text = { Text("Добавить подписку", color = c.accent) },
+                            text = { Text(tr("Добавить подписку"), color = c.accent) },
                             leadingIcon = { Icon(Icons.Rounded.Add, null, tint = c.accent) },
                             onClick = { open = false; nav.add() },
                         )
@@ -582,7 +583,7 @@ fun SubscriptionCard(profile: Profile, now: Long, controller: GhostlyController,
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    if (info.unlimitedTime) "Бессрочно" else Format.expiryPhrase(info.expire, now),
+                    if (info.unlimitedTime) tr("Бессрочно") else Format.expiryPhrase(info.expire, now),
                     style = MaterialTheme.typography.titleMedium,
                     color = when {
                         info.unlimitedTime -> c.ink
@@ -593,7 +594,7 @@ fun SubscriptionCard(profile: Profile, now: Long, controller: GhostlyController,
                     modifier = Modifier.weight(1f),
                 )
                 if (info.pools.isEmpty()) Text(
-                    if (info.unlimitedTraffic) "${Format.bytes(info.used)} · ∞" else "${Format.bytes(info.used)} из ${Format.bytes(info.total)}",
+                    if (info.unlimitedTraffic) "${Format.bytes(info.used)} · ∞" else tr("{0} из {1}", Format.bytes(info.used), Format.bytes(info.total)),
                     style = MaterialTheme.typography.labelMedium, color = c.ink2,
                 )
             }
@@ -604,7 +605,7 @@ fun SubscriptionCard(profile: Profile, now: Long, controller: GhostlyController,
                 }
                 if (info.cycleEnd > 0) {
                     Spacer(Modifier.height(8.dp))
-                    Text("Трафик обновится через ${Format.remaining(info.cycleEnd, now)}", style = MaterialTheme.typography.bodySmall)
+                    Text(tr("Трафик обновится через {0}", Format.remaining(info.cycleEnd, now)), style = MaterialTheme.typography.bodySmall)
                 }
             } else if (!info.unlimitedTraffic) {
                 Spacer(Modifier.height(10.dp))
@@ -621,16 +622,16 @@ fun SubscriptionCard(profile: Profile, now: Long, controller: GhostlyController,
         }
 
         val actions = buildList<Triple<ImageVector, String, () -> Unit>> {
-            if (profile.url != null) add(Triple(Icons.Rounded.Refresh, "Обновить") { controller.haptic(); controller.refresh(profile.id, manual = true) })
+            if (profile.url != null) add(Triple(Icons.Rounded.Refresh, tr("Обновить")) { controller.haptic(); controller.refresh(profile.id, manual = true) })
             // Support is the button at the top of the screen; here: the provider's page and renewing.
-            profile.webPageUrl?.let { url -> add(Triple(Icons.Rounded.Public, "Подписка") { controller.platform.openUrl(url) }) }
-            profile.renewLink()?.let { url -> add(Triple(Icons.Rounded.Payments, "Продлить") { controller.platform.openUrl(url) }) }
+            profile.webPageUrl?.let { url -> add(Triple(Icons.Rounded.Public, tr("Подписка")) { controller.platform.openUrl(url) }) }
+            profile.renewLink()?.let { url -> add(Triple(Icons.Rounded.Payments, tr("Продлить")) { controller.platform.openUrl(url) }) }
         }
         if (actions.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 actions.forEach { (icon, label, onClick) ->
-                    val busy = label == "Обновить" && profile.id in refreshing
+                    val busy = label == tr("Обновить") && profile.id in refreshing
                     Row(
                         Modifier.weight(1f).outerShadow(RoundedCornerShape(12.dp), 0.5f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.06f))
                             .hoverSound().clickable(enabled = !busy, onClick = onClick).padding(vertical = 9.dp),
@@ -663,7 +664,7 @@ fun PoolBar(p: app.ghostly.core.model.TrafficPool) {
         Spacer(Modifier.width(8.dp))
         Text(p.title, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
         Text(
-            if (p.total > 0) "${Format.bytes(p.used)} из ${Format.bytes(p.total)}" else "${Format.bytes(p.used)} · ∞",
+            if (p.total > 0) tr("{0} из {1}", Format.bytes(p.used), Format.bytes(p.total)) else "${Format.bytes(p.used)} · ∞",
             style = MaterialTheme.typography.labelMedium, color = c.ink2,
         )
     }

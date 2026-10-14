@@ -2,6 +2,7 @@ package app.ghostly.desktop
 
 import app.ghostly.core.vpn.KillSwitch
 import java.io.File
+import app.ghostly.i18n.tr
 
 /**
  * Kill switch on Windows Firewall. Engaged only while the tunnel is down against the user's will:
@@ -21,9 +22,9 @@ class WindowsKillSwitch(
     override val engaged: Boolean get() = saved.isFile
 
     override fun unavailableReason(): String? = when {
-        hostOs != HostOs.WINDOWS -> "Пока только для Windows"
-        !admin -> "Работает в режиме TUN — ему нужны права администратора"
-        !firewallOn() -> "Брандмауэр Windows выключен — без него блокировать трафик нечем"
+        hostOs != HostOs.WINDOWS -> tr("Пока только для Windows")
+        !admin -> tr("Работает в режиме TUN — ему нужны права администратора")
+        !firewallOn() -> tr("Брандмауэр Windows выключен — без него блокировать трафик нечем")
         else -> null
     }
 

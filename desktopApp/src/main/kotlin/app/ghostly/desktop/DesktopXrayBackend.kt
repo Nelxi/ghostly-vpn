@@ -38,6 +38,7 @@ import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.TimeUnit
+import app.ghostly.i18n.tr
 
 /**
  * Desktop [VpnBackend]: runs the official Xray binary as a child process.
@@ -97,14 +98,14 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
             killOrphanCores(exe)
             _state.value = VpnState.Connecting
             if (!exe.isFile) {
-                _state.value = VpnState.Failed("Не найдено ядро Xray (${exe.absolutePath})", retryable = false)
+                _state.value = VpnState.Failed(tr("Не найдено ядро Xray ({0})", exe.absolutePath), retryable = false)
                 return@withContext
             }
             val tun = settings.desktopMode == DesktopMode.TUN
             if (!tun) clearLeftoverTun()
             tunMode = tun
             if (tun && !isElevated()) {
-                _state.value = VpnState.Failed("Режиму TUN нужны права администратора. Запусти Ghostly от имени администратора или выбери «Системный прокси» в настройках.", retryable = false)
+                _state.value = VpnState.Failed(tr("Режиму TUN нужны права администратора. Запусти Ghostly от имени администратора или выбери «Системный прокси» в настройках."), retryable = false)
                 return@withContext
             }
             val proxy = XrayConfigBuilder.localProxy(settings)
@@ -114,7 +115,7 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
             var appPort0 = 0
             var osPort = 0
             var p: Process? = null
-            var failure = "Ядро не запустилось"
+            var failure = tr("Ядро не запустилось")
             for (attempt in 1..START_TRIES) {
                 appPort0 = freePort()
                 osPort = if (settings.desktopMode == DesktopMode.SYSTEM_PROXY) freePort() else 0
@@ -133,7 +134,7 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
                         .apply { environment()["XRAY_LOCATION_ASSET"] = coreDir.absolutePath }
                         .start()
                 } catch (e: Exception) {
-                    _state.value = VpnState.Failed("Не удалось запустить ядро: ${e.message}")
+                    _state.value = VpnState.Failed(tr("Не удалось запустить ядро: {0}", e.message))
                     return@withContext
                 }
                 WindowsJob.adopt(started)  // the core ends with Ghostly, even if the app crashes
@@ -258,7 +259,7 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
                 if (!p.isAlive) {
                     val tail = synchronized(log) { log.takeLast(6) }
                     stopBlocking()
-                    _state.value = VpnState.Failed("Ядро остановилось: " + app.ghostly.core.vpn.CoreErrors.describe(tail, tunMode))
+                    _state.value = VpnState.Failed(tr("Ядро остановилось: ") + app.ghostly.core.vpn.CoreErrors.describe(tail, tunMode))
                     break
                 }
                 val out = runCatching {
@@ -382,7 +383,7 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
 
     override fun coreVersion(): String = runCatching {
         exec(exe.absolutePath, "version").lineSequence().firstOrNull()?.trim()
-    }.getOrNull() ?: "Xray (не найдено)"
+    }.getOrNull() ?: tr("Xray (не найдено)")
 
     val recentLog: List<String> get() = synchronized(log) { log.toList() }
 

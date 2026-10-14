@@ -1,5 +1,7 @@
 package app.ghostly.core.sub
 
+import app.ghostly.i18n.tr
+
 /**
  * Turns a subscription download failure into a short Russian reason for the user. Platform
  * exceptions (UnknownHost, timeouts, TLS) arrive in English and name Java classes; they are
@@ -16,18 +18,18 @@ object FetchErrors {
         }
         return when {
             "offline" in text || "network is unreachable" in text || "not connected to the internet" in text ->
-                "нет подключения к интернету"
+                tr("нет подключения к интернету")
             "unknownhost" in text || "unable to resolve host" in text || "no address associated" in text ||
                 "hostname could not be found" in text || "nodename nor servname" in text ->
-                "не удаётся найти сервер подписки. Проверь интернет; если адрес блокируют, обнови с включённым VPN"
+                tr("не удаётся найти сервер подписки. Проверь интернет; если адрес блокируют, обнови с включённым VPN")
             "timeout" in text || "timed out" in text ->
-                "сервер подписки не ответил вовремя, попробуй ещё раз"
+                tr("сервер подписки не ответил вовремя, попробуй ещё раз")
             "ssl" in text || "certificate" in text || "certpath" in text || "trust anchor" in text || "handshake" in text ->
-                "не удалось установить защищённое соединение с сервером подписки"
+                tr("не удалось установить защищённое соединение с сервером подписки")
             "refused" in text || "connectexception" in text || "failed to connect" in text || "connection reset" in text ||
                 "could not connect" in text || "unreachable" in text ->
-                "сервер подписки недоступен, попробуй позже"
-            else -> "не удалось загрузить подписку" + (e.message?.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: "")
+                tr("сервер подписки недоступен, попробуй позже")
+            else -> tr("не удалось загрузить подписку") + (e.message?.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: "")
         }
     }
 
@@ -36,14 +38,14 @@ object FetchErrors {
         val m = Regex("""^HTTP (\d{3})(?::\s*(.*))?$""").find(msg.trim()) ?: return null
         val code = m.groupValues[1].toInt()
         val reason = when (code) {
-            401, 403 -> "доступ к подписке закрыт: она могла закончиться или превышен лимит устройств"
-            404, 410 -> "подписка не найдена: ссылка устарела или подписку удалили"
-            429 -> "слишком много запросов к серверу подписки, попробуй позже"
-            in 500..599 -> "сервер подписки временно не работает (ошибка $code)"
-            else -> "сервер подписки ответил ошибкой $code"
+            401, 403 -> tr("доступ к подписке закрыт: она могла закончиться или превышен лимит устройств")
+            404, 410 -> tr("подписка не найдена: ссылка устарела или подписку удалили")
+            429 -> tr("слишком много запросов к серверу подписки, попробуй позже")
+            in 500..599 -> tr("сервер подписки временно не работает (ошибка {0})", code)
+            else -> tr("сервер подписки ответил ошибкой {0}", code)
         }
         val hint = m.groupValues[2].trim().takeIf { it.isNotEmpty() && it.lowercase().trimEnd('.') !in STATUS_PHRASES }
-        return if (hint != null) "$reason. Сообщение провайдера: $hint" else reason
+        return if (hint != null) tr("{0}. Сообщение провайдера: {1}", reason, hint) else reason
     }
 
     /** Bodies that only repeat the status line add nothing to the reason above. */

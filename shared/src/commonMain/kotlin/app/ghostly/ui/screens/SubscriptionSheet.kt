@@ -58,6 +58,7 @@ import app.ghostly.ui.components.SoftButton
 import app.ghostly.ui.components.Spinner
 import app.ghostly.ui.theme.Ghost
 import kotlinx.coroutines.delay
+import app.ghostly.i18n.tr
 
 /** How any screen opens the subscription page or the "add" sheet; provided by the app shell. */
 class SubscriptionNav(val open: (profileId: String) -> Unit, val add: () -> Unit)
@@ -83,7 +84,7 @@ fun ProviderNoticeBlock(n: ProviderNotice, controller: GhostlyController, modifi
         n.buttonUrl?.let { url ->
             Spacer(Modifier.height(10.dp))
             Text(
-                n.buttonText ?: "Открыть", style = MaterialTheme.typography.labelLarge, color = tone,
+                n.buttonText ?: tr("Открыть"), style = MaterialTheme.typography.labelLarge, color = tone,
                 modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(tone.copy(alpha = 0.14f))
                     .hoverSound().clickable { controller.haptic(); controller.platform.openUrl(url) }.padding(horizontal = 14.dp, vertical = 8.dp),
             )
@@ -126,7 +127,7 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
             if (active) {
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    "активна", style = MaterialTheme.typography.labelSmall, color = c.ok,
+                    tr("активна"), style = MaterialTheme.typography.labelSmall, color = c.ok,
                     modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(c.ok.copy(alpha = 0.14f)).padding(horizontal = 8.dp, vertical = 3.dp),
                 )
             }
@@ -144,7 +145,7 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
             Spacer(Modifier.height(16.dp))
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.05f)).padding(14.dp)) {
                 Text(
-                    if (info.unlimitedTime) "Бессрочно" else Format.expiryPhrase(info.expire, now),
+                    if (info.unlimitedTime) tr("Бессрочно") else Format.expiryPhrase(info.expire, now),
                     style = MaterialTheme.typography.titleMedium,
                     color = when {
                         info.unlimitedTime -> c.ink
@@ -153,7 +154,7 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
                         else -> c.ink
                     },
                 )
-                if (!info.unlimitedTime) Text("до ${Format.date(info.expire, offset)}", style = MaterialTheme.typography.bodySmall, color = c.ink3)
+                if (!info.unlimitedTime) Text(tr("до {0}", Format.date(info.expire, offset)), style = MaterialTheme.typography.bodySmall, color = c.ink3)
                 Spacer(Modifier.height(12.dp))
                 if (info.pools.isNotEmpty()) {
                     info.pools.forEachIndexed { i, p ->
@@ -162,13 +163,13 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
                     }
                     if (info.cycleEnd > 0) {
                         Spacer(Modifier.height(8.dp))
-                        Text("Трафик обновится через ${Format.remaining(info.cycleEnd, now)}", style = MaterialTheme.typography.bodySmall)
+                        Text(tr("Трафик обновится через {0}", Format.remaining(info.cycleEnd, now)), style = MaterialTheme.typography.bodySmall)
                     }
                 } else {
                     Row {
-                        Text("Трафик", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+                        Text(tr("Трафик"), style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
                         Text(
-                            if (info.unlimitedTraffic) "${Format.bytes(info.used)} · без лимита" else "${Format.bytes(info.used)} из ${Format.bytes(info.total)}",
+                            if (info.unlimitedTraffic) tr("{0} · без лимита", Format.bytes(info.used)) else tr("{0} из {1}", Format.bytes(info.used), Format.bytes(info.total)),
                             style = MaterialTheme.typography.labelMedium, color = c.ink2,
                         )
                     }
@@ -191,7 +192,7 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.Campaign, null, tint = c.accent, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Сообщение от провайдера", style = MaterialTheme.typography.labelMedium, color = c.accent)
+                    Text(tr("Сообщение от провайдера"), style = MaterialTheme.typography.labelMedium, color = c.accent)
                 }
                 Spacer(Modifier.height(8.dp))
                 FlagText(note, style = MaterialTheme.typography.bodyMedium)
@@ -209,10 +210,10 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
             Spacer(Modifier.height(12.dp))
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.05f)).padding(horizontal = 14.dp, vertical = 6.dp)) {
                 if (traffic) {
-                    Fact("Скачано", Format.bytes(info!!.download))
-                    Fact("Отдано", Format.bytes(info.upload))
+                    Fact(tr("Скачано"), Format.bytes(info!!.download))
+                    Fact(tr("Отдано"), Format.bytes(info.upload))
                 }
-                if (profile.url != null) Fact("Автообновление", everyHours(profile.updateIntervalHours))
+                if (profile.url != null) Fact(tr("Автообновление"), everyHours(profile.updateIntervalHours))
             }
         }
 
@@ -220,12 +221,12 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
         Spacer(Modifier.height(14.dp))
         val busy = profile.id in refreshing
         val actions = buildList<Triple<ImageVector, String, () -> Unit>> {
-            if (profile.url != null) add(Triple(Icons.Rounded.Refresh, if (busy) "Обновляю…" else "Обновить") { controller.haptic(); controller.refresh(profile.id, manual = true) })
-            profile.webPageUrl?.let { url -> add(Triple(Icons.Rounded.Public, "Подписка") { controller.platform.openUrl(url) }) }
-            profile.renewLink()?.let { url -> add(Triple(Icons.Rounded.Payments, "Продлить") { controller.platform.openUrl(url) }) }
+            if (profile.url != null) add(Triple(Icons.Rounded.Refresh, if (busy) tr("Обновляю…") else tr("Обновить")) { controller.haptic(); controller.refresh(profile.id, manual = true) })
+            profile.webPageUrl?.let { url -> add(Triple(Icons.Rounded.Public, tr("Подписка")) { controller.platform.openUrl(url) }) }
+            profile.renewLink()?.let { url -> add(Triple(Icons.Rounded.Payments, tr("Продлить")) { controller.platform.openUrl(url) }) }
             // Without its own renew link "Продлить" already opens the support link: no second button for it.
-            profile.supportUrl?.takeIf { profile.renewUrl != null }?.let { url -> add(Triple(Icons.Rounded.SupportAgent, "Поддержка") { controller.platform.openUrl(url) }) }
-            profile.url?.let { url -> add(Triple(Icons.Rounded.ContentCopy, "Ссылка") { controller.platform.copyToClipboard(url) }) }
+            profile.supportUrl?.takeIf { profile.renewUrl != null }?.let { url -> add(Triple(Icons.Rounded.SupportAgent, tr("Поддержка")) { controller.platform.openUrl(url) }) }
+            profile.url?.let { url -> add(Triple(Icons.Rounded.ContentCopy, tr("Ссылка")) { controller.platform.copyToClipboard(url) }) }
         }
         actions.chunked(2).forEach { row ->
             Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -245,13 +246,13 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
             }
         }
         if (!active && profile.servers.isNotEmpty()) {
-            AccentButton("Сделать активной", { controller.haptic(); controller.switchProfile(profile.id) }, Modifier.fillMaxWidth().padding(top = 4.dp), Icons.Rounded.CheckCircle)
+            AccentButton(tr("Сделать активной"), { controller.haptic(); controller.switchProfile(profile.id) }, Modifier.fillMaxWidth().padding(top = 4.dp), Icons.Rounded.CheckCircle)
         }
 
         // Every subscription + add one more
         val subs = profiles.subscriptions()
         Spacer(Modifier.height(22.dp))
-        Text("МОИ ПОДПИСКИ", style = MaterialTheme.typography.labelSmall, color = c.ink3, modifier = Modifier.padding(start = 4.dp, bottom = 6.dp))
+        Text(tr("МОИ ПОДПИСКИ"), style = MaterialTheme.typography.labelSmall, color = c.ink3, modifier = Modifier.padding(start = 4.dp, bottom = 6.dp))
         subs.forEach { p ->
             val isActive = p.servers.any { it.id == selected }
             Row(
@@ -264,15 +265,15 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     FlagText(p.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    val sub = p.info?.let { i -> if (i.unlimitedTime) "бессрочно" else Format.expiryPhrase(i.expire, now).lowercase() }
+                    val sub = p.info?.let { i -> if (i.unlimitedTime) tr("бессрочно") else Format.expiryPhrase(i.expire, now).lowercase() }
                         ?: "${p.servers.size} ${Format.plural(p.servers.size.toLong(), "сервер", "сервера", "серверов")}"
                     Text(sub, style = MaterialTheme.typography.bodySmall, color = c.ink3, maxLines = 1)
                 }
-                if (isActive) Text("активна", style = MaterialTheme.typography.labelSmall, color = c.ok)
+                if (isActive) Text(tr("активна"), style = MaterialTheme.typography.labelSmall, color = c.ok)
             }
         }
         Spacer(Modifier.height(8.dp))
-        SoftButton("Добавить подписку", onAdd, Modifier.fillMaxWidth(), Icons.Rounded.Add, tint = c.accent)
+        SoftButton(tr("Добавить подписку"), onAdd, Modifier.fillMaxWidth(), Icons.Rounded.Add, tint = c.accent)
 
         // Delete: a second tap confirms.
         var confirm by remember(profile.id) { mutableStateOf(false) }
@@ -287,13 +288,13 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
         ) {
             Icon(Icons.Rounded.Delete, null, tint = c.bad, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
-            Text(if (confirm) "Нажмите ещё раз, чтобы удалить" else "Удалить подписку", style = MaterialTheme.typography.labelMedium, color = c.bad)
+            Text(if (confirm) tr("Нажмите ещё раз, чтобы удалить") else tr("Удалить подписку"), style = MaterialTheme.typography.labelMedium, color = c.bad)
         }
     }
 }
 
 private fun everyHours(h: Int): String =
-    if (h <= 1) "каждый час" else "каждые $h ${Format.plural(h.toLong(), "час", "часа", "часов")}"
+    if (h <= 1) tr("каждый час") else tr("каждые {0} {1}", h, Format.plural(h.toLong(), "час", "часа", "часов"))
 
 @Composable
 private fun Fact(label: String, value: String) {

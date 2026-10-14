@@ -17,6 +17,7 @@ import app.ghostly.core.vpn.VpnState
 import app.ghostly.ui.GhostlyApp
 import kotlinx.coroutines.runBlocking
 import javax.imageio.ImageIO
+import app.ghostly.i18n.tr
 
 fun main(args: Array<String>) {
     app.ghostly.core.vpn.LoopbackAuthenticator.install()
@@ -53,6 +54,8 @@ fun main(args: Array<String>) {
     }
     val c = GhostlyController(platform, backend)
     controller = c
+    // Translations before the tray menu and the window are built.
+    runBlocking { app.ghostly.i18n.L10n.load(c.settings.value.language) }
     // ghostly://… or a subscription URL passed on the command line (e.g. from a URL handler).
     args.firstOrNull { !it.startsWith("--") }?.let { c.import(it) }
     val autostart = "--autostart" in args
@@ -81,7 +84,7 @@ fun main(args: Array<String>) {
             c.updater.offer.collect { o ->
                 if (o != null && o.version != told) {
                     told = o.version
-                    trayState.sendNotification(androidx.compose.ui.window.Notification("Вышла Ghostly ${o.version}", "Открой Ghostly и нажми «Обновить» — установится само, настройки сохранятся."))
+                    trayState.sendNotification(androidx.compose.ui.window.Notification(tr("Вышла Ghostly {0}", o.version), tr("Открой Ghostly и нажми «Обновить» — установится само, настройки сохранятся.")))
                 }
             }
         }
@@ -105,8 +108,8 @@ fun main(args: Array<String>) {
                 trayHintShown = true
                 trayState.sendNotification(
                     androidx.compose.ui.window.Notification(
-                        "Ghostly работает в трее",
-                        if (c.state.value is VpnState.Connected) "VPN остаётся включённым. Открыть — клик по призраку в трее." else "Открыть — клик по призраку в трее.",
+                        tr("Ghostly работает в трее"),
+                        if (c.state.value is VpnState.Connected) tr("VPN остаётся включённым. Открыть — клик по призраку в трее.") else tr("Открыть — клик по призраку в трее."),
                     ),
                 )
             }
@@ -123,13 +126,13 @@ fun main(args: Array<String>) {
             Tray(
                 icon = icon,
                 state = trayState,
-                tooltip = if (state is VpnState.Connected) "Ghostly — защищено" else "Ghostly",
+                tooltip = if (state is VpnState.Connected) tr("Ghostly — защищено") else "Ghostly",
                 onAction = ::show,
                 menu = {
-                    Item("Открыть Ghostly", onClick = ::show)
-                    Item(if (state is VpnState.Connected) "Отключить" else "Подключить", onClick = { c.toggle() })
+                    Item(tr("Открыть Ghostly"), onClick = ::show)
+                    Item(if (state is VpnState.Connected) tr("Отключить") else tr("Подключить"), onClick = { c.toggle() })
                     Separator()
-                    Item("Выход", onClick = ::quit)
+                    Item(tr("Выход"), onClick = ::quit)
                 },
             )
         }

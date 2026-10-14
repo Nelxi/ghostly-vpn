@@ -14,6 +14,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import app.ghostly.i18n.tr
 
 /**
  * Clash/mihomo YAML → JSON. The config is kept and edited as JSON (like Xray configs) and written
@@ -34,7 +35,7 @@ object MihomoYaml {
     fun looksLikeClash(text: String): Boolean = !text.startsWith("{") && !text.startsWith("[") && TOP_KEYS.containsMatchIn(text)
 
     fun parse(text: String): JsonObject =
-        toJson(yaml.parseToYamlNode(text)) as? JsonObject ?: throw IllegalArgumentException("YAML без полей верхнего уровня")
+        toJson(yaml.parseToYamlNode(text)) as? JsonObject ?: throw IllegalArgumentException(tr("YAML без полей верхнего уровня"))
 
     private fun toJson(node: YamlNode): JsonElement = when (node) {
         is YamlNull -> JsonNull

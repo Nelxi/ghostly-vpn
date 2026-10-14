@@ -11,6 +11,7 @@ import android.graphics.Paint
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import app.ghostly.vpn.R
+import app.ghostly.i18n.tr
 
 /**
  * The ongoing VPN notification, shared by the Xray and mihomo services: header = core with a
@@ -34,7 +35,7 @@ internal object VpnNotification {
         val nm = context.getSystemService(NotificationManager::class.java)
         if (nm.getNotificationChannel(CHANNEL) == null) {
             nm.createNotificationChannel(
-                NotificationChannel(CHANNEL, context.getString(R.string.notif_channel), NotificationManager.IMPORTANCE_LOW).apply {
+                NotificationChannel(CHANNEL, tr("VPN-подключение"), NotificationManager.IMPORTANCE_LOW).apply {
                     setShowBadge(false)
                 },
             )
@@ -54,7 +55,7 @@ internal object VpnNotification {
         status: String? = null,
     ): Notification {
         val speed = stats?.let { "↓ ${speed(it.down)}  ·  ↑ ${speed(it.up)}" }
-        val text = status ?: speed ?: context.getString(R.string.notif_connected)
+        val text = status ?: speed ?: tr("Подключено")
         val sub = subscription?.takeIf { it.isNotBlank() }
         val bySubscription = core == Core.MIHOMO && sub != null
         val title = sub?.takeIf { bySubscription } ?: server.ifEmpty { context.getString(R.string.app_name) }
@@ -67,7 +68,7 @@ internal object VpnNotification {
             .setContentText(text)
             .setSubText(header)
             .setContentIntent(open)
-            .addAction(0, context.getString(R.string.notif_disconnect), stop)
+            .addAction(0, tr("Отключить"), stop)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
@@ -77,8 +78,8 @@ internal object VpnNotification {
             b.setWhen(connectedAt).setShowWhen(true).setUsesChronometer(true)
             val lines = listOfNotNull(
                 text,
-                stats?.let { "За сессию ↓ ${bytes(it.downTotal)}  ·  ↑ ${bytes(it.upTotal)}" },
-                sub?.takeIf { !bySubscription }?.let { "Подписка $it" },
+                stats?.let { tr("За сессию ↓ {0}  ·  ↑ {1}", bytes(it.downTotal), bytes(it.upTotal)) },
+                sub?.takeIf { !bySubscription }?.let { tr("Подписка {0}", it) },
             )
             b.setStyle(NotificationCompat.BigTextStyle().bigText(lines.joinToString("\n")))
         } else {
@@ -112,15 +113,15 @@ internal object VpnNotification {
     }
 
     fun speed(bps: Long): String = when {
-        bps < 1024 -> "$bps Б/с"
-        bps < 1024 * 1024 -> "${bps / 1024} КБ/с"
-        else -> String.format(java.util.Locale.US, "%.1f МБ/с", bps / 1048576.0)
+        bps < 1024 -> tr("{0} Б/с", bps)
+        bps < 1024 * 1024 -> tr("{0} КБ/с", bps / 1024)
+        else -> String.format(java.util.Locale.US, tr("%.1f МБ/с"), bps / 1048576.0)
     }
 
     fun bytes(n: Long): String = when {
-        n < 1024 -> "$n Б"
-        n < 1024 * 1024 -> "${n / 1024} КБ"
-        n < 1024L * 1024 * 1024 -> String.format(java.util.Locale.US, "%.1f МБ", n / 1048576.0)
-        else -> String.format(java.util.Locale.US, "%.2f ГБ", n / 1073741824.0)
+        n < 1024 -> tr("{0} Б", n)
+        n < 1024 * 1024 -> tr("{0} КБ", n / 1024)
+        n < 1024L * 1024 * 1024 -> String.format(java.util.Locale.US, tr("%.1f МБ"), n / 1048576.0)
+        else -> String.format(java.util.Locale.US, tr("%.2f ГБ"), n / 1073741824.0)
     }
 }

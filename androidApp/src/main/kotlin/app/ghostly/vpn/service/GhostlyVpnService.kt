@@ -37,6 +37,7 @@ import kotlinx.serialization.json.JsonObject
 import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
 import libv2ray.Libv2ray
+import app.ghostly.i18n.tr
 
 /**
  * Foreground VpnService: establishes the TUN interface and runs Xray on its fd
@@ -61,7 +62,7 @@ class GhostlyVpnService : VpnService() {
             ACTION_STOP -> scope.launch { stop(userInitiated = true, startId) }
             else -> {
                 // ACTION_START from the app, or android.net.VpnService from always-on VPN / reboot.
-                goForeground(getString(R.string.notif_connecting))
+                goForeground(tr("Подключаюсь…"))
                 scope.launch { start(startId) }
             }
         }
@@ -71,7 +72,7 @@ class GhostlyVpnService : VpnService() {
     private suspend fun start(startId: Int) = lock.withLock {
         val request = AndroidVpn.request ?: restoreRequest()
         if (request == null) {
-            AndroidVpn.mutableState.value = VpnState.Failed("Нет выбранного сервера", retryable = false)
+            AndroidVpn.mutableState.value = VpnState.Failed(tr("Нет выбранного сервера"), retryable = false)
             stopSelfResult(startId)
             return@withLock
         }
@@ -111,7 +112,7 @@ class GhostlyVpnService : VpnService() {
                 // Our own sockets (the core's uplinks) must bypass the tunnel, or they would loop into it.
                 SplitMode.OFF -> builder.addDisallowedApplication(packageName)
             }
-            val fd = builder.establish() ?: throw IllegalStateException("Нет разрешения на VPN")
+            val fd = builder.establish() ?: throw IllegalStateException(tr("Нет разрешения на VPN"))
             tun = fd
 
             val appPort = freePort()
@@ -128,7 +129,7 @@ class GhostlyVpnService : VpnService() {
                 .toSet()
             val controller = Libv2ray.newCoreController(callback)
             controller.startLoop(JsonX.encodeToString(JsonObject.serializer(), config), fd.fd)
-            if (!controller.isRunning) throw IllegalStateException("Ядро не запустилось")
+            if (!controller.isRunning) throw IllegalStateException(tr("Ядро не запустилось"))
             core = controller
             AndroidVpn.liveCore = controller
 
@@ -281,9 +282,9 @@ class GhostlyVpnService : VpnService() {
     private fun humanError(e: Throwable): String {
         val m = e.message.orEmpty()
         return when {
-            "config" in m.lowercase() -> "Ошибка конфигурации: $m"
+            "config" in m.lowercase() -> tr("Ошибка конфигурации: {0}", m)
             m.isNotBlank() -> m
-            else -> "Не удалось подключиться"
+            else -> tr("Не удалось подключиться")
         }
     }
 

@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.sp
 import app.ghostly.ui.theme.Ghost
 import app.ghostly.ui.theme.Motion
 import androidx.compose.material3.MaterialTheme
+import app.ghostly.i18n.tr
 
 // ---------------------------------------------------------------- pills & badges
 
@@ -87,8 +88,8 @@ fun PingPill(ms: Long?, loading: Boolean, modifier: Modifier = Modifier) {
             when {
                 loading -> "···"
                 ms == null -> "—"
-                ms <= 0 -> "нет"
-                else -> "$ms мс"
+                ms <= 0 -> tr("нет")
+                else -> tr("{0} мс", ms)
             },
             style = MaterialTheme.typography.labelSmall, color = animated,
         )

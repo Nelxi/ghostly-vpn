@@ -43,6 +43,7 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import app.ghostly.i18n.tr
 
 /** Full-screen camera with a rounded viewfinder; returns the first QR text via [EXTRA_RESULT]. */
 class QrScanActivity : ComponentActivity() {
@@ -102,7 +103,7 @@ class QrScanActivity : ComponentActivity() {
                     drawRoundRect(Color(0xFFA88DFF), tl, Size(side, side), CornerRadius(40f, 40f), style = Stroke(5f))
                 }
                 Text(
-                    "Наведи камеру на QR-код подписки",
+                    tr("Наведи камеру на QR-код подписки"),
                     color = Color.White, fontSize = 16.sp,
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 90.dp),
                 )

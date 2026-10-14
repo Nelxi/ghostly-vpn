@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import app.ghostly.core.GhostlyController
 import app.ghostly.core.update.UpdateStep
 import app.ghostly.ui.theme.Ghost
+import app.ghostly.i18n.tr
 
 /** "Вышло обновление — Обновить" with ✕; shows download / verify progress in place. */
 @Composable
@@ -63,14 +64,14 @@ fun UpdateBanner(controller: GhostlyController, modifier: Modifier = Modifier, c
                     Spacer(Modifier.width(12.dp))
                 }
                 Column(Modifier.weight(1f)) {
-                    Text("Вышло обновление", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold))
+                    Text(tr("Вышло обновление"), style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold))
                     Text(
                         when (val s = step) {
-                            is UpdateStep.Downloading -> "Загружаю ${(s.progress * 100).toInt()}%"
-                            UpdateStep.Verifying -> "Проверяю контрольную сумму…"
-                            UpdateStep.Installing -> "Запускаю установку…"
+                            is UpdateStep.Downloading -> tr("Загружаю {0}%", (s.progress * 100).toInt())
+                            UpdateStep.Verifying -> tr("Проверяю контрольную сумму…")
+                            UpdateStep.Installing -> tr("Запускаю установку…")
                             is UpdateStep.Failed -> s.message
-                            UpdateStep.Idle -> "Версия ${o.version}" + if (o.size > 0) " · ${app.ghostly.ui.Format.bytes(o.size)}" else ""
+                            UpdateStep.Idle -> tr("Версия {0}", o.version) + if (o.size > 0) " · ${app.ghostly.ui.Format.bytes(o.size)}" else ""
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = if (step is UpdateStep.Failed) c.bad else c.ink3,
@@ -78,7 +79,7 @@ fun UpdateBanner(controller: GhostlyController, modifier: Modifier = Modifier, c
                 }
                 if (!busy) {
                     Icon(
-                        Icons.Rounded.Close, "Скрыть", tint = c.ink3,
+                        Icons.Rounded.Close, tr("Скрыть"), tint = c.ink3,
                         modifier = Modifier.size(30.dp).clip(CircleShape).hoverSound().clickable { controller.dismissUpdate() }.padding(6.dp),
                     )
                 }
@@ -90,7 +91,7 @@ fun UpdateBanner(controller: GhostlyController, modifier: Modifier = Modifier, c
             } else if (!busy) {
                 Spacer(Modifier.height(10.dp))
                 AccentButton(
-                    if (step is UpdateStep.Failed) "Попробовать ещё раз" else "Обновить",
+                    if (step is UpdateStep.Failed) tr("Попробовать ещё раз") else tr("Обновить"),
                     { controller.haptic(); controller.updater.reset(); controller.installUpdate() },
                     Modifier.fillMaxWidth(), icon = Icons.Rounded.SystemUpdate,
                 )

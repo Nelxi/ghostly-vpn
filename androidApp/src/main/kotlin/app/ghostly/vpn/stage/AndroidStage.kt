@@ -31,6 +31,7 @@ import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.exp
 import kotlin.math.max
+import app.ghostly.i18n.tr
 
 /**
  * Needed only so Android lets us read the media sessions of other apps (which track plays where);
@@ -56,7 +57,7 @@ class AndroidStage(private val context: Context) : StageSource {
     override val track: StateFlow<NowPlaying?> = _track.asStateFlow()
     private val _setup = MutableStateFlow<String?>(null)
     override val setupNeeded: StateFlow<String?> = _setup.asStateFlow()
-    override val whereLabel = "на телефоне"
+    override val whereLabel: String get() = tr("на телефоне")
 
     @Volatile private var controller: MediaController? = null
 
@@ -113,7 +114,7 @@ class AndroidStage(private val context: Context) : StageSource {
 
     private fun updateSetup() {
         _setup.value = when {
-            !hasListenerAccess() -> "Разрешите Ghostly доступ к уведомлениям — так он видит, какой трек играет (сами уведомления не читаются). Если переключатель серый: нажмите ещё раз → ⋮ → «Разрешить ограниченные настройки»"
+            !hasListenerAccess() -> tr("Разрешите Ghostly доступ к уведомлениям — так он видит, какой трек играет (сами уведомления не читаются). Если переключатель серый: нажмите ещё раз → ⋮ → «Разрешить ограниченные настройки»")
             else -> null
         }
     }

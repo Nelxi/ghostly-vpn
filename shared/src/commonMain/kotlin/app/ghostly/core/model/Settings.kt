@@ -2,6 +2,7 @@ package app.ghostly.core.model
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
+import app.ghostly.i18n.tr
 
 /** What an additional local proxy speaks. */
 @Serializable
@@ -72,33 +73,39 @@ enum class DesktopMode {
 }
 
 @Serializable
-enum class DnsPreset(val title: String, val address: String?) {
+enum class DnsPreset(private val titleRu: String, val address: String?) {
     PROVIDER("Как у провайдера", null),
     CLOUDFLARE("Cloudflare", "https://1.1.1.1/dns-query"),
     GOOGLE("Google", "https://8.8.8.8/dns-query"),
     QUAD9("Quad9", "https://9.9.9.9/dns-query"),
     ADGUARD("AdGuard (без рекламы)", "https://94.140.14.14/dns-query"),
-    CUSTOM("Свой", null),
+    CUSTOM("Свой", null);
+
+    val title: String get() = tr(titleRu)
 }
 
 /** DNS for sites that open WITHOUT the VPN (Russian ones in smart routing). */
 @Serializable
-enum class DirectDns(val title: String, val address: String?) {
+enum class DirectDns(private val titleRu: String, val address: String?) {
     /** Yandex over DoH, sent straight out (not through the tunnel): encrypted, so the ISP can't swap answers. */
     YANDEX("Яндекс (зашифрованный)", "https+local://77.88.8.8/dns-query"),
     /** The resolver of the network / the ISP. */
     SYSTEM("Системный (провайдера)", "localhost"),
-    CUSTOM("Свой", null),
+    CUSTOM("Свой", null);
+
+    val title: String get() = tr(titleRu)
 }
 
 /** Which address families DNS returns. AUTO follows the IPv6 switch. */
 @Serializable
-enum class DnsStrategy(val title: String, val xray: String?) {
+enum class DnsStrategy(private val titleRu: String, val xray: String?) {
     AUTO("Как IPv6 в туннеле", null),
     IPV4("Только IPv4", "UseIPv4"),
     IPV4_FIRST("IPv4, затем IPv6", "UseIPv4v6"),
     IPV6_FIRST("IPv6, затем IPv4", "UseIPv6v4"),
-    BOTH("IPv4 и IPv6", "UseIP"),
+    BOTH("IPv4 и IPv6", "UseIP");
+
+    val title: String get() = tr(titleRu)
 }
 
 @Serializable

@@ -38,6 +38,7 @@ import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.URI
 import java.util.concurrent.TimeUnit
+import app.ghostly.i18n.tr
 
 /**
  * Desktop mihomo: runs Prizrak-Core (legiz-ru's mihomo build) as a child process next to Xray.
@@ -84,13 +85,13 @@ class DesktopMihomoBackend(private val platform: DesktopPlatform, private val xr
             killOrphanCores(exe)
             _state.value = VpnState.Connecting
             if (!exe.isFile) {
-                _state.value = VpnState.Failed("Не найдено ядро Mihomo (${exe.absolutePath})", retryable = false)
+                _state.value = VpnState.Failed(tr("Не найдено ядро Mihomo ({0})", exe.absolutePath), retryable = false)
                 return@withContext
             }
             val tun = settings.desktopMode == DesktopMode.TUN
             tunMode = tun
             if (tun && !xray.isElevated()) {
-                _state.value = VpnState.Failed("Режиму TUN нужны права администратора. Запусти Ghostly от имени администратора или выбери «Системный прокси» в настройках.", retryable = false)
+                _state.value = VpnState.Failed(tr("Режиму TUN нужны права администратора. Запусти Ghostly от имени администратора или выбери «Системный прокси» в настройках."), retryable = false)
                 return@withContext
             }
             val appPort0 = DesktopXrayBackend.freePort()
@@ -118,7 +119,7 @@ class DesktopMihomoBackend(private val platform: DesktopPlatform, private val xr
                     .redirectErrorStream(true)
                     .start()
             } catch (e: Exception) {
-                _state.value = VpnState.Failed("Не удалось запустить Mihomo: ${e.message}")
+                _state.value = VpnState.Failed(tr("Не удалось запустить Mihomo: {0}", e.message))
                 return@withContext
             }
             WindowsJob.adopt(p)  // the core ends with Ghostly, even if the app crashes
@@ -208,7 +209,7 @@ class DesktopMihomoBackend(private val platform: DesktopPlatform, private val xr
                 if (!p.isAlive) {
                     val tail = synchronized(log) { log.takeLast(6) }
                     stopBlocking()
-                    _state.value = VpnState.Failed("Mihomo остановился: " + app.ghostly.core.vpn.CoreErrors.describe(tail, tunMode))
+                    _state.value = VpnState.Failed(tr("Mihomo остановился: ") + app.ghostly.core.vpn.CoreErrors.describe(tail, tunMode))
                     break
                 }
             }
@@ -228,7 +229,7 @@ class DesktopMihomoBackend(private val platform: DesktopPlatform, private val xr
 
     override fun coreVersion(): String = coreVersionCache ?: runCatching {
         exec(exe.absolutePath, "-v").lineSequence().firstOrNull()?.trim()?.takeIf { it.isNotEmpty() }
-    }.getOrNull()?.also { coreVersionCache = it } ?: "Mihomo (не найдено)"
+    }.getOrNull()?.also { coreVersionCache = it } ?: tr("Mihomo (не найдено)")
 
     override val directProbesBypassTunnel: Boolean get() = !tunMode
 

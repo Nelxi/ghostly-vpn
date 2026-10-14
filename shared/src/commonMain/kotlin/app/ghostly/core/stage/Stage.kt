@@ -1,6 +1,7 @@
 package app.ghostly.core.stage
 
 import kotlinx.coroutines.flow.StateFlow
+import app.ghostly.i18n.tr
 
 /**
  * "Stage mode": the ghost sings along with whatever is playing on the computer and the whole
@@ -23,7 +24,7 @@ interface StageSource {
     fun requestSetup() {}
 
     /** Where the music is heard: "на компьютере", "на телефоне". */
-    val whereLabel: String get() = "на компьютере"
+    val whereLabel: String get() = tr("на компьютере")
 }
 
 private val NoSetup: StateFlow<String?> = kotlinx.coroutines.flow.MutableStateFlow(null)

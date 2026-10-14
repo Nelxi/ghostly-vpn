@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
+import app.ghostly.i18n.tr
 
 /** A message from Ghostly: to everyone, or to this person only. Shown in the app window like an incoming Telegram message. */
 @Serializable
@@ -37,7 +38,7 @@ data class Notice(
 )
 
 @Serializable
-data class NoticeButton(val text: String = "Открыть", val url: String? = null)
+data class NoticeButton(val text: String = tr("Открыть"), val url: String? = null)
 
 @Serializable
 private data class NoticesReply(val ok: Boolean = false, val notices: List<Notice> = emptyList())
@@ -90,6 +91,7 @@ class Notices(private val store: FileStore, private val platform: PlatformInfo, 
                 http.post("https://$host/sub/$sub/notices") {
                     header("User-Agent", userAgent)
                     header("x-hwid", platform.hwid)
+                    header("Accept-Language", app.ghostly.i18n.L10n.language)
                     contentType(ContentType.Application.Json)
                     setBody("""{"seen":[$id]}""")
                 }.status.isSuccess()
@@ -107,6 +109,7 @@ class Notices(private val store: FileStore, private val platform: PlatformInfo, 
                 val r = http.get("https://$host/sub/$sub/notices" + if (history) "?all=1" else "") {
                     header("User-Agent", userAgent)
                     header("x-hwid", platform.hwid)
+                    header("Accept-Language", app.ghostly.i18n.L10n.language)
                 }
                 if (r.status.isSuccess()) JsonX.decodeFromString(NoticesReply.serializer(), r.bodyAsText()) else null
             }.getOrNull() ?: continue

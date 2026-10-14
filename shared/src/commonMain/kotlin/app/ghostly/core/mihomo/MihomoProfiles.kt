@@ -9,6 +9,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import app.ghostly.i18n.tr
 
 /** What we read out of a Clash/mihomo config: server rows for the list and the group tree. */
 object MihomoProfiles {
@@ -50,7 +51,7 @@ object MihomoProfiles {
         return listOf(
             Server(
                 id = "$idPrefix:all",
-                name = inlineHeaders["profile-title"] ?: "Все серверы подписки",
+                name = inlineHeaders["profile-title"] ?: tr("Все серверы подписки"),
                 protocol = MIHOMO_PROFILE,
                 transport = "$groups",
                 config = null,

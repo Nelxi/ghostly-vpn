@@ -18,6 +18,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import app.ghostly.i18n.tr
 
 class SubscriptionException(message: String, val definitive: Boolean = false) : Exception(message)
 
@@ -95,7 +96,7 @@ class SubscriptionClient(private val platform: PlatformInfo) {
                 throw e
             }
         }
-        throw error ?: SubscriptionException("Не удалось загрузить подписку")
+        throw error ?: SubscriptionException(tr("Не удалось загрузить подписку"))
     }
 
     private suspend fun fetchOnce(client: HttpClient, url: String, idPrefix: String, ua: String, attested: Boolean = false): ParsedSubscription {
@@ -104,6 +105,7 @@ class SubscriptionClient(private val platform: PlatformInfo) {
             header("Accept", "*/*")
             // Same device headers Happ sends: providers use them for device limits.
             header("x-hwid", platform.hwid)
+            header("Accept-Language", app.ghostly.i18n.L10n.language)
             header("x-device-os", platform.os)
             header("x-ver-os", platform.osVersion)
             header("x-device-model", platform.deviceModel)
@@ -126,7 +128,7 @@ class SubscriptionClient(private val platform: PlatformInfo) {
         }
         val headers = response.headers.entries().associate { (k, v) -> k.lowercase() to v.joinToString(", ") }
         val parsed = SubscriptionParser.parse(body, headers, idPrefix)
-        if (parsed.servers.isEmpty()) throw SubscriptionException("В подписке нет поддерживаемых серверов", definitive = true)
+        if (parsed.servers.isEmpty()) throw SubscriptionException(tr("В подписке нет поддерживаемых серверов"), definitive = true)
         return parsed.copy(fetchedFrom = url)
     }
 
@@ -154,6 +156,7 @@ class SubscriptionClient(private val platform: PlatformInfo) {
             client.post(endpoint) {
                 header("User-Agent", ua)
                 header("x-hwid", platform.hwid)
+                header("Accept-Language", app.ghostly.i18n.L10n.language)
                 header("x-device-os", platform.os)
                 header("x-ver-os", platform.osVersion)
                 header("x-device-model", platform.deviceModel)

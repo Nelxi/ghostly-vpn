@@ -1,5 +1,7 @@
 package app.ghostly.core.vpn
 
+import app.ghostly.i18n.tr
+
 /**
  * Turns the last lines of a core's log (Xray or mihomo) into one sentence a person can act on, and
  * says whether starting the core again may help. The raw tail used to be shown as is: four lines of
@@ -11,24 +13,24 @@ object CoreErrors {
 
     private val rules = listOf(
         Rule(
-            true, "Адаптер TUN ещё занят прошлым подключением",
+            true, tr("Адаптер TUN ещё занят прошлым подключением"),
             "cannot create a file when that file already exists", "failed to create tun", "create tun", "wintun",
             "device or resource busy", "utun",
         ),
         Rule(
-            true, "Локальный порт занят другой программой",
+            true, tr("Локальный порт занят другой программой"),
             "address already in use", "only one usage of each socket address", "failed to listen", "bind:",
         ),
         Rule(
-            false, "Не хватает прав: запусти Ghostly от имени администратора или выбери «Системный прокси»",
+            false, tr("Не хватает прав: запусти Ghostly от имени администратора или выбери «Системный прокси»"),
             "access is denied", "permission denied", "operation not permitted", "requires elevation",
         ),
         Rule(
-            false, "Не найдены файлы geoip/geosite — переустанови приложение",
+            false, tr("Не найдены файлы geoip/geosite — переустанови приложение"),
             "geoip.dat", "geosite.dat", "failed to load geo",
         ),
         Rule(
-            false, "Сервер прислал настройки, которые ядро не понимает",
+            false, tr("Сервер прислал настройки, которые ядро не понимает"),
             "failed to parse", "failed to build", "failed to load config", "invalid config", "unknown field",
             "unknown protocol", "unknown transport", "unknown cipher", "unmarshal", "yaml:", "parse config",
         ),
@@ -49,8 +51,8 @@ object CoreErrors {
         return when {
             rule != null -> if (rule.transient || last == null) rule.text else "${rule.text}: ${last.take(160)}"
             last != null -> last.take(240)
-            tun -> "Ядро не успело поднять TUN-адаптер"
-            else -> "Ядро не запустилось"
+            tun -> tr("Ядро не успело поднять TUN-адаптер")
+            else -> tr("Ядро не запустилось")
         }
     }
 

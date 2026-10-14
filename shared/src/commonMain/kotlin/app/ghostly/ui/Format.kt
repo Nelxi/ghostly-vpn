@@ -2,19 +2,20 @@ package app.ghostly.ui
 
 import app.ghostly.core.model.Server
 import kotlin.math.roundToLong
+import app.ghostly.i18n.tr
 
 object Format {
 
     fun bytes(b: Long): String {
-        if (b < 1024) return "$b Б"
-        val units = listOf("КБ", "МБ", "ГБ", "ТБ")
+        if (b < 1024) return tr("{0} Б", b)
+        val units = listOf(tr("КБ"), tr("МБ"), tr("ГБ"), tr("ТБ"))
         var v = b.toDouble() / 1024
         var i = 0
         while (v >= 1024 && i < units.lastIndex) { v /= 1024; i++ }
         return "${oneDecimal(v)} ${units[i]}"
     }
 
-    fun speed(bps: Long): String = if (bps < 1024) "$bps Б/с" else bytes(bps) + "/с"
+    fun speed(bps: Long): String = if (bps < 1024) tr("{0} Б/с", bps) else bytes(bps) + tr("/с")
 
     fun duration(ms: Long): String {
         val s = (ms / 1000).coerceAtLeast(0)
@@ -26,12 +27,12 @@ object Format {
 
     /** "Осталось 3 дня" / "Истекла" — a full phrase for subscription cards. */
     fun expiryPhrase(expireSec: Long, nowMs: Long): String =
-        if (expireSec * 1000 <= nowMs) "Подписка истекла" else "Осталось ${remaining(expireSec, nowMs)}"
+        if (expireSec * 1000 <= nowMs) tr("Подписка истекла") else tr("Осталось {0}", remaining(expireSec, nowMs))
 
-    /** "3 дня", "21 день", "5 часов" — Russian plural forms. */
+    /** "3 дня", "21 день", "5 часов" — plural forms, translated (see [app.ghostly.i18n.L10n.plural]). */
     fun remaining(expireSec: Long, nowMs: Long): String {
         val left = expireSec * 1000 - nowMs
-        if (left <= 0) return "0 дней"
+        if (left <= 0) return tr("0 дней")
         val days = left / 86_400_000
         if (days >= 1) return "$days ${plural(days, "день", "дня", "дней")}"
         val hours = (left / 3_600_000).coerceAtLeast(1)
@@ -40,13 +41,13 @@ object Format {
 
     /** "обновлена 5 мин назад" — when a subscription was last fetched. */
     fun updatedAgo(atMs: Long, nowMs: Long): String {
-        if (atMs <= 0) return "ещё не обновлялась"
+        if (atMs <= 0) return tr("ещё не обновлялась")
         val min = (nowMs - atMs).coerceAtLeast(0) / 60_000
         return when {
-            min < 1 -> "обновлена только что"
-            min < 60 -> "обновлена $min мин назад"
-            min < 24 * 60 -> "обновлена ${min / 60} ч назад"
-            else -> (min / (24 * 60)).let { d -> "обновлена $d ${plural(d, "день", "дня", "дней")} назад" }
+            min < 1 -> tr("обновлена только что")
+            min < 60 -> tr("обновлена {0} мин назад", min)
+            min < 24 * 60 -> tr("обновлена {0} ч назад", min / 60)
+            else -> (min / (24 * 60)).let { d -> tr("обновлена {0} {1} назад", d, plural(d, "день", "дня", "дней")) }
         }
     }
 
@@ -62,20 +63,12 @@ object Format {
         val d = doy - (153 * mp + 2) / 5 + 1
         val m = if (mp < 10) mp + 3 else mp - 9
         val y = yoe + era * 400 + if (m <= 2) 1 else 0
-        return "$d ${MONTHS[(m - 1).toInt()]} $y"
+        return tr("{0} {1} {2}", d, tr(MONTHS[(m - 1).toInt()]), y)
     }
 
     private val MONTHS = listOf("января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря")
 
-    fun plural(n: Long, one: String, few: String, many: String): String {
-        val m10 = n % 10
-        val m100 = n % 100
-        return when {
-            m10 == 1L && m100 != 11L -> one
-            m10 in 2..4 && m100 !in 12..14 -> few
-            else -> many
-        }
-    }
+    fun plural(n: Long, one: String, few: String, many: String): String = app.ghostly.i18n.L10n.plural(n, one, few, many)
 
     private fun two(v: Long) = v.toString().padStart(2, '0')
 
@@ -93,9 +86,10 @@ fun Server.title(): ServerTitle {
     // The row's icon is the FIRST flag anywhere in the name (like Happ): "Автовыбор 🇪🇺 🤝🇷🇺" → EU.
     val flag = FLAG_ANYWHERE.find(n)?.value
     if (flag != null) n = n.replaceFirst(flag, " ").replace(Regex("\\s+"), " ").trim()
-    val parts = n.split(" · ", " | ", " - ").map { it.trim() }.filter { it.isNotEmpty() }
+    // Names come from the subscription in Russian; each part is translated if the dictionary knows it.
+    val parts = n.split(" · ", " | ", " - ").map { it.trim() }.filter { it.isNotEmpty() }.map { tr(it) }
     return if (parts.size >= 2) ServerTitle(flag, parts.first(), parts.drop(1).joinToString(" · "))
-    else ServerTitle(flag, n.ifEmpty { name }, null)
+    else ServerTitle(flag, tr(n).ifEmpty { name }, null)
 }
 
 /**
@@ -122,13 +116,13 @@ fun Server.protocolLabel(): String = when (protocol) {
     "trojan" -> "Trojan"
     "shadowsocks" -> "SS"
     "hysteria" -> "Hysteria2"
-    "balancer" -> "Авто"
+    "balancer" -> tr("Авто")
     else -> protocol.uppercase()
 }
 
 fun Server.transportLabel(): String? = when {
-    protocol == app.ghostly.core.model.MIHOMO_PROFILE -> "группы: $transport"
-    isAuto -> "$transport узлов"
+    protocol == app.ghostly.core.model.MIHOMO_PROFILE -> tr("группы: {0}", transport)
+    isAuto -> tr("{0} узлов", transport)
     protocol == "hysteria" -> "QUIC"
     security == "reality" -> "${transport?.uppercase()} · Reality"
     transport != null -> transport.uppercase()
@@ -148,12 +142,12 @@ private val COUNTRY_NAMES = mapOf(
     "DK" to "Дания", "BE" to "Бельгия", "PT" to "Португалия", "GR" to "Греция", "CY" to "Кипр",
 )
 
-/** Russian name of a flag emoji's country ("🇫🇮" → "Финляндия"); the two-letter code when unknown. */
+/** Name (translated) of a flag emoji's country ("🇫🇮" → "Финляндия"); the two-letter code when unknown. */
 fun countryName(flag: String): String {
     val cps = flag.flagCodePoints()
     if (cps.size < 2) return flag
     val code = cps.take(2).map { ('A'.code + (it - 0x1F1E6)).toChar() }.joinToString("")
-    return COUNTRY_NAMES[code] ?: code
+    return COUNTRY_NAMES[code]?.let { tr(it) } ?: code
 }
 
 private fun String.flagCodePoints(): List<Int> {

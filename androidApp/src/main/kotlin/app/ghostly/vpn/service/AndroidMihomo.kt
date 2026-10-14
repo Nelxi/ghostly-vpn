@@ -32,6 +32,7 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import java.io.File
+import app.ghostly.i18n.tr
 
 /**
  * Android mihomo, main-process side. The core itself (legiz-ru's Prizrak-Core through the
@@ -124,7 +125,7 @@ object AndroidMihomo : MihomoCore {
             watchStart()
             Unit
         } catch (e: Exception) {
-            mutableState.value = VpnState.Failed("Mihomo: ${e.message ?: "не удалось подготовить конфиг"}")
+            mutableState.value = VpnState.Failed("Mihomo: " + (e.message ?: tr("не удалось подготовить конфиг")))
         }
     }
 
@@ -160,7 +161,7 @@ object AndroidMihomo : MihomoCore {
             }
             MihomoVpnService.STATE_FAILED -> {
                 stopLocal()
-                mutableState.value = VpnState.Failed(intent.getStringExtra(MihomoVpnService.EXTRA_MESSAGE) ?: "Mihomo не запустился")
+                mutableState.value = VpnState.Failed(intent.getStringExtra(MihomoVpnService.EXTRA_MESSAGE) ?: tr("Mihomo не запустился"))
             }
             MihomoVpnService.STATE_IDLE -> {
                 // "Idle" of the session that was just replaced: a new connect is already under way.
@@ -198,7 +199,7 @@ object AndroidMihomo : MihomoCore {
             if (state.value == VpnState.Connecting) {
                 log("no answer from the service in ${START_TIMEOUT_MS / 1000} s")
                 stopLocal()
-                mutableState.value = VpnState.Failed("Mihomo не ответил — пробую ещё раз")
+                mutableState.value = VpnState.Failed(tr("Mihomo не ответил — пробую ещё раз"))
             }
         }
     }

@@ -22,6 +22,7 @@ import app.ghostly.vpn.trial.AndroidTrialAttestation
 import app.ghostly.vpn.service.AndroidVpn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import app.ghostly.i18n.tr
 
 class GhostlyApplication : Application() {
 
@@ -37,6 +38,9 @@ class GhostlyApplication : Application() {
         AndroidVpn.init(this)
         app.ghostly.vpn.service.AndroidMihomo.init(this)
         platform.preloadSounds()
+        // Translations before the first notification or screen (a small asset read).
+        kotlinx.coroutines.runBlocking { app.ghostly.i18n.L10n.load(controller.settings.value.language) }
+        app.ghostly.vpn.service.GhostlyWidget.watch(this)
     }
 
     private fun isMihomoProcess(): Boolean {
@@ -320,7 +324,7 @@ class AndroidPlatform(private val context: Context) : PlatformInfo {
                 Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             )
-            throw IllegalStateException("Разрешите Ghostly устанавливать приложения и нажмите «Обновить» ещё раз")
+            throw IllegalStateException(tr("Разрешите Ghostly устанавливать приложения и нажмите «Обновить» ещё раз"))
         }
         val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.updates", java.io.File(path))
         context.startActivity(

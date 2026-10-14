@@ -56,6 +56,7 @@ import app.ghostly.ui.components.ToggleRow
 import app.ghostly.ui.components.hoverSound
 import app.ghostly.ui.theme.Ghost
 import app.ghostly.ui.title
+import app.ghostly.i18n.tr
 
 /**
  * «Дополнительные прокси» on the local-proxy page: any number of SOCKS5/HTTP proxies, each with its own
@@ -68,14 +69,14 @@ internal fun ExtraProxiesSection(controller: GhostlyController, host: String) {
     val c = Ghost.colors
     val servers = remember(profiles) { controller.extraProxyServers() }
 
-    SectionTitle("Дополнительные прокси")
+    SectionTitle(tr("Дополнительные прокси"))
     Text(
-        "Сколько угодно своих прокси: у каждого свой порт и свой сервер. Работают одновременно с основным подключением — " +
-            "например, одни программы в Proxifier идут через Германию, другие через Нидерланды. Автосмена сервера их не трогает.",
+        tr("Сколько угодно своих прокси: у каждого свой порт и свой сервер. Работают одновременно с основным подключением — ") +
+            tr("например, одни программы в Proxifier идут через Германию, другие через Нидерланды. Автосмена сервера их не трогает."),
         style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(6.dp, 0.dp, 6.dp, 10.dp),
     )
     if (s.core != CoreType.XRAY) Text(
-        "Сейчас выбрано ядро Mihomo — дополнительные прокси работают на ядре Xray и поднимутся, когда вернёшься на него.",
+        tr("Сейчас выбрано ядро Mihomo — дополнительные прокси работают на ядре Xray и поднимутся, когда вернёшься на него."),
         style = MaterialTheme.typography.bodySmall, color = c.warn, modifier = Modifier.padding(6.dp, 0.dp, 6.dp, 10.dp),
     )
     // A port may be used once: by the main proxy or by one additional proxy.
@@ -89,13 +90,13 @@ internal fun ExtraProxiesSection(controller: GhostlyController, host: String) {
     }
     GlassCard(Modifier.fillMaxWidth(), padding = 14.dp, onClick = {
         controller.haptic()
-        if (servers.isEmpty()) controller.toast("Сначала добавь подписку — прокси нужен сервер")
+        if (servers.isEmpty()) controller.toast(tr("Сначала добавь подписку — прокси нужен сервер"))
         else controller.addExtraProxy()
     }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.Add, null, tint = c.accent, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(10.dp))
-            Text("Добавить прокси", style = MaterialTheme.typography.titleSmall)
+            Text(tr("Добавить прокси"), style = MaterialTheme.typography.titleSmall)
         }
     }
 }
@@ -116,25 +117,25 @@ private fun ExtraProxyCard(x: ExtraProxy, controller: GhostlyController, servers
             IconBubble(Icons.Rounded.Delete, { controller.haptic(); controller.removeExtraProxy(x.id) }, size = 36.dp, tint = c.bad)
         }
         if (server == null) Text(
-            if (x.serverName == null) "Выбери сервер — без него прокси не поднимется"
-            else "Сервера «${x.serverName}» больше нет в подписке — выбери другой",
+            if (x.serverName == null) tr("Выбери сервер — без него прокси не поднимется")
+            else tr("Сервера «{0}» больше нет в подписке — выбери другой", x.serverName),
             style = MaterialTheme.typography.bodySmall, color = c.bad, modifier = Modifier.padding(6.dp, 6.dp, 6.dp, 0.dp),
         )
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Segmented(ExtraProxyType.entries.map { it to it.title }, x.type, { t -> update { it.copy(type = t) } }, Modifier.weight(1f))
-            PortField("Порт", x.port, Modifier.weight(1f)) { p -> update { it.copy(port = p) } }
+            PortField(tr("Порт"), x.port, Modifier.weight(1f)) { p -> update { it.copy(port = p) } }
         }
         if (portClash) Text(
-            "Этот порт уже занят другим прокси Ghostly — поставь другой, иначе этот не поднимется",
+            tr("Этот порт уже занят другим прокси Ghostly — поставь другой, иначе этот не поднимется"),
             style = MaterialTheme.typography.bodySmall, color = c.bad, modifier = Modifier.padding(6.dp, 6.dp, 6.dp, 0.dp),
         )
         Spacer(Modifier.height(4.dp))
-        ToggleRow("Логин и пароль", if (x.auth) null else "Сейчас прокси открыт без пароля", x.auth, Icons.Rounded.Lock) { v -> update { it.copy(auth = v) } }
+        ToggleRow(tr("Логин и пароль"), if (x.auth) null else tr("Сейчас прокси открыт без пароля"), x.auth, Icons.Rounded.Lock) { v -> update { it.copy(auth = v) } }
         if (x.auth) {
-            CredentialField("Логин", x.user, controller) { v -> update { it.copy(user = v) } }
+            CredentialField(tr("Логин"), x.user, controller) { v -> update { it.copy(user = v) } }
             Spacer(Modifier.height(8.dp))
-            CredentialField("Пароль", x.pass, controller, secret = true) { v -> update { it.copy(pass = v) } }
+            CredentialField(tr("Пароль"), x.pass, controller, secret = true) { v -> update { it.copy(pass = v) } }
         }
         Spacer(Modifier.height(10.dp))
         val creds = if (x.auth) "${x.user}:${x.pass}@" else ""
@@ -142,7 +143,7 @@ private fun ExtraProxyCard(x: ExtraProxy, controller: GhostlyController, servers
         val shown = if (x.auth) "${x.type.scheme}://${x.user}:••••••@$host:${x.port}" else link
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.Black.copy(alpha = 0.22f)).border(1.dp, c.line, RoundedCornerShape(14.dp))
-                .hoverSound().clickable { controller.haptic(); controller.platform.copyToClipboard(link); controller.toast("Адрес прокси скопирован") }
+                .hoverSound().clickable { controller.haptic(); controller.platform.copyToClipboard(link); controller.toast(tr("Адрес прокси скопирован")) }
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -170,7 +171,7 @@ private fun ServerPicker(server: Server?, lostName: String?, servers: List<Serve
             if (t?.flag != null) FlagIcon(t.flag, 14.dp) else Icon(Icons.Rounded.Public, null, tint = c.ink3, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(10.dp))
             Text(
-                t?.let { listOfNotNull(it.title, it.subtitle).joinToString(" · ") } ?: lostName ?: "Выбрать сервер",
+                t?.let { listOfNotNull(it.title, it.subtitle).joinToString(" · ") } ?: lostName ?: tr("Выбрать сервер"),
                 style = MaterialTheme.typography.titleSmall, color = if (server != null) c.ink else c.ink3,
                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
             )

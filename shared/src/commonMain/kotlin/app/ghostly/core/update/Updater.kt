@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.Serializable
+import app.ghostly.i18n.tr
 
 @Serializable
 data class ReleaseFile(
@@ -65,7 +66,7 @@ class Updater(private val platform: PlatformInfo, private val isDismissed: (Stri
     /** @return the offer if a newer version exists (ignores the user's "✕" unless [force]). */
     suspend fun check(force: Boolean = false): UpdateOffer? {
         val asset = platform.updateAsset ?: run {
-            _lastCheck.value = "Эта сборка не обновляется сама (портативная или из исходников)"
+            _lastCheck.value = tr("Эта сборка не обновляется сама (портативная или из исходников)")
             return null
         }
         // Ask every mirror at once and trust the newest answer: a CDN edge can hold a stale manifest.
@@ -83,16 +84,16 @@ class Updater(private val platform: PlatformInfo, private val isDismissed: (Stri
                 }
             }.awaitAll().filterNotNull().maxWithOrNull { a, b -> compareVersions(a.version, b.version) }
         } ?: run {
-            _lastCheck.value = "${stamp()}: сервер обновлений недоступен"
+            _lastCheck.value = tr("{0}: сервер обновлений недоступен", stamp())
             return null
         }
         val file = manifest.files[asset] ?: run {
-            _lastCheck.value = "${stamp()}: в версии ${manifest.version} нет файла $asset"
+            _lastCheck.value = tr("{0}: в версии {1} нет файла {2}", stamp(), manifest.version, asset)
             return null
         }
         val latest = file.version ?: manifest.version
-        _lastCheck.value = "${stamp()}: на сервере $latest, у тебя ${platform.appVersion}" +
-            if (compareVersions(latest, platform.appVersion) > 0) " — есть обновление" else " — всё свежее"
+        _lastCheck.value = tr("{0}: на сервере {1}, у тебя {2}", stamp(), latest, platform.appVersion) +
+            if (compareVersions(latest, platform.appVersion) > 0) tr(" — есть обновление") else tr(" — всё свежее")
         val newer = compareVersions(latest, platform.appVersion) > 0
         // Up to date: the installer that got us here (66–180 MB) has done its job. While an update is
         // still pending it stays, so a failed install is retried without downloading it again.
@@ -130,12 +131,12 @@ class Updater(private val platform: PlatformInfo, private val isDismissed: (Stri
             }
         } catch (e: Exception) {
             failures[offer.version] = (failures[offer.version] ?: 0) + 1
-            _step.value = UpdateStep.Failed(e.message ?: "Не удалось скачать обновление")
+            _step.value = UpdateStep.Failed(e.message ?: tr("Не удалось скачать обновление"))
             return
         }
         _step.value = UpdateStep.Installing
         runCatching { platform.installUpdate(path) }
-            .onFailure { _step.value = UpdateStep.Failed(it.message ?: "Не удалось запустить установку") }
+            .onFailure { _step.value = UpdateStep.Failed(it.message ?: tr("Не удалось запустить установку")) }
             .onSuccess {
                 // Android hands the APK to the system installer and stays alive: if the user cancels it,
                 // the banner must come back to "Обновить" instead of hanging on "Запускаю установку".

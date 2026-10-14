@@ -14,6 +14,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import app.ghostly.i18n.tr
 
 /** Quick Settings toggle. */
 class GhostlyTileService : TileService() {
@@ -73,10 +74,10 @@ class GhostlyTileService : TileService() {
                 is VpnState.Connected -> when {
                     mihomo -> "Mihomo"
                     profile?.url != null && server != null -> server.name
-                    else -> getString(R.string.tile_on)
+                    else -> tr("Защищено")
                 }
-                VpnState.Connecting -> getString(R.string.notif_connecting)
-                else -> getString(R.string.tile_off)
+                VpnState.Connecting -> tr("Подключаюсь…")
+                else -> tr("Выключен")
             }
         }
         tile.updateTile()

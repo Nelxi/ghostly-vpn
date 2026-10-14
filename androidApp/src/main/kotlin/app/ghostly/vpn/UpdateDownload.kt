@@ -7,6 +7,7 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URI
 import java.security.MessageDigest
+import app.ghostly.i18n.tr
 
 /** Streams the first reachable URL into [target], hashing on the fly; keeps it only if SHA-256 matches. */
 internal suspend fun downloadVerifiedTo(
@@ -46,10 +47,10 @@ internal suspend fun downloadVerifiedTo(
             val got = md.digest().joinToString("") { "%02x".format(it) }
             if (!got.equals(sha256.trim(), ignoreCase = true)) {
                 tmp.delete()
-                throw IOException("Контрольная сумма не совпала — файл повреждён или подменён, установка отменена")
+                throw IOException(tr("Контрольная сумма не совпала — файл повреждён или подменён, установка отменена"))
             }
             target.delete()
-            if (!tmp.renameTo(target)) throw IOException("Не удалось сохранить файл обновления")
+            if (!tmp.renameTo(target)) throw IOException(tr("Не удалось сохранить файл обновления"))
             onProgress(1f)
             return@withContext target.path
         } catch (e: Exception) {
@@ -58,5 +59,5 @@ internal suspend fun downloadVerifiedTo(
             last = e
         }
     }
-    throw last ?: IOException("Не удалось скачать обновление")
+    throw last ?: IOException(tr("Не удалось скачать обновление"))
 }

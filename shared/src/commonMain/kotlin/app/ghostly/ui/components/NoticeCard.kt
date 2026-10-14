@@ -77,6 +77,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import app.ghostly.i18n.tr
 
 private class NoticeLook(val a: Color, val b: Color, val icon: ImageVector)
 
@@ -196,7 +197,7 @@ private fun NoticeCard(n: Notice, more: Int, controller: GhostlyController) {
                     Text(ago(n.ts), style = MaterialTheme.typography.labelSmall, color = c.ink3)
                     Spacer(Modifier.width(6.dp))
                     Icon(
-                        Icons.Rounded.Close, "Закрыть", tint = c.ink2,
+                        Icons.Rounded.Close, tr("Закрыть"), tint = c.ink2,
                         modifier = Modifier.size(24.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.07f))
                             .hoverSound().clickable { controller.haptic(Haptic.TICK); dismiss() }.padding(5.dp),
                     )
@@ -204,7 +205,7 @@ private fun NoticeCard(n: Notice, more: Int, controller: GhostlyController) {
                 if (n.personal) {
                     Spacer(Modifier.height2())
                     Text(
-                        "Лично вам", color = look.b,
+                        tr("Лично вам"), color = look.b,
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                         modifier = Modifier.clip(CircleShape).background(look.a.copy(alpha = 0.2f)).padding(horizontal = 8.dp, vertical = 1.dp),
                     )
@@ -230,12 +231,12 @@ private fun NoticeCard(n: Notice, more: Int, controller: GhostlyController) {
                                     .padding(horizontal = 14.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text(b.text.ifBlank { "Открыть" }, color = Color(0xFF150A2C), style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold))
+                                Text(b.text.ifBlank { tr("Открыть") }, color = Color(0xFF150A2C), style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold))
                                 Spacer(Modifier.width(6.dp))
                                 Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = Color(0xFF150A2C), modifier = Modifier.size(15.dp))
                             }
                         }
-                        if (more > 0) Text("ещё $more", style = MaterialTheme.typography.labelMedium, color = c.ink3)
+                        if (more > 0) Text(tr("ещё {0}", more), style = MaterialTheme.typography.labelMedium, color = c.ink3)
                     }
                 }
             }
@@ -246,13 +247,13 @@ private fun NoticeCard(n: Notice, more: Int, controller: GhostlyController) {
 private fun Modifier.height2() = this.then(Modifier.padding(top = 3.dp))
 
 private fun ago(ts: Long): String {
-    if (ts <= 0) return "сейчас"
+    if (ts <= 0) return tr("сейчас")
     val d = (app.ghostly.core.GhostlyController.now() / 1000 - ts).coerceAtLeast(0)
     return when {
-        d < 60 -> "сейчас"
-        d < 3600 -> "${d / 60} мин"
-        d < 86400 -> "${d / 3600} ч"
-        else -> "${d / 86400} дн"
+        d < 60 -> tr("сейчас")
+        d < 3600 -> tr("{0} мин", d / 60)
+        d < 86400 -> tr("{0} ч", d / 3600)
+        else -> tr("{0} дн", d / 86400)
     }
 }
 
@@ -298,12 +299,12 @@ fun NoticeBell(controller: GhostlyController) {
                     .padding(18.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Уведомления", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = c.ink, modifier = Modifier.weight(1f))
-                    Icon(Icons.Rounded.Close, "Закрыть", tint = c.ink2, modifier = Modifier.size(30.dp).clip(CircleShape).clickable { open = false }.padding(5.dp))
+                    Text(tr("Уведомления"), style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = c.ink, modifier = Modifier.weight(1f))
+                    Icon(Icons.Rounded.Close, tr("Закрыть"), tint = c.ink2, modifier = Modifier.size(30.dp).clip(CircleShape).clickable { open = false }.padding(5.dp))
                 }
                 Spacer(Modifier.height(12.dp))
                 if (items.isEmpty()) {
-                    Text("Пока тихо. Здесь будут объявления Ghostly и сообщения лично вам.", color = c.ink3, style = MaterialTheme.typography.bodyMedium)
+                    Text(tr("Пока тихо. Здесь будут объявления Ghostly и сообщения лично вам."), color = c.ink3, style = MaterialTheme.typography.bodyMedium)
                 } else {
                     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         items.forEach { n -> NoticeRow(n, controller) }
@@ -334,7 +335,7 @@ private fun NoticeRow(n: Notice, controller: GhostlyController) {
             if (n.personal) {
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    "лично вам", color = look.b, style = MaterialTheme.typography.labelSmall,
+                    tr("лично вам"), color = look.b, style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.clip(CircleShape).background(look.a.copy(alpha = 0.2f)).padding(horizontal = 7.dp, vertical = 1.dp),
                 )
             }
@@ -346,7 +347,7 @@ private fun NoticeRow(n: Notice, controller: GhostlyController) {
         val b = n.button
         if (b?.url != null) {
             Text(
-                b.text.ifBlank { "Открыть" } + " →", color = look.b, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                b.text.ifBlank { tr("Открыть") } + " →", color = look.b, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                 modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(10.dp)).clickable { controller.platform.openUrl(b.url) }.padding(vertical = 4.dp),
             )
         }

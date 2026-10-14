@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import libv2ray.Libv2ray
 import java.io.File
+import app.ghostly.i18n.tr
 
 /** What the service should bring up next. Lives in-process; the service reads it on start. */
 data class TunnelRequest(val server: Server, val settings: AppSettings)
@@ -120,7 +121,7 @@ object AndroidVpn : VpnBackend {
         }
         if (done == null && state.value is VpnState.Connecting) {
             log("no answer from the service in ${START_TIMEOUT_MS / 1000} s")
-            mutableState.value = VpnState.Failed("Сервис VPN не ответил — пробую ещё раз")
+            mutableState.value = VpnState.Failed(tr("Сервис VPN не ответил — пробую ещё раз"))
         }
     }
 

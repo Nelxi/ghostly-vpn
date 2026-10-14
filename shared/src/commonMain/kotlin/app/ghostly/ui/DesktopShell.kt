@@ -75,6 +75,7 @@ import app.ghostly.ui.screens.ServersScreen
 import app.ghostly.ui.screens.SettingsScreen
 import app.ghostly.ui.theme.Ghost
 import app.ghostly.ui.theme.Motion
+import app.ghostly.i18n.tr
 
 private val NAV_ITEM_H = 48.dp
 private val NAV_GAP = 6.dp
@@ -143,13 +144,13 @@ private fun Sidebar(controller: GhostlyController, tab: Tab, onTab: (Tab) -> Uni
                     .border(1.dp, c.accent.copy(alpha = 0.32f), RoundedCornerShape(16.dp)),
             )
             Column(verticalArrangement = Arrangement.spacedBy(NAV_GAP)) {
-                NavItem(Icons.Rounded.Home, "Главная", tab == Tab.HOME) { onTab(Tab.HOME) }
-                NavItem(Icons.Rounded.Dns, "Серверы", tab == Tab.SERVERS) { onTab(Tab.SERVERS) }
-                NavItem(Icons.Rounded.Settings, "Настройки", tab == Tab.SETTINGS) { onTab(Tab.SETTINGS) }
+                NavItem(Icons.Rounded.Home, tr("Главная"), tab == Tab.HOME) { onTab(Tab.HOME) }
+                NavItem(Icons.Rounded.Dns, tr("Серверы"), tab == Tab.SERVERS) { onTab(Tab.SERVERS) }
+                NavItem(Icons.Rounded.Settings, tr("Настройки"), tab == Tab.SETTINGS) { onTab(Tab.SETTINGS) }
             }
         }
         Spacer(Modifier.height(14.dp))
-        NavItem(Icons.Rounded.Add, "Добавить подписку", false, tint = c.accent, onClick = onAdd)
+        NavItem(Icons.Rounded.Add, tr("Добавить подписку"), false, tint = c.accent, onClick = onAdd)
 
         Spacer(Modifier.weight(1f))
 
@@ -163,7 +164,7 @@ private fun Sidebar(controller: GhostlyController, tab: Tab, onTab: (Tab) -> Uni
                 app.ghostly.ui.components.FlagText(profile.name, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    if (info.unlimitedTime) "Бессрочно" else Format.expiryPhrase(info.expire, GhostlyController.now()),
+                    if (info.unlimitedTime) tr("Бессрочно") else Format.expiryPhrase(info.expire, GhostlyController.now()),
                     style = MaterialTheme.typography.bodySmall,
                 )
                 if (info.pools.isNotEmpty()) {
@@ -173,13 +174,13 @@ private fun Sidebar(controller: GhostlyController, tab: Tab, onTab: (Tab) -> Uni
                         Spacer(Modifier.height(4.dp))
                         GlowBar(if (p.total > 0) p.used.toFloat() / p.total else 0f, if (p.isWhitelist) c.accent else c.ok)
                         Spacer(Modifier.height(3.dp))
-                        Text(if (p.total > 0) "${Format.bytes(p.used)} из ${Format.bytes(p.total)}" else "без лимита", style = MaterialTheme.typography.bodySmall)
+                        Text(if (p.total > 0) tr("{0} из {1}", Format.bytes(p.used), Format.bytes(p.total)) else tr("без лимита"), style = MaterialTheme.typography.bodySmall)
                     }
                 } else if (!info.unlimitedTraffic) {
                     Spacer(Modifier.height(10.dp))
                     GlowBar(info.used.toFloat() / info.total, c.accent)
                     Spacer(Modifier.height(6.dp))
-                    Text("${Format.bytes(info.used)} из ${Format.bytes(info.total)}", style = MaterialTheme.typography.bodySmall)
+                    Text(tr("{0} из {1}", Format.bytes(info.used), Format.bytes(info.total)), style = MaterialTheme.typography.bodySmall)
                 }
             }
             Spacer(Modifier.height(10.dp))
@@ -253,14 +254,14 @@ private fun StatusChip(state: VpnState, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(
                 when {
-                    connected -> "Защищено"
-                    busy -> "Подождите…"
-                    state is VpnState.Failed -> "Ошибка"
-                    else -> "Выключено"
+                    connected -> tr("Защищено")
+                    busy -> tr("Подождите…")
+                    state is VpnState.Failed -> tr("Ошибка")
+                    else -> tr("Выключено")
                 },
                 style = MaterialTheme.typography.labelLarge, color = c.ink,
             )
-            Text(if (connected) "Нажми, чтобы отключить" else "Нажми, чтобы подключить", style = MaterialTheme.typography.bodySmall)
+            Text(if (connected) tr("Нажми, чтобы отключить") else tr("Нажми, чтобы подключить"), style = MaterialTheme.typography.bodySmall)
         }
     }
 }

@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import app.ghostly.i18n.tr
 
 /**
  * Why a server that fails the ping doesn't answer, found by a direct connection (outside the tunnel):
@@ -12,7 +13,7 @@ import kotlinx.serialization.json.JsonPrimitive
  * freezes it after the first ~16 KB (the "16 KB block" of foreign hosting).
  */
 @Serializable
-enum class BlockVerdict(val short: String, val title: String) {
+enum class BlockVerdict(private val shortRu: String, private val titleRu: String) {
     /** The server itself answers directly — the problem is in the proxy, not a block. */
     REACHABLE("нет", "Сервер доступен напрямую — не отвечает сам прокси"),
     /** No TCP to host:port while the internet works. */
@@ -22,7 +23,10 @@ enum class BlockVerdict(val short: String, val title: String) {
     /** Data flows, then freezes after ~16 KB. */
     TSPU_16KB("16 КБ", "Трафик замирает после ~16 КБ — блок ТСПУ по объёму"),
     /** No internet at all: nothing to say about the server. */
-    OFFLINE("нет", "Нет интернета"),
+    OFFLINE("нет", "Нет интернета");
+
+    val short: String get() = tr(shortRu)
+    val title: String get() = tr(titleRu)
 }
 
 /** What the direct check connects to: the server's address and the SNI it presents (null = no TLS). */

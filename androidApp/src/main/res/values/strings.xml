@@ -6,4 +6,5 @@
     <string name="notif_connected">Подключено</string>
     <string name="tile_off">Выключен</string>
     <string name="tile_on">Защищено</string>
+    <string name="widget_description">Включение VPN одним нажатием</string>
 </resources>

@@ -15,6 +15,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.serialization.Serializable
+import app.ghostly.i18n.tr
 
 /**
  * The way from the app into the user's Ghostly account: everything the bot and the site can do
@@ -82,6 +83,7 @@ class GhostlyAccount(private val platform: PlatformInfo, private val userAgent: 
         val r = http.post(endpoint) {
             header("User-Agent", userAgent())
             header("x-hwid", platform.hwid)
+            header("Accept-Language", app.ghostly.i18n.L10n.language)
             header("x-device-os", platform.os)
             header("x-device-model", platform.deviceModel)
             contentType(ContentType.Application.Json)
@@ -102,12 +104,12 @@ class GhostlyAccount(private val platform: PlatformInfo, private val userAgent: 
 
         /** What to tell the person while the browser opens; null when the link signs in by itself. */
         fun hint(link: Link?): String? = when {
-            link == null -> "Сервер не ответил — открываю сайт, войдите там в аккаунт"
+            link == null -> tr("Сервер не ответил — открываю сайт, войдите там в аккаунт")
             link.login -> null
-            link.reason == "totp" -> "У аккаунта двухэтапная защита — войдите на сайте с кодом"
-            link.pair -> "Войдите на сайте и подтвердите это устройство — дальше кабинет будет открываться сам"
-            link.reason == "not_first_device" -> "Вход без пароля работает на устройстве, где подписку добавили первой. Здесь войдите на сайте сами"
-            else -> "Открываю сайт — войдите в аккаунт"
+            link.reason == "totp" -> tr("У аккаунта двухэтапная защита — войдите на сайте с кодом")
+            link.pair -> tr("Войдите на сайте и подтвердите это устройство — дальше кабинет будет открываться сам")
+            link.reason == "not_first_device" -> tr("Вход без пароля работает на устройстве, где подписку добавили первой. Здесь войдите на сайте сами")
+            else -> tr("Открываю сайт — войдите в аккаунт")
         }
 
         /** Where to send the person when the server could not be asked: the site, on the same section. */

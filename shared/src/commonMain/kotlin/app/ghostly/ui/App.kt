@@ -99,15 +99,17 @@ import app.ghostly.ui.theme.GhostlyTheme
 import app.ghostly.ui.theme.Motion
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import app.ghostly.i18n.tr
 
 const val SITE_URL = "https://ghostlynex.fun"
 
-internal enum class Tab(val title: String) { HOME("Главная"), SERVERS("Серверы"), SETTINGS("Настройки") }
+internal enum class Tab(val title: String) { HOME(tr("Главная")), SERVERS(tr("Серверы")), SETTINGS(tr("Настройки")) }
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun GhostlyApp(controller: GhostlyController) {
     val settings by controller.settings.collectAsState()
+    LaunchedEffect(settings.language) { app.ghostly.i18n.L10n.load(settings.language) }
     val onboarded by controller.onboarded.collectAsState()
     val state by controller.state.collectAsState()
 
@@ -122,7 +124,7 @@ fun GhostlyApp(controller: GhostlyController) {
         ?: design.accentArgb()?.takeIf { settings.accent == app.ghostly.core.model.ThemeAccent.GHOST } ?: settings.accent.argb
     // One clock for every looping decoration, paused while the app is off screen (see Ambient.kt).
     val ambientTime = app.ghostly.ui.components.rememberAmbientClock()
-    GhostlyTheme(accent, settings.reduceMotion) { androidx.compose.runtime.CompositionLocalProvider(app.ghostly.ui.components.LocalAmbientTime provides ambientTime, app.ghostly.ui.components.LocalHaptic provides { controller.haptic(app.ghostly.core.vpn.Haptic.TICK) }, app.ghostly.ui.components.LocalHapticOf provides { k -> controller.haptic(k) }, app.ghostly.ui.components.LocalHoverSound provides { controller.hoverSound() }, app.ghostly.ui.theme.LocalDesign provides design) {
+    GhostlyTheme(accent, settings.reduceMotion) { androidx.compose.runtime.CompositionLocalProvider(app.ghostly.ui.components.LocalAmbientTime provides ambientTime, app.ghostly.ui.components.LocalHaptic provides { controller.haptic(app.ghostly.core.vpn.Haptic.TICK) }, app.ghostly.ui.components.LocalHapticOf provides { k -> controller.haptic(k) }, app.ghostly.ui.components.LocalHoverSound provides { controller.hoverSound() }, app.ghostly.ui.theme.LocalDesign provides design, androidx.compose.ui.platform.LocalLayoutDirection provides if (app.ghostly.i18n.L10n.isRtl) androidx.compose.ui.unit.LayoutDirection.Rtl else androidx.compose.ui.unit.LayoutDirection.Ltr) {
         var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
         controller.platform.demo?.takeIf { it.startsWith("tabs:") }?.let { spec ->
             val every = spec.removePrefix("tabs:").toLongOrNull() ?: 2500L
@@ -158,7 +160,7 @@ fun GhostlyApp(controller: GhostlyController) {
         var exitArmed by remember { mutableStateOf(false) }
         androidx.compose.ui.backhandler.BackHandler(enabled = onboarded && !wideLayout && tab == Tab.HOME && !exitArmed) {
             exitArmed = true
-            toast = "Свайпните ещё раз, чтобы выйти"
+            toast = tr("Свайпните ещё раз, чтобы выйти")
         }
         LaunchedEffect(exitArmed) { if (exitArmed) { delay(2000); exitArmed = false } }
 
@@ -217,7 +219,7 @@ fun GhostlyApp(controller: GhostlyController) {
             stage?.let { app.ghostly.ui.stage.StageOverlay(it) }
 
             // Server picker: our own sheet (see PickerSheet for why not ModalBottomSheet).
-            PickerSheet(pickerOpen, onClose = { pickerOpen = false }, title = "Выбор сервера") {
+            PickerSheet(pickerOpen, onClose = { pickerOpen = false }, title = tr("Выбор сервера")) {
                 ServersScreen(
                     controller, PaddingValues(bottom = insets.calculateBottomPadding() + 24.dp),
                     onAdd = { pickerOpen = false; addOpen = true },
@@ -464,21 +466,21 @@ private fun Onboarding(controller: GhostlyController, onAdd: () -> Unit) {
         Text("Ghostly VPN", style = MaterialTheme.typography.displayMedium)
         Spacer(Modifier.height(8.dp))
         Text(
-            "Свободный интернет без тормозов.\nYouTube, Instagram, Telegram — как будто ничего и не блокировали.",
+            tr("Свободный интернет без тормозов.\nYouTube, Instagram, Telegram — как будто ничего и не блокировали."),
             style = MaterialTheme.typography.bodyLarge.copy(color = c.ink2), textAlign = TextAlign.Center,
             modifier = Modifier.widthIn(max = 360.dp),
         )
         Spacer(Modifier.height(34.dp))
         Column(Modifier.widthIn(max = 380.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            AccentButton("Вставить ссылку из буфера", {
+            AccentButton(tr("Вставить ссылку из буфера"), {
                 controller.haptic()
                 controller.import(controller.platform.readClipboard().orEmpty())
             }, Modifier.fillMaxWidth(), Icons.Rounded.ContentPaste)
-            SoftButton("Другие способы", onAdd, Modifier.fillMaxWidth(), Icons.Rounded.QrCodeScanner)
-            SoftButton("Купить подписку", { controller.platform.openUrl(SITE_URL) }, Modifier.fillMaxWidth(), Icons.Rounded.ShoppingBag, tint = c.accent)
+            SoftButton(tr("Другие способы"), onAdd, Modifier.fillMaxWidth(), Icons.Rounded.QrCodeScanner)
+            SoftButton(tr("Купить подписку"), { controller.platform.openUrl(SITE_URL) }, Modifier.fillMaxWidth(), Icons.Rounded.ShoppingBag, tint = c.accent)
         }
         Spacer(Modifier.height(20.dp))
-        Text("Подходит любая подписка VLESS / VMess / Trojan / Shadowsocks / Hysteria2", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+        Text(tr("Подходит любая подписка VLESS / VMess / Trojan / Shadowsocks / Hysteria2"), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
     }
 }
 
@@ -492,27 +494,27 @@ private fun AddSheet(controller: GhostlyController, close: () -> Unit) {
     val done: (Boolean) -> Unit = { ok -> busy = false; if (ok) close() }
 
     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp)) {
-        Text("Добавить", style = MaterialTheme.typography.headlineSmall)
-        Text("Подписка, ссылка на сервер или JSON-конфиг", style = MaterialTheme.typography.bodySmall)
+        Text(tr("Добавить"), style = MaterialTheme.typography.headlineSmall)
+        Text(tr("Подписка, ссылка на сервер или JSON-конфиг"), style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            SourceTile("Из буфера", Icons.Rounded.ContentPaste, Modifier.weight(1f)) {
+            SourceTile(tr("Из буфера"), Icons.Rounded.ContentPaste, Modifier.weight(1f)) {
                 busy = true
                 controller.import(controller.platform.readClipboard().orEmpty(), done)
             }
             controller.platform.qrScanner?.let { scan ->
-                SourceTile("QR-код", Icons.Rounded.QrCodeScanner, Modifier.weight(1f)) {
+                SourceTile(tr("QR-код"), Icons.Rounded.QrCodeScanner, Modifier.weight(1f)) {
                     scan { result -> busy = true; controller.import(result, done) }
                 }
             }
-            SourceTile("Купить", Icons.Rounded.ShoppingBag, Modifier.weight(1f)) { controller.platform.openUrl(SITE_URL) }
+            SourceTile(tr("Купить"), Icons.Rounded.ShoppingBag, Modifier.weight(1f)) { controller.platform.openUrl(SITE_URL) }
         }
         Spacer(Modifier.height(16.dp))
         Box(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.05f))
                 .border(1.dp, c.line, RoundedCornerShape(16.dp)).padding(14.dp),
         ) {
-            if (text.isEmpty()) Text("https://… или vless://…", style = MaterialTheme.typography.bodyMedium, color = c.ink3)
+            if (text.isEmpty()) Text(tr("https://… или vless://…"), style = MaterialTheme.typography.bodyMedium, color = c.ink3)
             BasicTextField(
                 text, { text = it },
                 textStyle = MaterialTheme.typography.bodyMedium.copy(color = c.ink),
@@ -520,7 +522,7 @@ private fun AddSheet(controller: GhostlyController, close: () -> Unit) {
             )
         }
         Spacer(Modifier.height(12.dp))
-        AccentButton(if (busy) "Загружаю…" else "Добавить", {
+        AccentButton(if (busy) tr("Загружаю…") else tr("Добавить"), {
             busy = true
             controller.import(text, done)
         }, Modifier.fillMaxWidth(), enabled = text.isNotBlank() && !busy)

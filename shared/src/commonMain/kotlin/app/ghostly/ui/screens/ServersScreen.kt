@@ -100,6 +100,7 @@ import app.ghostly.ui.title
 import app.ghostly.ui.transportLabel
 import app.ghostly.ui.section
 import app.ghostly.ui.withoutLte
+import app.ghostly.i18n.tr
 
 private enum class Sort { LIST, PING, NAME }
 
@@ -173,7 +174,7 @@ private fun ServersList(
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
         if (showHeader) item {
             Row(Modifier.fillMaxWidth().padding(start = LocalListPad.current, end = LocalListPad.current, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Серверы", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
+                Text(tr("Серверы"), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
                 IconBubble(Icons.Rounded.Add, onAdd, tint = c.accent)
             }
         }
@@ -185,7 +186,7 @@ private fun ServersList(
                 Box {
                     IconBubble(Icons.AutoMirrored.Rounded.Sort, { sortMenu = true }, active = sort != Sort.LIST)
                     DropdownMenu(sortMenu, { sortMenu = false }) {
-                        listOf(Sort.LIST to "Как в подписке", Sort.PING to "По пингу", Sort.NAME to "По имени").forEach { (v, l) ->
+                        listOf(Sort.LIST to tr("Как в подписке"), Sort.PING to tr("По пингу"), Sort.NAME to tr("По имени")).forEach { (v, l) ->
                             DropdownMenuItem(text = { Text(l) }, onClick = { sort = v; sortMenu = false },
                                 trailingIcon = { if (sort == v) Icon(Icons.Rounded.CheckCircle, null, tint = c.accent) })
                         }
@@ -207,7 +208,7 @@ private fun ServersList(
         val inGroups = if (query.isBlank()) (mihomoGroups + groupsByProfile.filterKeys { it != activeId }.values.flatten()).flatMap { it.members }.toSet() else emptySet()
         val favs = profiles.flatMap { it.servers }.filter { it.id in favorites && matches(it) && it.name !in inGroups }
         if (favs.isNotEmpty()) {
-            item { GroupLabel("Избранное", Icons.Rounded.Star) }
+            item { GroupLabel(tr("Избранное"), Icons.Rounded.Star) }
             items(sorted(favs), key = { "fav:" + it.id }) { s ->
                 ServerRow(s, s.id == selected, pings[s.id], s.id in pinging, true, controller, Modifier.animateItem()) { pick(s) }
             }
@@ -280,7 +281,7 @@ private fun SearchField(value: String, onChange: (String) -> Unit, modifier: Mod
         Icon(Icons.Rounded.Search, null, tint = c.ink3, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
         Box(Modifier.weight(1f)) {
-            if (value.isEmpty()) Text("Поиск", style = MaterialTheme.typography.bodyMedium, color = c.ink3)
+            if (value.isEmpty()) Text(tr("Поиск"), style = MaterialTheme.typography.bodyMedium, color = c.ink3)
             BasicTextField(
                 value, onChange, singleLine = true,
                 textStyle = MaterialTheme.typography.bodyMedium.copy(color = c.ink),
@@ -326,7 +327,7 @@ private fun ProfileHeader(profile: Profile, collapsed: Boolean, refreshing: Bool
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // The arrow folds the list; the rest of the header opens the subscription page.
-        Icon(Icons.Rounded.ExpandMore, if (collapsed) "Развернуть" else "Свернуть", tint = c.ink3,
+        Icon(Icons.Rounded.ExpandMore, if (collapsed) tr("Развернуть") else tr("Свернуть"), tint = c.ink3,
             modifier = Modifier.size(34.dp).clip(RoundedCornerShape(12.dp)).hoverSound().clickable(onClick = onToggle).padding(7.dp).rotate(arrow))
         Column(
             Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).pointerHoverIcon(PointerIcon.Hand)
@@ -337,7 +338,7 @@ private fun ProfileHeader(profile: Profile, collapsed: Boolean, refreshing: Bool
                 // There is a note from the provider: it is on the subscription page.
                 if (profile.announce != null) {
                     Spacer(Modifier.width(6.dp))
-                    Icon(Icons.Rounded.Campaign, "Есть сообщение", tint = c.accent, modifier = Modifier.size(15.dp))
+                    Icon(Icons.Rounded.Campaign, tr("Есть сообщение"), tint = c.accent, modifier = Modifier.size(15.dp))
                 }
                 Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = c.ink3, modifier = Modifier.size(18.dp))
             }
@@ -351,7 +352,7 @@ private fun ProfileHeader(profile: Profile, collapsed: Boolean, refreshing: Bool
         if (profile.url != null) {
             Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) {
                 if (refreshing) Spinner(c.accent, Modifier.size(18.dp))
-                else Icon(Icons.Rounded.Refresh, "Обновить", tint = c.ink3,
+                else Icon(Icons.Rounded.Refresh, tr("Обновить"), tint = c.ink3,
                     modifier = Modifier.size(34.dp).clip(RoundedCornerShape(12.dp)).hoverSound().clickable { controller.refresh(profile.id, manual = true) }.padding(8.dp))
             }
         }
@@ -359,23 +360,23 @@ private fun ProfileHeader(profile: Profile, collapsed: Boolean, refreshing: Bool
             Icon(Icons.Rounded.MoreHoriz, null, tint = c.ink3,
                 modifier = Modifier.size(34.dp).clip(RoundedCornerShape(12.dp)).hoverSound().clickable { menu = true }.padding(7.dp))
             DropdownMenu(menu, { menu = false }) {
-                DropdownMenuItem(text = { Text("О подписке") }, leadingIcon = { Icon(Icons.Rounded.Info, null) },
+                DropdownMenuItem(text = { Text(tr("О подписке")) }, leadingIcon = { Icon(Icons.Rounded.Info, null) },
                     onClick = { menu = false; nav.open(profile.id) })
-                DropdownMenuItem(text = { Text("Проверить пинг") }, leadingIcon = { Icon(Icons.Rounded.NetworkPing, null) },
+                DropdownMenuItem(text = { Text(tr("Проверить пинг")) }, leadingIcon = { Icon(Icons.Rounded.NetworkPing, null) },
                     onClick = { menu = false; controller.pingAll(profile.id) })
                 profile.webPageUrl?.let { url ->
-                    DropdownMenuItem(text = { Text("Кабинет подписки") }, leadingIcon = { Icon(Icons.Rounded.Public, null) },
+                    DropdownMenuItem(text = { Text(tr("Кабинет подписки")) }, leadingIcon = { Icon(Icons.Rounded.Public, null) },
                         onClick = { menu = false; controller.platform.openUrl(url) })
                 }
                 profile.supportUrl?.let { url ->
-                    DropdownMenuItem(text = { Text("Поддержка") }, leadingIcon = { Icon(Icons.Rounded.SupportAgent, null) },
+                    DropdownMenuItem(text = { Text(tr("Поддержка")) }, leadingIcon = { Icon(Icons.Rounded.SupportAgent, null) },
                         onClick = { menu = false; controller.platform.openUrl(url) })
                 }
                 profile.url?.let { url ->
-                    DropdownMenuItem(text = { Text("Скопировать ссылку") }, leadingIcon = { Icon(Icons.Rounded.ContentCopy, null) },
+                    DropdownMenuItem(text = { Text(tr("Скопировать ссылку")) }, leadingIcon = { Icon(Icons.Rounded.ContentCopy, null) },
                         onClick = { menu = false; controller.platform.copyToClipboard(url) })
                 }
-                DropdownMenuItem(text = { Text("Удалить", color = c.bad) }, leadingIcon = { Icon(Icons.Rounded.Delete, null, tint = c.bad) },
+                DropdownMenuItem(text = { Text(tr("Удалить"), color = c.bad) }, leadingIcon = { Icon(Icons.Rounded.Delete, null, tint = c.bad) },
                     onClick = { menu = false; controller.deleteProfile(profile.id) })
             }
         }
@@ -395,7 +396,7 @@ private fun AddSubscriptionRow(onAdd: () -> Unit) {
     ) {
         Icon(Icons.Rounded.Add, null, tint = c.accent, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
-        Text("Добавить подписку", style = MaterialTheme.typography.labelLarge, color = c.accent)
+        Text(tr("Добавить подписку"), style = MaterialTheme.typography.labelLarge, color = c.accent)
     }
 }
 
@@ -417,7 +418,7 @@ private fun BestRow(server: Server, ms: Long?, onClick: () -> Unit) {
         Icon(Icons.Rounded.AutoAwesome, null, tint = c.accent, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text("Лучший сейчас", style = MaterialTheme.typography.titleSmall)
+            Text(tr("Лучший сейчас"), style = MaterialTheme.typography.titleSmall)
             val t = server.title()
             Row(verticalAlignment = Alignment.CenterVertically) {
                 t.flag?.let { app.ghostly.ui.components.FlagIcon(it, 11.dp); Spacer(Modifier.width(6.dp)) }
@@ -500,15 +501,15 @@ private fun ServerRow(
             Icon(Icons.Rounded.MoreHoriz, null, tint = c.ink3.copy(alpha = if (showTools) 1f else 0f),
                 modifier = Modifier.size(30.dp).clip(RoundedCornerShape(12.dp)).hoverSound().clickable { menu = true }.padding(6.dp))
             DropdownMenu(menu, { menu = false }) {
-                DropdownMenuItem(text = { Text("Проверить пинг") }, leadingIcon = { Icon(Icons.Rounded.NetworkPing, null) },
+                DropdownMenuItem(text = { Text(tr("Проверить пинг")) }, leadingIcon = { Icon(Icons.Rounded.NetworkPing, null) },
                     onClick = { menu = false; controller.ping(server.id) })
                 controller.shareLink(server.id)?.let { link ->
-                    DropdownMenuItem(text = { Text(if (server.link != null) "Скопировать ссылку" else "Скопировать конфиг") },
+                    DropdownMenuItem(text = { Text(if (server.link != null) tr("Скопировать ссылку") else tr("Скопировать конфиг")) },
                         leadingIcon = { Icon(Icons.Rounded.ContentCopy, null) },
                         onClick = { menu = false; controller.platform.copyToClipboard(link) })
                 }
                 if (controller.profileOf(server.id)?.url == null) {
-                    DropdownMenuItem(text = { Text("Удалить", color = c.bad) }, leadingIcon = { Icon(Icons.Rounded.Delete, null, tint = c.bad) },
+                    DropdownMenuItem(text = { Text(tr("Удалить"), color = c.bad) }, leadingIcon = { Icon(Icons.Rounded.Delete, null, tint = c.bad) },
                         onClick = { menu = false; controller.deleteServer(server.id) })
                 }
             }
@@ -553,8 +554,8 @@ private fun PingText(ms: Long?, loading: Boolean, block: app.ghostly.core.vpn.Bl
             when {
                 loading -> "···"
                 ms == null -> "—"
-                ms <= 0 -> block?.short ?: "нет"
-                else -> "$ms мс"
+                ms <= 0 -> block?.short ?: tr("нет")
+                else -> tr("{0} мс", ms)
             },
             style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"), color = color,
         )
@@ -566,9 +567,9 @@ private fun EmptyServers(onAdd: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         GhostMark(Modifier.size(96.dp), happy = 0f)
         Spacer(Modifier.height(12.dp))
-        Text("Здесь пока пусто", style = MaterialTheme.typography.titleLarge)
-        Text("Добавь подписку или ссылку на сервер", style = MaterialTheme.typography.bodyMedium)
+        Text(tr("Здесь пока пусто"), style = MaterialTheme.typography.titleLarge)
+        Text(tr("Добавь подписку или ссылку на сервер"), style = MaterialTheme.typography.bodyMedium)
         Spacer(Modifier.height(16.dp))
-        app.ghostly.ui.components.AccentButton("Добавить", onAdd, icon = Icons.Rounded.Add)
+        app.ghostly.ui.components.AccentButton(tr("Добавить"), onAdd, icon = Icons.Rounded.Add)
     }
 }

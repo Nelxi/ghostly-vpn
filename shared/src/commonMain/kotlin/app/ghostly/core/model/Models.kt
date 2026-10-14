@@ -2,6 +2,7 @@ package app.ghostly.core.model
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
+import app.ghostly.i18n.tr
 
 /** A subscription (or a manually added group of links). */
 @Serializable
@@ -66,9 +67,9 @@ const val POOL_REG = "reg"
 data class TrafficPool(val id: String, val used: Long, val total: Long, val topupLeftGb: Int = 0) {
     val title: String
         get() = when (id) {
-            POOL_WL -> "Белые списки"
-            POOL_WL2 -> "Белые списки 2"
-            else -> "Обычные серверы"
+            POOL_WL -> tr("Белые списки")
+            POOL_WL2 -> tr("Белые списки 2")
+            else -> tr("Обычные серверы")
         }
 
     /** White lists of either kind get the accent colour in the bars. */

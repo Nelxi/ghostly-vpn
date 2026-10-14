@@ -26,6 +26,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import app.ghostly.i18n.tr
 
 /**
  * Foreground VpnService running mihomo (Prizrak-Core via the ClashMetaForAndroid bridge) in the
@@ -159,7 +160,7 @@ class MihomoVpnService : VpnService() {
                 SplitMode.BYPASS_SELECTED -> (apps.toSet() - packageName).forEach { runCatching { builder.addDisallowedApplication(it) } }
                 SplitMode.OFF -> Unit
             }
-            val fd = builder.establish()?.detachFd() ?: throw IllegalStateException("Нет разрешения на VPN")
+            val fd = builder.establish()?.detachFd() ?: throw IllegalStateException(tr("Нет разрешения на VPN"))
 
             val connectivity = getSystemService(ConnectivityManager::class.java)
             Clash.startTun(
@@ -184,7 +185,7 @@ class MihomoVpnService : VpnService() {
         } catch (e: Throwable) {
             Log.e(TAG, "start failed", e)
             log("start failed: " + Log.getStackTraceString(e))
-            report(STATE_FAILED, e.message?.takeIf { it.isNotBlank() }?.let { "Mihomo: $it" } ?: "Mihomo не запустился")
+            report(STATE_FAILED, e.message?.takeIf { it.isNotBlank() }?.let { "Mihomo: $it" } ?: tr("Mihomo не запустился"))
             shutdown()
         }
     }

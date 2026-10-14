@@ -34,6 +34,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.JsonObject
 import kotlin.random.Random
 import kotlin.time.Clock
+import app.ghostly.i18n.tr
 
 @Serializable
 private data class UiState(
@@ -118,15 +119,15 @@ class GhostlyController(
             val name = if (core == app.ghostly.core.model.CoreType.MIHOMO) "Mihomo" else "Xray"
             val logs = coreLogs(core)
             if (logs == null) {
-                _events.emit("Журнал $name пуст — сначала попробуй подключиться на этом ядре")
+                _events.emit(tr("Журнал {0} пуст — сначала попробуй подключиться на этом ядре", name))
                 return@launch
             }
             val head = "Ghostly ${platform.appVersion} · ${platform.os} ${platform.osVersion} · ${platform.deviceModel}\n" +
-                "Ядро: $name · ${backend.coreVersion()}\n\n"
+                tr("Ядро: {0} · {1}\n\n", name, backend.coreVersion())
             if (share) platform.share(head + logs)
             else {
                 platform.copyToClipboard(head + logs)
-                _events.emit("Журнал $name скопирован — вставь его в чат поддержки")
+                _events.emit(tr("Журнал {0} скопирован — вставь его в чат поддержки", name))
             }
         }
     }
@@ -168,7 +169,7 @@ class GhostlyController(
     fun checkUpdates(manual: Boolean) {
         scope.launch(Dispatchers.IO) {
             val offer = runCatching { updater.check(force = manual) }.getOrNull()
-            if (manual) _events.emit(offer?.let { "Вышла версия ${it.version} — можно обновиться" } ?: "У тебя последняя версия ♡")
+            if (manual) _events.emit(offer?.let { tr("Вышла версия {0} — можно обновиться", it.version) } ?: tr("У тебя последняя версия ♡"))
         }
     }
 
@@ -252,7 +253,7 @@ class GhostlyController(
                     val offer = runCatching { updater.check() }.getOrNull()
                     // Hands-off updates: fetch, verify SHA-256, install (desktop relaunches and reconnects).
                     if (offer != null && s.autoInstallUpdates && platform.canAutoInstall() && !updater.gaveUp(offer.version)) {
-                        _events.emit("Вышла Ghostly ${offer.version} — скачиваю и ставлю сама ♡")
+                        _events.emit(tr("Вышла Ghostly {0} — скачиваю и ставлю сама ♡", offer.version))
                         runCatching { updater.install(offer) }
                     }
                 }
@@ -301,7 +302,7 @@ class GhostlyController(
     fun import(raw: String, onDone: (Boolean) -> Unit = {}) {
         scope.launch(Dispatchers.IO) {
             val ok = runCatching { importInternal(raw.trim()) }
-                .onFailure { _events.emit("Не получилось добавить: ${app.ghostly.core.sub.FetchErrors.describe(it)}") }
+                .onFailure { _events.emit(tr("Не получилось добавить: {0}", app.ghostly.core.sub.FetchErrors.describe(it))) }
                 .getOrDefault(false)
             onDone(ok)
         }
@@ -309,7 +310,7 @@ class GhostlyController(
 
     private suspend fun importInternal(text: String): Boolean {
         if (text.isEmpty()) {
-            _events.emit("Буфер обмена пуст")
+            _events.emit(tr("Буфер обмена пуст"))
             return false
         }
         // happ://crypt…: the address inside is encrypted with keys that only the Happ app holds — it
@@ -350,7 +351,7 @@ class GhostlyController(
                 saveProfiles()
                 if (server(_selected.value) == null) select(profile.servers.first().id)
                 markOnboarded()
-                _events.emit("Подписка «${profile.name}» добавлена · ${serverCount(profile.servers.size)}")
+                _events.emit(tr("Подписка «{0}» добавлена · {1}", profile.name, serverCount(profile.servers.size)))
                 pingAll(profile.id)
                 return true
             } finally {
@@ -362,14 +363,14 @@ class GhostlyController(
             val id = newId()
             val parsed = SubscriptionParser.parse(text, emptyMap(), id)
             if (parsed.servers.isEmpty()) {
-                _events.emit("В профиле нет серверов")
+                _events.emit(tr("В профиле нет серверов"))
                 return false
             }
-            _profiles.update { it + Profile(id = id, name = parsed.title ?: "Профиль Mihomo", servers = parsed.servers, mihomo = parsed.mihomo, updatedAt = now()) }
+            _profiles.update { it + Profile(id = id, name = parsed.title ?: tr("Профиль Mihomo"), servers = parsed.servers, mihomo = parsed.mihomo, updatedAt = now()) }
             saveProfiles()
             if (server(_selected.value) == null) select(parsed.servers.first().id)
             markOnboarded()
-            _events.emit("Профиль Mihomo добавлен · ${serverCount(parsed.servers.size)}")
+            _events.emit(tr("Профиль Mihomo добавлен · {0}", serverCount(parsed.servers.size)))
             return true
         }
 
@@ -384,7 +385,7 @@ class GhostlyController(
             val base = manual?.servers?.size ?: 0
             val servers = lines.mapIndexedNotNull { i, l -> LinkParser.parse(l, "${manual?.id ?: MANUAL}:${base + i}:${Random.nextInt(1 shl 20)}") }
             if (servers.isEmpty()) {
-                _events.emit("Ссылка не распознана")
+                _events.emit(tr("Ссылка не распознана"))
                 return false
             }
             return addManual(servers)
@@ -392,7 +393,7 @@ class GhostlyController(
 
         decodeBase64Lenient(text)?.takeIf { d -> d.lines().any { LinkParser.looksLikeLink(it) } }?.let { return importInternal(it) }
 
-        _events.emit("Не похоже на ссылку или подписку")
+        _events.emit(tr("Не похоже на ссылку или подписку"))
         return false
     }
 
@@ -411,7 +412,7 @@ class GhostlyController(
         if (servers.isEmpty()) return false
         val existing = manualProfile()
         if (existing == null) {
-            _profiles.update { it + Profile(id = MANUAL, name = "Мои серверы", servers = servers, updatedAt = now()) }
+            _profiles.update { it + Profile(id = MANUAL, name = tr("Мои серверы"), servers = servers, updatedAt = now()) }
         } else {
             val known = existing.servers.mapNotNull { it.link }.toSet()
             val fresh = servers.filter { it.link == null || it.link !in known }
@@ -420,7 +421,7 @@ class GhostlyController(
         saveProfiles()
         if (server(_selected.value) == null) select(servers.first().id)
         markOnboarded()
-        _events.emit(if (servers.size == 1) "Сервер «${servers.first().name}» добавлен" else "Добавлено серверов: ${servers.size}")
+        _events.emit(if (servers.size == 1) tr("Сервер «{0}» добавлен", servers.first().name) else tr("Добавлено серверов: {0}", servers.size))
         // One core at a time: say which core the new servers need when the chosen one can't run them.
         val core = _settings.value.core
         val hidden = servers.filter { s ->
@@ -429,8 +430,8 @@ class GhostlyController(
         }
         if (hidden.isNotEmpty()) {
             val names = hidden.map { it.protocol.uppercase() }.distinct().joinToString()
-            _events.emit(if (core == app.ghostly.core.model.CoreType.XRAY) "$names работает на ядре Prizrak-Core — переключите ядро в настройках"
-                         else "$names работает на ядре Xray — переключите ядро в настройках")
+            _events.emit(if (core == app.ghostly.core.model.CoreType.XRAY) tr("{0} работает на ядре Prizrak-Core — переключите ядро в настройках", names)
+                         else tr("{0} работает на ядре Xray — переключите ядро в настройках", names))
         }
         pingServers(servers)
         return true
@@ -496,7 +497,7 @@ class GhostlyController(
                 }
                 saveProfiles()
                 if (_settings.value.core == app.ghostly.core.model.CoreType.MIHOMO && parsed.mihomo == null && parsed.servers.all { it.config != null } && warnedXrayOnly.add(profileId)) {
-                    _events.emit("«${profile.name}»: провайдер отдаёт только формат Xray — на ядре Mihomo эта подписка не показывается")
+                    _events.emit(tr("«{0}»: провайдер отдаёт только формат Xray — на ядре Mihomo эта подписка не показывается", profile.name))
                 }
                 // Selection is id-based (profile id + index), so it survives; fall back if the server vanished.
                 if (server(_selected.value) == null) parsed.servers.firstOrNull()?.let { select(it.id) }
@@ -506,14 +507,14 @@ class GhostlyController(
                     val t = now()
                     if (t - (appliedAt[profileId] ?: 0L) > 10 * 60_000L) {
                         appliedAt[profileId] = t
-                        _events.emit("Провайдер обновил серверы — переподключаюсь на свежие настройки")
+                        _events.emit(tr("Провайдер обновил серверы — переподключаюсь на свежие настройки"))
                         applier.request(force = true)
                     }
                 }
-                if (manual) _events.emit("Подписка «${parsed.title ?: profile.name}» обновлена · ${serverCount(parsed.servers.size)}")
+                if (manual) _events.emit(tr("Подписка «{0}» обновлена · {1}", parsed.title ?: profile.name, serverCount(parsed.servers.size)))
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                _events.emit("Не удалось обновить «${profile.name}»: ${app.ghostly.core.sub.FetchErrors.describe(e)}")
+                _events.emit(tr("Не удалось обновить «{0}»: {1}", profile.name, app.ghostly.core.sub.FetchErrors.describe(e)))
             } finally {
                 _refreshing.update { it - profileId }
             }
@@ -538,9 +539,9 @@ class GhostlyController(
         val m10 = n % 10
         val m100 = n % 100
         val word = when {
-            m10 == 1 && m100 != 11 -> "сервер"
-            m10 in 2..4 && m100 !in 12..14 -> "сервера"
-            else -> "серверов"
+            m10 == 1 && m100 != 11 -> tr("сервер")
+            m10 in 2..4 && m100 !in 12..14 -> tr("сервера")
+            else -> tr("серверов")
         }
         return "$n $word"
     }
@@ -899,11 +900,11 @@ class GhostlyController(
     suspend fun connect() {
         val server = selectedServer()
         if (server == null) {
-            _events.emit("Сначала добавь подписку ♡")
+            _events.emit(tr("Сначала добавь подписку ♡"))
             return
         }
         if (backend.needsPermission() && !backend.requestPermission()) {
-            _events.emit("Без разрешения на VPN подключиться нельзя")
+            _events.emit(tr("Без разрешения на VPN подключиться нельзя"))
             return
         }
         userWantsConnection = true
@@ -921,7 +922,7 @@ class GhostlyController(
             saveUi()
         }
         runCatching { connectTo(target) }
-            .onFailure { _events.emit(it.message ?: "Не удалось подключиться") }
+            .onFailure { _events.emit(it.message ?: tr("Не удалось подключиться")) }
     }
 
     fun toast(message: String) {
@@ -932,7 +933,7 @@ class GhostlyController(
         val ks = platform.killSwitch ?: return
         if (!_settings.value.killSwitch || ks.engaged) return
         scope.launch(Dispatchers.IO) {
-            if (ks.engage()) _events.emit("Kill switch: VPN упал — интернет заблокирован, пока туннель не вернётся. Отключи VPN, чтобы снять блок")
+            if (ks.engage()) _events.emit(tr("Kill switch: VPN упал — интернет заблокирован, пока туннель не вернётся. Отключи VPN, чтобы снять блок"))
         }
     }
 
@@ -963,7 +964,7 @@ class GhostlyController(
         val http = pick(s.httpPort, socks)
         if (socks != s.socksPort || http != s.httpPort) {
             updateSettings { it.copy(socksPort = socks, httpPort = http) }
-            _events.emit("Порты ${s.socksPort}/${s.httpPort} заняты другой программой — Ghostly перешёл на $socks/$http")
+            _events.emit(tr("Порты {0}/{1} заняты другой программой — Ghostly перешёл на {2}/{3}", s.socksPort, s.httpPort, socks, http))
         }
     }
 
@@ -974,13 +975,13 @@ class GhostlyController(
         val busy = s.extraProxies.filter { it.ready && !platform.isPortFree(it.port, listen) }
         if (busy.isEmpty()) return
         updateSettings { st -> st.copy(extraProxies = st.extraProxies.map { x -> if (busy.any { it.id == x.id }) x.copy(enabled = false) else x }) }
-        _events.emit("Порт ${busy.joinToString { it.port.toString() }} занят другой программой — дополнительный прокси на нём выключен")
+        _events.emit(tr("Порт {0} занят другой программой — дополнительный прокси на нём выключен", busy.joinToString { it.port.toString() }))
     }
 
     private suspend fun reconnect() {
         val server = selectedServer() ?: return
         runCatching { connectTo(server) }
-            .onFailure { _events.emit(it.message ?: "Не удалось переподключиться") }
+            .onFailure { _events.emit(it.message ?: tr("Не удалось переподключиться")) }
     }
 
     /**
@@ -992,7 +993,7 @@ class GhostlyController(
         val retry = app.ghostly.core.vpn.ConnectRetry
         if (retry.shouldRetry(retryAttempts, failure.retryable)) {
             val attempt = ++retryAttempts
-            if (attempt == 1) _events.emit("Не подключилось — пробую ещё раз")
+            if (attempt == 1) _events.emit(tr("Не подключилось — пробую ещё раз"))
             retryJob?.cancel()
             retryJob = scope.launch {
                 kotlinx.coroutines.delay(retry.delayMs(attempt))
@@ -1013,7 +1014,7 @@ class GhostlyController(
             _events.emit(failure.message)
             return
         }
-        _events.emit("«${server(current)?.name}» не отвечает — пробую «${next.name}»")
+        _events.emit(tr("«{0}» не отвечает — пробую «{1}»", server(current)?.name, next.name))
         _selected.value = next.id
         saveUi()
         retryAttempts = 0
@@ -1079,7 +1080,7 @@ class GhostlyController(
                             // Switched Wi-Fi -> mobile while on a regular server: re-check right away.
                             netChanged && net == NetType.CELLULAR && !cur.isWhitelist && !regularStable() -> {
                                 preferredWhitelist(whitelistServers())?.let { next ->
-                                    _events.emit("Мобильный интернет — перешла на белые списки «${next.name}»")
+                                    _events.emit(tr("Мобильный интернет — перешла на белые списки «{0}»", next.name))
                                     select(next.id)
                                 }
                                 regularBack = 0
@@ -1093,7 +1094,7 @@ class GhostlyController(
                                 if (regularBack >= need) {
                                     regularBack = 0
                                     preferredRegular(regularServers())?.let { next ->
-                                        _events.emit("Обычный интернет стабилен — перешла на «${next.name}», чтобы не тратить трафик белых списков")
+                                        _events.emit(tr("Обычный интернет стабилен — перешла на «{0}», чтобы не тратить трафик белых списков", next.name))
                                         select(next.id)
                                     }
                                 }
@@ -1136,13 +1137,13 @@ class GhostlyController(
                 server.isWhitelist -> server
                 regularStable() -> server
                 else -> preferredWhitelist(whitelistServers())?.also {
-                    _events.emit("Мобильный интернет: белые списки сейчас надёжнее — подключаюсь через «${it.name}»")
+                    _events.emit(tr("Мобильный интернет: белые списки сейчас надёжнее — подключаюсь через «{0}»", it.name))
                 } ?: server
             }
             NetType.WIFI, NetType.ETHERNET -> when {
                 !server.isWhitelist -> server
                 regularReachable() -> preferredRegular(regularServers())?.also {
-                    _events.emit("Wi-Fi: обычные серверы доступны — подключаюсь через «${it.name}»")
+                    _events.emit(tr("Wi-Fi: обычные серверы доступны — подключаюсь через «{0}»", it.name))
                 } ?: server
                 else -> server
             }
@@ -1195,8 +1196,8 @@ class GhostlyController(
         val candidates = pool.filter { it.name != cur.name }
         val next = (if (whitelistMode) preferredWhitelist(candidates) else preferredRegular(candidates)) ?: return
         _events.emit(
-            if (whitelistMode) "Похоже, включились белые списки — перешла на «${next.name}»"
-            else "«${cur.name}» перестал пропускать трафик — перешла на «${next.name}»",
+            if (whitelistMode) tr("Похоже, включились белые списки — перешла на «{0}»", next.name)
+            else tr("«{0}» перестал пропускать трафик — перешла на «{1}»", cur.name, next.name),
         )
         select(next.id)
     }
