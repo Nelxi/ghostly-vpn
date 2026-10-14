@@ -29,6 +29,14 @@ object Format {
     fun expiryPhrase(expireSec: Long, nowMs: Long): String =
         if (expireSec * 1000 <= nowMs) tr("Подписка истекла") else tr("Осталось {0}", remaining(expireSec, nowMs))
 
+    /** "Ghostly · Осталось 12 дней · 34 ГБ из 100 ГБ" — the subscription line of the VPN notification. */
+    fun subscriptionLine(name: String?, info: app.ghostly.core.model.SubscriptionInfo?, nowMs: Long): String? =
+        listOfNotNull(
+            name?.takeIf { it.isNotBlank() },
+            info?.takeIf { !it.unlimitedTime }?.let { expiryPhrase(it.expire, nowMs) },
+            info?.takeIf { !it.unlimitedTraffic }?.let { tr("{0} из {1}", bytes(it.used), bytes(it.total)) },
+        ).joinToString(" · ").ifEmpty { null }
+
     /** "3 дня", "21 день", "5 часов" — plural forms, translated (see [app.ghostly.i18n.L10n.plural]). */
     fun remaining(expireSec: Long, nowMs: Long): String {
         val left = expireSec * 1000 - nowMs

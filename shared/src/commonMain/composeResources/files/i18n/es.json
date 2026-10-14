@@ -589,5 +589,9 @@
  "Выбери сервер в приложении": "Elige un servidor en la app",
  "Как в системе": "Como el sistema",
  "Нажми, чтобы подключить · {0}": "Toca para conectar · {0}",
- "Язык": "Idioma"
+ "Язык": "Idioma",
+ "Переподключить": "Reconectar",
+ "Следующий": "Siguiente",
+ "Отменить": "Cancelar",
+ "VPN отключён": "VPN desconectada"
 }

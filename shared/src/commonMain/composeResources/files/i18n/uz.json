@@ -589,5 +589,9 @@
  "Выбери сервер в приложении": "Ilovada server tanla",
  "Как в системе": "Tizimdagidek",
  "Нажми, чтобы подключить · {0}": "Ulanish uchun bos · {0}",
- "Язык": "Til"
+ "Язык": "Til",
+ "Переподключить": "Qayta ulash",
+ "Следующий": "Keyingi",
+ "Отменить": "Bekor qilish",
+ "VPN отключён": "VPN o‘chdi"
 }

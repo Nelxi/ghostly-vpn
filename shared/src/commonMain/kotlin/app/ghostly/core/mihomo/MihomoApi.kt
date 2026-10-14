@@ -75,7 +75,9 @@ class MihomoApi(val port: Int, private val secret: String) {
 
     /** Groups in config order (GLOBAL lists them that way), hidden ones and GLOBAL itself left out. */
     suspend fun groups(includeGlobal: Boolean = false): List<ProxyGroupInfo> {
-        val body = withTimeoutOrNull(4000) { client.get { endpoint("proxies") }.bodyAsText() } ?: return emptyList()
+        // A refused or blocked request must not escape: callers run in plain launches (a crash, not an empty list).
+        val body = runCatching { withTimeoutOrNull(4000) { client.get { endpoint("proxies") }.bodyAsText() } }
+            .getOrNull() ?: return emptyList()
         val all = JsonX.parseToJsonElement(body).jsonObject["proxies"] as? JsonObject ?: return emptyList()
         fun delayOf(name: String): Int? {
             val history = (all[name] as? JsonObject)?.get("history") as? JsonArray ?: return null

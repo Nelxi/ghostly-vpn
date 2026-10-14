@@ -589,5 +589,9 @@
  "Выбери сервер в приложении": "Choose a server in the app",
  "Как в системе": "System default",
  "Нажми, чтобы подключить · {0}": "Tap to connect · {0}",
- "Язык": "Language"
+ "Язык": "Language",
+ "Переподключить": "Reconnect",
+ "Следующий": "Next",
+ "Отменить": "Cancel",
+ "VPN отключён": "VPN is off"
 }

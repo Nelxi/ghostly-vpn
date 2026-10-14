@@ -52,6 +52,8 @@ class GhostlyVpnService : VpnService() {
     private var statsJob: Job? = null
     private var serverName: String = ""
     private var subscriptionName: String? = null
+    private var subscriptionLine: String? = null
+    private var canSwitch = false
     private var connectedAt: Long? = null
     /** Outbounds that are not the tunnel (freedom/blackhole/dns): excluded from the speed meter. */
     private var serviceTags: Set<String> = emptySet()
@@ -78,9 +80,13 @@ class GhostlyVpnService : VpnService() {
         }
         AndroidVpn.mutableState.value = VpnState.Connecting
         serverName = request.server.name
-        subscriptionName = runCatching {
-            GhostlyApplication.instance.controller.profiles.value.firstOrNull { p -> p.servers.any { it.id == request.server.id } }?.name
-        }.getOrNull()
+        runCatching {
+            val controller = GhostlyApplication.instance.controller
+            val profile = controller.profileOf(request.server.id)
+            subscriptionName = profile?.name
+            subscriptionLine = app.ghostly.ui.Format.subscriptionLine(profile?.name, profile?.info, System.currentTimeMillis())
+            canSwitch = controller.nextFavorite() != null
+        }
         connectedAt = null
         shutdownCore()
 
@@ -268,9 +274,9 @@ class GhostlyVpnService : VpnService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         return VpnNotification.build(
-            this, VpnNotification.Core.XRAY, serverName, subscriptionName,
+            this, VpnNotification.Core.XRAY, serverName, subscriptionName, subscriptionLine,
             connectedAt = if (status == null) connectedAt else null,
-            stats = stats, open = openAppIntent(), stop = stop, status = status,
+            stats = stats, stop = stop, canSwitch = canSwitch, status = status,
         )
     }
 

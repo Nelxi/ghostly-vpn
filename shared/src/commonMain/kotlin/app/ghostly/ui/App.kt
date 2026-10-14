@@ -49,6 +49,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.QrCodeScanner
@@ -82,6 +83,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import app.ghostly.core.GhostlyController
 import app.ghostly.core.vpn.VpnState
@@ -91,6 +93,7 @@ import app.ghostly.ui.components.GhostMark
 import app.ghostly.ui.components.SoftButton
 import app.ghostly.ui.components.pressScale
 import app.ghostly.ui.components.sheen
+import app.ghostly.ui.components.softShadow
 import app.ghostly.ui.screens.HomeScreen
 import app.ghostly.ui.screens.ServersScreen
 import app.ghostly.ui.screens.SettingsScreen
@@ -103,7 +106,29 @@ import app.ghostly.i18n.tr
 
 const val SITE_URL = "https://ghostlynex.fun"
 
-internal enum class Tab(val title: String) { HOME(tr("Главная")), SERVERS(tr("Серверы")), SETTINGS(tr("Настройки")) }
+internal enum class Tab {
+    HOME, SERVERS, ACCOUNT, SETTINGS;
+
+    /** Read on every composition: the language can change while the app runs. */
+    val title: String
+        get() = when (this) {
+            HOME -> tr("Главная")
+            SERVERS -> tr("Серверы")
+            ACCOUNT -> tr("Аккаунт")
+            SETTINGS -> tr("Настройки")
+        }
+}
+
+/**
+ * The tabs shown: the account tab is there for Ghostly's own subscription, a signed-in account, an app with
+ * nothing added yet, or when something asked for it ([forced]); someone on another provider's
+ * subscription only does not get a Ghostly shop in the tab bar.
+ */
+internal fun visibleTabs(controller: GhostlyController, forced: Boolean): List<Tab> {
+    val profiles = controller.profiles.value
+    val ours = profiles.isEmpty() || controller.ghostlyProfile() != null || controller.cabinet.api.hasSession
+    return Tab.entries.filter { it != Tab.ACCOUNT || ours || forced }
+}
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
@@ -125,7 +150,33 @@ fun GhostlyApp(controller: GhostlyController) {
     // One clock for every looping decoration, paused while the app is off screen (see Ambient.kt).
     val ambientTime = app.ghostly.ui.components.rememberAmbientClock()
     GhostlyTheme(accent, settings.reduceMotion) { androidx.compose.runtime.CompositionLocalProvider(app.ghostly.ui.components.LocalAmbientTime provides ambientTime, app.ghostly.ui.components.LocalHaptic provides { controller.haptic(app.ghostly.core.vpn.Haptic.TICK) }, app.ghostly.ui.components.LocalHapticOf provides { k -> controller.haptic(k) }, app.ghostly.ui.components.LocalHoverSound provides { controller.hoverSound() }, app.ghostly.ui.theme.LocalDesign provides design, androidx.compose.ui.platform.LocalLayoutDirection provides if (app.ghostly.i18n.L10n.isRtl) androidx.compose.ui.unit.LayoutDirection.Rtl else androidx.compose.ui.unit.LayoutDirection.Ltr) {
-        var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
+        // GHOSTLY_DEMO=tab:<NAME> (screenshots) opens on that tab.
+        var tab by rememberSaveable {
+            mutableStateOf(controller.platform.demo?.takeIf { it.startsWith("tab:") }?.removePrefix("tab:")?.let { d -> Tab.entries.firstOrNull { it.name == d } } ?: Tab.HOME)
+        }
+        // The account tab follows what is added; a request from elsewhere (Settings, «Продлить») brings it up.
+        val profilesForTabs by controller.profiles.collectAsState()
+        val cabinetUi by controller.cabinet.ui.collectAsState()
+        var cabinetForced by remember { mutableStateOf(false) }
+        val tabs = remember(profilesForTabs, cabinetUi, cabinetForced) { visibleTabs(controller, cabinetForced) }
+        LaunchedEffect(tabs) { if (tab !in tabs) tab = Tab.HOME }
+        // Over the first screen (nothing added yet) the cabinet opens as a page of its own.
+        var cabinetOverlay by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            controller.openCabinet.collect {
+                if (controller.onboarded.value) {
+                    cabinetForced = true
+                    tab = Tab.ACCOUNT
+                } else cabinetOverlay = true
+            }
+        }
+        LaunchedEffect(onboarded) {
+            if (onboarded && cabinetOverlay) {
+                cabinetOverlay = false
+                cabinetForced = true
+                tab = Tab.ACCOUNT
+            }
+        }
         controller.platform.demo?.takeIf { it.startsWith("tabs:") }?.let { spec ->
             val every = spec.removePrefix("tabs:").toLongOrNull() ?: 2500L
             androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -182,8 +233,8 @@ fun GhostlyApp(controller: GhostlyController) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val wide = maxWidth >= 900.dp
                 when {
-                    !onboarded -> Onboarding(controller, onAdd = { addOpen = true })
-                    wide -> DesktopShell(controller, tab, { tab = it }, onAdd = { addOpen = true })
+                    !onboarded -> Onboarding(controller, onAdd = { addOpen = true }, onBuy = { controller.openAccount("renew") })
+                    wide -> DesktopShell(controller, tabs, tab, { tab = it }, onAdd = { addOpen = true })
                     else -> {
                         val pad = PaddingValues(top = insets.calculateTopPadding() + 8.dp, bottom = insets.calculateBottomPadding() + 96.dp)
                         // Predictive back to Главная: it is drawn beneath while the current tab slides off as a card.
@@ -205,18 +256,33 @@ fun GhostlyApp(controller: GhostlyController) {
                                     when (t) {
                                         Tab.HOME -> HomeScreen(controller, onPickServer = { pickerOpen = true }, contentPadding = pad)
                                         Tab.SERVERS -> ServersScreen(controller, pad, onAdd = { addOpen = true })
+                                        Tab.ACCOUNT -> app.ghostly.ui.screens.cabinet.CabinetScreen(controller, pad)
                                         Tab.SETTINGS -> SettingsScreen(controller, pad)
                                     }
                                 }
                             }
                         }
-                        TabBar(tab, { controller.haptic(); tab = it }, Modifier.align(Alignment.BottomCenter).padding(bottom = insets.calculateBottomPadding() + 14.dp))
+                        TabBar(tabs, tab, { controller.haptic(); tab = it }, Modifier.align(Alignment.BottomCenter).padding(bottom = insets.calculateBottomPadding() + 14.dp))
                     }
                 }
                 SideEffect { wideLayout = wide }
             }
             // Music on the PC: the whole composition plays along (rim lights with the bass).
             stage?.let { app.ghostly.ui.stage.StageOverlay(it) }
+
+            // Nothing added yet and «Купить подписку» / a trial asked: the cabinet as a page of its own.
+            if (cabinetOverlay && !onboarded) {
+                androidx.compose.ui.backhandler.BackHandler { cabinetOverlay = false }
+                Box(Modifier.fillMaxSize().background(Ghost.colors.bg.copy(alpha = 0.94f)), contentAlignment = Alignment.TopCenter) {
+                    Box(Modifier.widthIn(max = 620.dp).fillMaxSize()) {
+                        app.ghostly.ui.screens.cabinet.CabinetScreen(
+                            controller,
+                            PaddingValues(top = insets.calculateTopPadding() + 8.dp, bottom = insets.calculateBottomPadding() + 24.dp),
+                            onClose = { cabinetOverlay = false },
+                        )
+                    }
+                }
+            }
 
             // Server picker: our own sheet (see PickerSheet for why not ModalBottomSheet).
             PickerSheet(pickerOpen, onClose = { pickerOpen = false }, title = tr("Выбор сервера")) {
@@ -418,34 +484,42 @@ private fun BoxScope.PickerSheet(
 // ---------------------------------------------------------------------------- tab bar
 
 @Composable
-private fun TabBar(selected: Tab, onSelect: (Tab) -> Unit, modifier: Modifier) {
+private fun TabBar(tabs: List<Tab>, selected: Tab, onSelect: (Tab) -> Unit, modifier: Modifier) {
     val c = Ghost.colors
     Row(
         modifier
-            .clip(RoundedCornerShape(28.dp))
-            .background(Color(0xE6130E1D))
-            .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.16f), Color.White.copy(alpha = 0.04f))), RoundedCornerShape(28.dp))
+            .softShadow(RoundedCornerShape(26.dp), 1f)
+            .clip(RoundedCornerShape(26.dp))
+            .background(c.surface1.copy(alpha = 0.97f))
+            .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.11f), Color.White.copy(alpha = 0.03f))), RoundedCornerShape(26.dp))
             .padding(6.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Tab.entries.forEach { t ->
+        tabs.forEach { t ->
             val active = t == selected
             val interaction = remember { MutableInteractionSource() }
-            val bg by animateColorAsState(if (active) c.accent.copy(alpha = 0.2f) else Color.Transparent, Motion.quick())
+            val bg by animateColorAsState(if (active) c.accent.copy(alpha = 0.17f) else Color.Transparent, Motion.quick())
             val tint by animateColorAsState(if (active) c.accent else c.ink3, Motion.quick())
-            val w by animateDpAsState(if (active) 122.dp else 56.dp, Motion.bouncy())
+            val w by animateDpAsState(if (active) 124.dp else 54.dp, Motion.bouncy())
             // The chosen tab's icon pops and tilts a little, like a tap on the site's dock.
             val pop by animateFloatAsState(if (active) 1f else 0f, Motion.bouncy())
             Row(
-                Modifier.width(w).height(48.dp).pressScale(interaction, 0.9f).clip(RoundedCornerShape(24.dp)).background(bg)
+                Modifier.width(w).height(50.dp).pressScale(interaction, 0.9f).clip(RoundedCornerShape(20.dp)).background(bg)
                     .hoverSound().clickable(interaction, null) { onSelect(t) },
                 horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
             ) {
                 val iconFx = Modifier.graphicsLayer { val k = 1f + 0.08f * pop; scaleX = k; scaleY = k; rotationZ = if (t == Tab.SETTINGS) 60f * pop else -6f * pop }
                 if (t == Tab.HOME) GhostMark(Modifier.size(24.dp).then(iconFx), happy = if (active) 1f else 0f, pokeable = false)
-                else Icon(if (t == Tab.SERVERS) Icons.Rounded.Dns else Icons.Rounded.Settings, null, tint = tint, modifier = Modifier.size(22.dp).then(iconFx))
+                else Icon(
+                    when (t) {
+                        Tab.SERVERS -> Icons.Rounded.Dns
+                        Tab.ACCOUNT -> Icons.Rounded.AccountCircle
+                        else -> Icons.Rounded.Settings
+                    },
+                    null, tint = tint, modifier = Modifier.size(22.dp).then(iconFx),
+                )
                 AnimatedVisibility(active, enter = fadeIn() + scaleIn(initialScale = 0.6f), exit = fadeOut() + scaleOut(targetScale = 0.6f)) {
-                    Text(t.title, style = MaterialTheme.typography.labelMedium, color = tint, modifier = Modifier.padding(start = 7.dp), maxLines = 1)
+                    Text(t.title, style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp), color = c.ink, modifier = Modifier.padding(start = 8.dp), maxLines = 1)
                 }
             }
         }
@@ -455,7 +529,7 @@ private fun TabBar(selected: Tab, onSelect: (Tab) -> Unit, modifier: Modifier) {
 // ---------------------------------------------------------------------------- onboarding
 
 @Composable
-private fun Onboarding(controller: GhostlyController, onAdd: () -> Unit) {
+private fun Onboarding(controller: GhostlyController, onAdd: () -> Unit, onBuy: () -> Unit) {
     val c = Ghost.colors
     Column(
         Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(24.dp),
@@ -477,7 +551,7 @@ private fun Onboarding(controller: GhostlyController, onAdd: () -> Unit) {
                 controller.import(controller.platform.readClipboard().orEmpty())
             }, Modifier.fillMaxWidth(), Icons.Rounded.ContentPaste)
             SoftButton(tr("Другие способы"), onAdd, Modifier.fillMaxWidth(), Icons.Rounded.QrCodeScanner)
-            SoftButton(tr("Купить подписку"), { controller.platform.openUrl(SITE_URL) }, Modifier.fillMaxWidth(), Icons.Rounded.ShoppingBag, tint = c.accent)
+            SoftButton(tr("Купить подписку"), onBuy, Modifier.fillMaxWidth(), Icons.Rounded.ShoppingBag, tint = c.accent)
         }
         Spacer(Modifier.height(20.dp))
         Text(tr("Подходит любая подписка VLESS / VMess / Trojan / Shadowsocks / Hysteria2"), style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
@@ -507,7 +581,7 @@ private fun AddSheet(controller: GhostlyController, close: () -> Unit) {
                     scan { result -> busy = true; controller.import(result, done) }
                 }
             }
-            SourceTile(tr("Купить"), Icons.Rounded.ShoppingBag, Modifier.weight(1f)) { controller.platform.openUrl(SITE_URL) }
+            SourceTile(tr("Купить"), Icons.Rounded.ShoppingBag, Modifier.weight(1f)) { close(); controller.openAccount("renew") }
         }
         Spacer(Modifier.height(16.dp))
         Box(

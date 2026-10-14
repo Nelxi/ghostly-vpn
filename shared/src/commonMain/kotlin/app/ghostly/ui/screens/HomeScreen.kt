@@ -14,6 +14,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -133,6 +134,7 @@ fun rememberHome(controller: GhostlyController): HomeModel {
     val pinging by controller.pinging.collectAsState()
     val liveGroups by controller.mihomoGroups.groups.collectAsState()
     val staticGroups by controller.staticMihomoGroups.collectAsState()
+    val settings by controller.settings.collectAsState()
 
     val server = remember(selectedId, profiles) { controller.selectedServer() }
     val profile = remember(server, profiles) { server?.let { controller.profileOf(it.id) } ?: profiles.firstOrNull() }
@@ -153,7 +155,8 @@ fun rememberHome(controller: GhostlyController): HomeModel {
     LaunchedEffect(Unit) { while (true) { now = GhostlyController.now(); delay(1000) } }
     return HomeModel(
         state, orb, traffic, server, profile, pings[server?.id]?.ms, server?.id in pinging, now, down, up,
-        mihomoGroups = liveGroups.ifEmpty { staticGroups }.size,
+        // Selectors are mihomo's: right after a switch to Xray the old groups must not linger on the card.
+        mihomoGroups = if (settings.core == app.ghostly.core.model.CoreType.MIHOMO) liveGroups.ifEmpty { staticGroups }.size else 0,
     )
 }
 
@@ -543,7 +546,7 @@ fun SubscriptionCard(profile: Profile, now: Long, controller: GhostlyController,
                 var open by remember { mutableStateOf(false) }
                 Box {
                     Row(
-                        Modifier.outerShadow(RoundedCornerShape(12.dp), 0.5f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.06f))
+                        Modifier.clip(RoundedCornerShape(12.dp)).background(c.surface2).border(1.dp, c.hairline, RoundedCornerShape(12.dp))
                             .hoverSound().clickable { open = true }.padding(start = 10.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -580,23 +583,41 @@ fun SubscriptionCard(profile: Profile, now: Long, controller: GhostlyController,
         }
 
         if (info != null) {
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(14.dp))
+            // Days left on a ring (a month is a full ring), the end date next to it.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    if (info.unlimitedTime) tr("Бессрочно") else Format.expiryPhrase(info.expire, now),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = when {
-                        info.unlimitedTime -> c.ink
-                        info.expire * 1000 <= now -> c.bad
-                        info.expire * 1000 - now < 3 * 86_400_000L -> c.warn
-                        else -> c.ink
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-                if (info.pools.isEmpty()) Text(
-                    if (info.unlimitedTraffic) "${Format.bytes(info.used)} · ∞" else tr("{0} из {1}", Format.bytes(info.used), Format.bytes(info.total)),
-                    style = MaterialTheme.typography.labelMedium, color = c.ink2,
-                )
+                val left = info.expire * 1000 - now
+                val (num, unit, frac) = app.ghostly.ui.components.ringLeft(left)
+                val tone = when {
+                    info.unlimitedTime -> c.accent
+                    left <= 0 -> c.bad
+                    left < 3 * 86_400_000L -> c.warn
+                    else -> c.accent
+                }
+                app.ghostly.ui.components.RingProgress(if (info.unlimitedTime) 1f else frac, tone, Modifier.size(66.dp), stroke = 5.dp) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            if (info.unlimitedTime) "∞" else num,
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold, fontFeatureSettings = "tnum", lineHeight = 22.sp),
+                        )
+                        if (!info.unlimitedTime) Text(unit, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp), color = c.ink3)
+                    }
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (info.unlimitedTime) tr("Бессрочно") else Format.expiryPhrase(info.expire, now),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = if (tone == c.accent) c.ink else tone,
+                    )
+                    if (!info.unlimitedTime && left > 0) {
+                        Text(tr("до {0}", Format.date(info.expire, controller.platform.utcOffsetMinutes())), style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (info.pools.isEmpty()) Text(
+                        if (info.unlimitedTraffic) "${Format.bytes(info.used)} · ∞" else tr("{0} из {1}", Format.bytes(info.used), Format.bytes(info.total)),
+                        style = MaterialTheme.typography.bodySmall, color = c.ink2,
+                    )
+                }
             }
             if (info.pools.isNotEmpty()) {
                 info.pools.forEach { p ->
@@ -625,7 +646,7 @@ fun SubscriptionCard(profile: Profile, now: Long, controller: GhostlyController,
             if (profile.url != null) add(Triple(Icons.Rounded.Refresh, tr("Обновить")) { controller.haptic(); controller.refresh(profile.id, manual = true) })
             // Support is the button at the top of the screen; here: the provider's page and renewing.
             profile.webPageUrl?.let { url -> add(Triple(Icons.Rounded.Public, tr("Подписка")) { controller.platform.openUrl(url) }) }
-            profile.renewLink()?.let { url -> add(Triple(Icons.Rounded.Payments, tr("Продлить")) { controller.platform.openUrl(url) }) }
+            profile.renewLink()?.let { url -> add(Triple(Icons.Rounded.Payments, tr("Продлить")) { controller.openLink(url) }) }
         }
         if (actions.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
@@ -633,8 +654,9 @@ fun SubscriptionCard(profile: Profile, now: Long, controller: GhostlyController,
                 actions.forEach { (icon, label, onClick) ->
                     val busy = label == tr("Обновить") && profile.id in refreshing
                     Row(
-                        Modifier.weight(1f).outerShadow(RoundedCornerShape(12.dp), 0.5f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.06f))
-                            .hoverSound().clickable(enabled = !busy, onClick = onClick).padding(vertical = 9.dp),
+                        Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(c.surface2)
+                            .border(1.dp, c.hairline, RoundedCornerShape(12.dp))
+                            .hoverSound().clickable(enabled = !busy, onClick = onClick).padding(vertical = 10.dp),
                         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (busy) app.ghostly.ui.components.Spinner(c.accent, Modifier.size(14.dp))

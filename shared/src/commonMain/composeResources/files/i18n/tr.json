@@ -589,5 +589,9 @@
  "Выбери сервер в приложении": "Uygulamada bir sunucu seç",
  "Как в системе": "Sistem varsayılanı",
  "Нажми, чтобы подключить · {0}": "Bağlanmak için dokun · {0}",
- "Язык": "Dil"
+ "Язык": "Dil",
+ "Переподключить": "Yeniden bağlan",
+ "Следующий": "Sonraki",
+ "Отменить": "İptal",
+ "VPN отключён": "VPN kapandı"
 }

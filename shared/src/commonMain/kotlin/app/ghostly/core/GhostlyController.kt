@@ -25,7 +25,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import app.ghostly.core.mihomo.forCore
 import app.ghostly.core.mihomo.visibleFor
+import app.ghostly.core.mihomo.withFetched
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -142,17 +144,56 @@ class GhostlyController(
         return ours.firstOrNull { p -> p.servers.any { it.id == _selected.value } } ?: ours.firstOrNull()
     }
 
-    /**
-     * Opens the site cabinet on [section] ("cabinet", "renew", "notices"), signed in when the server
-     * allows it for this device (see [app.ghostly.core.account.GhostlyAccount]).
-     */
-    fun openAccount(section: String = "cabinet") {
-        val url = ghostlyProfile()?.url ?: return
+    private fun subIdsInApp(): Set<String> =
+        _profiles.value.mapNotNull { p -> p.url?.let { app.ghostly.core.account.Cabinet.subIdOf(it) } }.toSet()
+
+    /** Is the Ghostly subscription [subId] added to the app (with any core)? */
+    fun hasSubscription(subId: String): Boolean = subId in subIdsInApp()
+
+    /** The Ghostly account inside the app: subscription, balance, devices, purchases (see [app.ghostly.core.account.Cabinet]). */
+    val cabinet: app.ghostly.core.account.Cabinet by lazy {
+        app.ghostly.core.account.Cabinet(
+            platform, store, scope,
+            toast = { _events.emit(it) },
+            haptic = { haptic(it) },
+            ghostlySub = { ghostlyProfile()?.url },
+            appSubIds = ::subIdsInApp,
+            importSub = { url -> import(url) },
+            refreshSub = { id ->
+                _profiles.value.filter { p -> p.url?.let { app.ghostly.core.account.Cabinet.subIdOf(it) } == id }.forEach { refresh(it.id) }
+            },
+            tunnelPort = { backend.appPort },
+        )
+    }
+
+    private val _openCabinet = MutableSharedFlow<Unit>(extraBufferCapacity = 4)
+
+    /** Asks the UI to bring the cabinet up (its tab, or the cabinet page over the first screen). */
+    val openCabinet: SharedFlow<Unit> = _openCabinet
+
+    /** Opens the in-app cabinet on [section] ("cabinet", "renew", "topup", "devices"), for [subId] when given. */
+    fun openAccount(section: String = "cabinet", subId: String? = null) {
+        cabinet.request(section, subId)
+        _openCabinet.tryEmit(Unit)
+    }
+
+    /** The site cabinet in the browser, signed in when the server allows it (for what the app does not show). */
+    fun openAccountOnSite(section: String = "cabinet") {
+        val url = ghostlyProfile()?.url ?: return platform.openUrl("https://${app.ghostly.core.sub.GhostlyDomains.MAIN}/#cabinet")
         scope.launch(Dispatchers.IO) {
             val link = runCatching { account.cabinet(url, section, backend.appPort) }.getOrNull()
             platform.openUrl(link?.url ?: app.ghostly.core.account.GhostlyAccount.fallback(url, section))
             app.ghostly.core.account.GhostlyAccount.hint(link)?.let { _events.emit(it) }
         }
+    }
+
+    /**
+     * Links into Ghostly's own cabinet or bot (a «Продлить» button, a notice's button) open the cabinet in
+     * the app; anything else goes to the browser.
+     */
+    fun openLink(url: String) {
+        val target = app.ghostly.core.account.Cabinet.linkTarget(url)
+        if (target != null) openAccount(target.first, target.second) else platform.openUrl(url)
     }
 
     fun dismissUpdate() {
@@ -276,6 +317,9 @@ class GhostlyController(
         // Subscriptions refresh themselves: at start, then every 15 min check whether the provider's
         // interval (profile-update-interval) has passed.
         scope.launch(Dispatchers.IO) {
+            // A subscription left in the other core's format (switched before it was kept for both) is
+            // invisible here: fetch it now, whatever the interval says.
+            _profiles.value.filter { it.url != null && it.visibleFor(_settings.value.core) == null }.forEach { refresh(it.id) }
             while (true) {
                 if (_settings.value.autoUpdateSubs) refreshStale()
                 kotlinx.coroutines.delay(15 * 60_000L)
@@ -300,6 +344,15 @@ class GhostlyController(
      * base64 blobs, a JSON config, or deep links (ghostly://, happ://add/, incy://, v2rayng://install-sub?url=).
      */
     fun import(raw: String, onDone: (Boolean) -> Unit = {}) {
+        // ghostly://cabinet (back from a payment page) and friends lead into the cabinet, not to an import.
+        if (raw.trim().startsWith("ghostly://", ignoreCase = true)) {
+            app.ghostly.core.account.Cabinet.linkTarget(raw)?.let { (section, subId) ->
+                openAccount(section, subId)
+                cabinet.onReturn()
+                onDone(true)
+                return
+            }
+        }
         scope.launch(Dispatchers.IO) {
             val ok = runCatching { importInternal(raw.trim()) }
                 .onFailure { _events.emit(tr("Не получилось добавить: {0}", app.ghostly.core.sub.FetchErrors.describe(it))) }
@@ -478,7 +531,7 @@ class GhostlyController(
                 val movedTo = domainFailover(profileId, url, parsed.fetchedFrom)
                 _profiles.update { list ->
                     list.map {
-                        if (it.id != profileId) it else it.copy(
+                        if (it.id != profileId) it else it.withFetched(parsed.servers, parsed.mihomo).copy(
                             url = movedTo ?: it.url,
                             name = parsed.title ?: it.name,
                             info = parsed.info ?: it.info,
@@ -490,12 +543,11 @@ class GhostlyController(
                             notice = parsed.notice,
                             updateIntervalHours = parsed.updateIntervalHours ?: it.updateIntervalHours,
                             updatedAt = now(),
-                            servers = parsed.servers,
-                            mihomo = parsed.mihomo,
                         )
                     }
                 }
                 saveProfiles()
+                hiddenRetries.remove(profileId)
                 if (_settings.value.core == app.ghostly.core.model.CoreType.MIHOMO && parsed.mihomo == null && parsed.servers.all { it.config != null } && warnedXrayOnly.add(profileId)) {
                     _events.emit(tr("«{0}»: провайдер отдаёт только формат Xray — на ядре Mihomo эта подписка не показывается", profile.name))
                 }
@@ -515,10 +567,27 @@ class GhostlyController(
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 _events.emit(tr("Не удалось обновить «{0}»: {1}", profile.name, app.ghostly.core.sub.FetchErrors.describe(e)))
+                retryHidden(profileId)
             } finally {
                 _refreshing.update { it - profileId }
             }
         }
+    }
+
+    private val hiddenRetries = mutableMapOf<String, Int>()
+
+    /**
+     * A subscription stored only in the other core's format is invisible on this one until a fetch
+     * succeeds, and a fetch right after a core switch often fails (the tunnel is restarting). Try again
+     * a few times instead of waiting hours for the next scheduled refresh.
+     */
+    private fun retryHidden(profileId: String) {
+        val p = _profiles.value.firstOrNull { it.id == profileId } ?: return
+        if (p.visibleFor(_settings.value.core) != null) { hiddenRetries.remove(profileId); return }
+        val attempt = (hiddenRetries[profileId] ?: 0) + 1
+        if (attempt > 5) return
+        hiddenRetries[profileId] = attempt
+        scope.launch { kotlinx.coroutines.delay(attempt * 5_000L); refresh(profileId) }
     }
 
     /** Last time a refreshed subscription was applied to the running tunnel, per profile (no reconnect loops). */
@@ -942,6 +1011,20 @@ class GhostlyController(
         if (ks.engaged) scope.launch(Dispatchers.IO) { ks.release() }
     }
 
+    /** «Переподключить» from the notification: the same server again, or a plain connect when it's down. */
+    suspend fun restart() {
+        if (backend.state.value is VpnState.Connected) {
+            userWantsConnection = true
+            reconnect()
+        } else {
+            connect()
+        }
+    }
+
+    /** The favourite after the current server (see [app.ghostly.core.vpn.QuickSwitch]), null if none. */
+    fun nextFavorite(): Server? =
+        server(app.ghostly.core.vpn.QuickSwitch.next(allServers().map { it.id }, _favorites.value, _selected.value))
+
     suspend fun disconnect() {
         userWantsConnection = false
         retryJob?.cancel()
@@ -1214,11 +1297,14 @@ class GhostlyController(
         if (before.startOnBoot != after.startOnBoot) runCatching { platform.setStartOnBoot(after.startOnBoot) }
         // Providers send another format to mihomo (Clash YAML with groups): fetch subscriptions again.
         if (before.core != after.core) {
-            refreshAll()
+            // The other core's format is kept with each subscription: use it right away, then refetch.
+            _profiles.update { list -> list.map { it.forCore(after.core) } }
+            saveProfiles()
             if (server(_selected.value) == null) {
-                _selected.value = allServers().firstOrNull()?.id
+                _selected.value = visibleProfiles().firstOrNull()?.servers?.let { s -> s.firstOrNull { it.isAuto } ?: s.firstOrNull() }?.id
                 saveUi()
             }
+            refreshAll()
         }
         // Also while a reconnect is still running: the applier lands on whatever was picked last.
         if (tunnelAffecting(before) != tunnelAffecting(after)) applier.request()

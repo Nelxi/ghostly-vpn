@@ -17,6 +17,8 @@ import app.ghostly.core.model.Server
 import app.ghostly.core.vpn.Traffic
 import app.ghostly.core.vpn.VpnState
 import app.ghostly.core.xray.XrayConfigBuilder
+import app.ghostly.ui.Format
+import app.ghostly.vpn.GhostlyApplication
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -115,6 +117,9 @@ object AndroidMihomo : MihomoCore {
                 .setAction(MihomoVpnService.ACTION_START)
                 .putExtra(MihomoVpnService.EXTRA_NAME, server.name)
                 .putExtra(MihomoVpnService.EXTRA_SUBSCRIPTION, profile?.name)
+                .putExtra(MihomoVpnService.EXTRA_SUBSCRIPTION_LINE, Format.subscriptionLine(profile?.name, profile?.info, System.currentTimeMillis()))
+                .putExtra(MihomoVpnService.EXTRA_CAN_SWITCH, runCatching { GhostlyApplication.instance.controller.nextFavorite() != null }.getOrDefault(false))
+                .putExtra(MihomoVpnService.EXTRA_LANGUAGE, settings.language)
                 .putExtra(MihomoVpnService.EXTRA_CONTROLLER, controller)
                 .putExtra(MihomoVpnService.EXTRA_SECRET, secret)
                 .putExtra(MihomoVpnService.EXTRA_MTU, settings.mtu)

@@ -227,7 +227,7 @@ private fun NoticeCard(n: Notice, more: Int, controller: GhostlyController) {
                         if (b?.url != null) {
                             Row(
                                 Modifier.clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(listOf(look.b, androidx.compose.ui.graphics.lerp(look.b, look.a, 0.45f))))
-                                    .hoverSound().clickable { controller.haptic(); controller.platform.openUrl(b.url) }
+                                    .hoverSound().clickable { controller.haptic(); controller.openLink(b.url) }
                                     .padding(horizontal = 14.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
@@ -348,7 +348,7 @@ private fun NoticeRow(n: Notice, controller: GhostlyController) {
         if (b?.url != null) {
             Text(
                 b.text.ifBlank { tr("Открыть") } + " →", color = look.b, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(10.dp)).clickable { controller.platform.openUrl(b.url) }.padding(vertical = 4.dp),
+                modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(10.dp)).clickable { controller.openLink(b.url) }.padding(vertical = 4.dp),
             )
         }
     }

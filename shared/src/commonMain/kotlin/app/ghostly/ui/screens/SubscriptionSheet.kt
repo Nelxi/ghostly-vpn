@@ -86,7 +86,7 @@ fun ProviderNoticeBlock(n: ProviderNotice, controller: GhostlyController, modifi
             Text(
                 n.buttonText ?: tr("Открыть"), style = MaterialTheme.typography.labelLarge, color = tone,
                 modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(tone.copy(alpha = 0.14f))
-                    .hoverSound().clickable { controller.haptic(); controller.platform.openUrl(url) }.padding(horizontal = 14.dp, vertical = 8.dp),
+                    .hoverSound().clickable { controller.haptic(); controller.openLink(url) }.padding(horizontal = 14.dp, vertical = 8.dp),
             )
         }
     }
@@ -223,7 +223,7 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
         val actions = buildList<Triple<ImageVector, String, () -> Unit>> {
             if (profile.url != null) add(Triple(Icons.Rounded.Refresh, if (busy) tr("Обновляю…") else tr("Обновить")) { controller.haptic(); controller.refresh(profile.id, manual = true) })
             profile.webPageUrl?.let { url -> add(Triple(Icons.Rounded.Public, tr("Подписка")) { controller.platform.openUrl(url) }) }
-            profile.renewLink()?.let { url -> add(Triple(Icons.Rounded.Payments, tr("Продлить")) { controller.platform.openUrl(url) }) }
+            profile.renewLink()?.let { url -> add(Triple(Icons.Rounded.Payments, tr("Продлить")) { controller.openLink(url) }) }
             // Without its own renew link "Продлить" already opens the support link: no second button for it.
             profile.supportUrl?.takeIf { profile.renewUrl != null }?.let { url -> add(Triple(Icons.Rounded.SupportAgent, tr("Поддержка")) { controller.platform.openUrl(url) }) }
             profile.url?.let { url -> add(Triple(Icons.Rounded.ContentCopy, tr("Ссылка")) { controller.platform.copyToClipboard(url) }) }

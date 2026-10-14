@@ -41,6 +41,8 @@ class MihomoVpnService : VpnService() {
     private var running = false
     private var serverName = ""
     private var subscriptionName: String? = null
+    private var subscriptionLine: String? = null
+    private var canSwitch = false
     private var connectedAt: Long? = null
     private var statsJob: kotlinx.coroutines.Job? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
@@ -81,6 +83,14 @@ class MihomoVpnService : VpnService() {
                 killJob = null
                 serverName = intent.getStringExtra(EXTRA_NAME).orEmpty()
                 subscriptionName = intent.getStringExtra(EXTRA_SUBSCRIPTION)
+                subscriptionLine = intent.getStringExtra(EXTRA_SUBSCRIPTION_LINE)
+                canSwitch = intent.getBooleanExtra(EXTRA_CAN_SWITCH, false)
+                // This process has no controller: the app's language comes with the start (a small asset read).
+                intent.getStringExtra(EXTRA_LANGUAGE)?.let { lang ->
+                    if (app.ghostly.i18n.L10n.resolve(lang) != app.ghostly.i18n.L10n.language) {
+                        kotlinx.coroutines.runBlocking { app.ghostly.i18n.L10n.load(lang) }
+                    }
+                }
                 connectedAt = null
                 goForeground(getString(R.string.notif_connecting))
                 scope.launch { start(intent) }
@@ -341,9 +351,9 @@ class MihomoVpnService : VpnService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         return VpnNotification.build(
-            this, VpnNotification.Core.MIHOMO, serverName, subscriptionName,
+            this, VpnNotification.Core.MIHOMO, serverName, subscriptionName, subscriptionLine,
             connectedAt = if (status == null) connectedAt else null,
-            stats = stats, open = openAppIntent(), stop = stop, status = status,
+            stats = stats, stop = stop, canSwitch = canSwitch, status = status,
         )
     }
 
@@ -363,6 +373,9 @@ class MihomoVpnService : VpnService() {
         const val ACTION_PING_DONE = "app.ghostly.vpn.MIHOMO_PING_DONE"
         const val EXTRA_NAME = "name"
         const val EXTRA_SUBSCRIPTION = "subscription"
+        const val EXTRA_SUBSCRIPTION_LINE = "subscription_line"
+        const val EXTRA_CAN_SWITCH = "can_switch"
+        const val EXTRA_LANGUAGE = "language"
         const val EXTRA_CONTROLLER = "controller"
         const val EXTRA_SECRET = "secret"
         const val EXTRA_MTU = "mtu"

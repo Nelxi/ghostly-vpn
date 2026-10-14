@@ -44,6 +44,14 @@ data class GhostColors(
     val line: Color = Color(0x14FFFFFF),
     val glass: Color = Color(0x0DFFFFFF),
     val glassStrong: Color = Color(0x17FFFFFF),
+    /** Cards: an opaque night-ink tile (the aurora only glows around it, not through it). */
+    val surface1: Color = Color(0xFF13111B),
+    /** Tiles inside cards, raised rows. */
+    val surface2: Color = Color(0xFF1A1724),
+    /** Inputs, steppers, pressed states. */
+    val surface3: Color = Color(0xFF231F2F),
+    /** 1px edges. */
+    val hairline: Color = Color(0x12FFFFFF),
 )
 
 object Motion {
@@ -90,7 +98,7 @@ fun GhostlyTheme(accentArgb: Long, reduceMotion: Boolean, content: @Composable (
     val typography = Typography(
         displayLarge = base.copy(fontSize = 44.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1.2).sp),
         displayMedium = base.copy(fontSize = 34.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.8).sp),
-        headlineMedium = base.copy(fontSize = 26.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp),
+        headlineMedium = base.copy(fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.8).sp),
         headlineSmall = base.copy(fontSize = 21.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp),
         titleLarge = base.copy(fontSize = 18.sp, fontWeight = FontWeight.SemiBold),
         titleMedium = base.copy(fontSize = 16.sp, fontWeight = FontWeight.SemiBold),

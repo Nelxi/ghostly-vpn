@@ -158,7 +158,7 @@ val fetchMihomoCore = tasks.register<FetchMihomoDesktop>("fetchMihomoCore") {
 tasks.matching { it.name == "prepareAppResources" }.configureEach { dependsOn(fetchXrayCore, fetchMihomoCore) }
 
 /** The one place to bump the desktop version (Windows/Linux use it as is, macOS as 1.x.y). */
-val ghostlyVersion = "0.3.35"
+val ghostlyVersion = "0.3.36"
 
 compose.desktop {
     application {
@@ -196,4 +196,22 @@ compose.desktop {
             }
         }
     }
+}
+
+// Screens rendered to PNG for design review, without a window or a network (not part of the app):
+// ./gradlew :desktopApp:shots  →  desktopApp/build/shots/*.png
+val shots: SourceSet by sourceSets.creating {
+    compileClasspath += sourceSets["main"].output + sourceSets["main"].compileClasspath
+    runtimeClasspath += output + compileClasspath + sourceSets["main"].runtimeClasspath
+}
+tasks.register<JavaExec>("shots") {
+    group = "verification"
+    description = "Renders the app's screens to PNG files"
+    mainClass.set("app.ghostly.shots.ShotsKt")
+    // The shared module is compiled by the JDK Gradle runs on: run the shots on that one too.
+    javaLauncher.set(javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(JavaVersion.current().majorVersion)) })
+    classpath = shots.runtimeClasspath
+    args(layout.buildDirectory.dir("shots").get().asFile.absolutePath)
+    providers.gradleProperty("only").orNull?.let { args(it.split(',')) }
+    jvmArgs("-Xmx1g")
 }

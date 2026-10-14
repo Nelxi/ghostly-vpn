@@ -108,21 +108,19 @@ fun Tag(text: String, modifier: Modifier = Modifier, color: Color = Ghost.colors
 
 // ---------------------------------------------------------------- buttons
 
-/** Primary action: accent gradient pill (site's `.btn-acc`). */
+/** Primary action: a solid accent button with a lit top edge (no glow under it). */
 @Composable
 fun AccentButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, icon: ImageVector? = null, enabled: Boolean = true) {
     val c = Ghost.colors
     val interaction = remember { MutableInteractionSource() }
     Row(
         modifier
-            .pressScale(interaction, 0.96f)
-            // accent bloom under the primary button
-            .then(if (enabled) Modifier.dropShadow(RoundedCornerShape(20.dp), androidx.compose.ui.graphics.shadow.Shadow(
-                radius = 26.dp, color = c.accent.copy(alpha = 0.55f), spread = 1.dp, offset = androidx.compose.ui.unit.DpOffset(0.dp, 6.dp),
-            )) else Modifier)
-            .clip(RoundedCornerShape(20.dp))
+            .pressScale(interaction, 0.97f)
+            .softShadow(RoundedCornerShape(Radius.control), if (enabled) 0.6f else 0f)
+            .clip(RoundedCornerShape(Radius.control))
             .background(c.accent)
-            .sheen(interaction, strength = 0.22f)
+            .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.16f), Color.Transparent), endY = 60f))
+            .sheen(interaction, strength = 0.18f)
             .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha; alpha = if (enabled) 1f else 0.45f }
             .hoverSound().clickable(interaction, null, enabled = enabled, onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 15.dp),
@@ -138,15 +136,16 @@ fun AccentButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifie
 fun SoftButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, icon: ImageVector? = null, tint: Color = Ghost.colors.ink) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
-    val bg by animateColorAsState(Color.White.copy(alpha = if (hovered) 0.1f else 0.06f), Motion.quick())
-    val edge by animateColorAsState(if (hovered) Ghost.colors.accent.copy(alpha = 0.5f) else Ghost.colors.line, Motion.quick())
+    val c = Ghost.colors
+    val bg by animateColorAsState(if (hovered) c.surface3 else c.surface2, Motion.quick())
+    val edge by animateColorAsState(if (hovered) c.accent.copy(alpha = 0.45f) else c.hairline, Motion.quick())
     Row(
         modifier
-            .pressScale(interaction, 0.96f)
-            .outerShadow(RoundedCornerShape(20.dp), 0.7f).clip(RoundedCornerShape(20.dp))
+            .pressScale(interaction, 0.97f)
+            .clip(RoundedCornerShape(Radius.control))
             .background(bg)
-            .sheen(interaction, strength = 0.1f)
-            .border(1.dp, edge, RoundedCornerShape(20.dp))
+            .sheen(interaction, strength = 0.08f)
+            .border(1.dp, edge, RoundedCornerShape(Radius.control))
             .hoverSound().clickable(interaction, null, onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.Center,
@@ -166,18 +165,18 @@ fun IconBubble(icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modi
     val bg by animateColorAsState(
         when {
             active -> c.accent.copy(alpha = 0.18f)
-            hovered -> c.accent.copy(alpha = 0.12f)
-            else -> Color.White.copy(alpha = 0.06f)
+            hovered -> c.surface3
+            else -> c.surface2
         },
         Motion.quick(),
     )
-    val edge by animateColorAsState(if (active || hovered) c.accent.copy(alpha = 0.4f) else c.line, Motion.quick())
+    val edge by animateColorAsState(if (active || hovered) c.accent.copy(alpha = 0.4f) else c.hairline, Motion.quick())
     val tilt by animateFloatAsState(if (hovered) -8f else 0f, Motion.bouncy())
     Box(
         modifier
             .size(size)
-            .pressScale(interaction, 0.88f, hover = 1.08f)
-            .outerShadow(CircleShape, 0.6f).clip(CircleShape)
+            .pressScale(interaction, 0.88f, hover = 1.06f)
+            .softShadow(CircleShape, 0.5f).clip(CircleShape)
             .background(bg)
             .border(1.dp, edge, CircleShape)
             .hoverSound().clickable(interaction, null, onClick = onClick),
@@ -263,13 +262,13 @@ fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> 
     val index = options.indexOfFirst { it.first == selected }.coerceAtLeast(0)
     val pos by animateFloatAsState(index.toFloat(), Motion.bouncy())
     BoxWithConstraints(
-        modifier.fillMaxWidth().height(42.dp).outerShadow(RoundedCornerShape(16.dp), 0.6f).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.05f)).padding(3.dp),
+        modifier.fillMaxWidth().height(42.dp).clip(RoundedCornerShape(14.dp)).background(c.surface3).padding(3.dp),
     ) {
         val segW = maxWidth / options.size
         Box(
-            Modifier.offset(x = segW * pos).width(segW).fillMaxHeight().clip(RoundedCornerShape(12.dp))
-                .background(Brush.linearGradient(listOf(c.accent.copy(alpha = 0.32f), c.accent2.copy(alpha = 0.26f))))
-                .border(1.dp, c.accent.copy(alpha = 0.35f), RoundedCornerShape(12.dp)),
+            Modifier.offset(x = segW * pos).width(segW).fillMaxHeight().softShadow(RoundedCornerShape(11.dp), 0.5f).clip(RoundedCornerShape(11.dp))
+                .background(c.surface1)
+                .border(1.dp, c.accent.copy(alpha = 0.45f), RoundedCornerShape(11.dp)),
         )
         Row(Modifier.fillMaxWidth().fillMaxHeight()) {
             options.forEach { (value, label) ->
@@ -288,10 +287,10 @@ fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> 
 @Composable
 fun SectionTitle(text: String, modifier: Modifier = Modifier) {
     Text(
-        text.uppercase(),
-        modifier.padding(start = 6.dp, top = 22.dp, bottom = 10.dp),
-        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.4.sp),
-        color = Ghost.colors.ink3,
+        text,
+        modifier.padding(start = 6.dp, top = 24.dp, bottom = 10.dp),
+        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
+        color = Ghost.colors.ink2,
     )
 }
 
@@ -326,13 +325,12 @@ fun GlowBar(progress: Float, color: Color, modifier: Modifier = Modifier) {
     val p by animateFloatAsState(progress.coerceIn(0f, 1f), Motion.soft())
     Canvas(modifier.fillMaxWidth().height(6.dp)) {
         val r = size.height / 2
-        drawRoundRect(Color.White.copy(alpha = 0.08f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(r, r))
+        drawRoundRect(Color.White.copy(alpha = 0.07f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(r, r))
         if (p > 0f) {
             drawRoundRect(
-                Brush.horizontalGradient(listOf(color.copy(alpha = 0.55f), color)),
-                size = size.copy(width = size.width * p), cornerRadius = androidx.compose.ui.geometry.CornerRadius(r, r),
+                Brush.horizontalGradient(listOf(color.copy(alpha = 0.7f), color)),
+                size = size.copy(width = (size.width * p).coerceAtLeast(size.height)), cornerRadius = androidx.compose.ui.geometry.CornerRadius(r, r),
             )
-            drawCircle(color.copy(alpha = 0.35f), r * 2.2f, Offset(size.width * p - r, r))
         }
     }
 }

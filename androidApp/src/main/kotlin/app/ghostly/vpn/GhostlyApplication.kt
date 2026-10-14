@@ -41,6 +41,7 @@ class GhostlyApplication : Application() {
         // Translations before the first notification or screen (a small asset read).
         kotlinx.coroutines.runBlocking { app.ghostly.i18n.L10n.load(controller.settings.value.language) }
         app.ghostly.vpn.service.GhostlyWidget.watch(this)
+        app.ghostly.vpn.service.NotificationActions.watchFailures(this)
     }
 
     private fun isMihomoProcess(): Boolean {

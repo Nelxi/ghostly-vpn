@@ -80,7 +80,7 @@ fun AuroraBackground(energy: Float, modifier: Modifier = Modifier, content: @Com
     val e by animateFloatAsState(energy, tween(1400, easing = Motion.Ease))
     val stars = remember {
         val r = Random(7)
-        List(70) { floatArrayOf(r.nextFloat(), r.nextFloat(), 0.6f + r.nextFloat() * 1.6f, r.nextFloat() * 6.28f, 0.4f + r.nextFloat()) }
+        List(44) { floatArrayOf(r.nextFloat(), r.nextFloat(), 0.5f + r.nextFloat() * 1.3f, r.nextFloat() * 6.28f, 0.4f + r.nextFloat()) }
     }
     // Parallax: the aurora leans away from the cursor, stars (nearer) move more — depth for free.
     var mouse by remember { mutableStateOf(Offset.Zero) }
@@ -121,17 +121,17 @@ fun AuroraBackground(energy: Float, modifier: Modifier = Modifier, content: @Com
                     radius = r, center = Offset(cx, cy),
                 )
             }
-            blob(w * (0.15f + 0.12f * cos(phase)), h * (0.10f + 0.07f * sin(phase * 2)), m * 0.62f, c.accent2, 0.34f + 0.14f * e)
-            blob(w * (0.90f + 0.08f * sin(phase)), h * (0.32f + 0.08f * cos(phase)), m * 0.50f, c.accent, 0.15f + 0.08f * e)
-            blob(w * (0.45f + 0.22f * cos(phase + 2f)), h * (1.0f + 0.05f * sin(phase)), m * 0.66f, lerp(c.accent2, c.ok, e), 0.18f + 0.14f * e)
-            blob(w * (0.65f + 0.1f * sin(phase * 1.5f + 1f)), h * (0.62f + 0.06f * cos(phase)), m * 0.35f, Color(0xFFFF9AC8), 0.05f + 0.04f * e)
+            // Two slow lights: violet from the top corner, and from below one that turns mint when protected.
+            blob(w * (0.12f + 0.10f * cos(phase)), h * (0.02f + 0.05f * sin(phase * 2)), m * 0.66f, c.accent2, 0.26f + 0.10f * e)
+            blob(w * (0.92f + 0.06f * sin(phase)), h * (0.28f + 0.06f * cos(phase)), m * 0.42f, c.accent, 0.09f + 0.06f * e)
+            blob(w * (0.50f + 0.20f * cos(phase + 2f)), h * (1.04f + 0.04f * sin(phase)), m * 0.70f, lerp(c.accent2, c.ok, e), 0.12f + 0.14f * e)
 
             // Ghost dust: tiny stars drifting up and twinkling.
             stars.forEach { s ->
                 val y = ((s[1] - drift * s[4] * 0.35f) % 1f + 1f) % 1f
                 val tw = (0.5f + 0.5f * sin(phase * 3f * s[4] + s[3])) * (1f + (sa?.let { it.treble * 1.2f } ?: 0f))
                 val depth = 1.2f + s[4] * 1.4f
-                drawCircle(Color.White.copy(alpha = (0.10f + 0.35f * tw) * (0.7f + 0.3f * e)), s[2].dp.toPx() * 0.8f, Offset(s[0] * w + px * depth, y * h + py * depth))
+                drawCircle(Color.White.copy(alpha = (0.06f + 0.22f * tw) * (0.7f + 0.3f * e)), s[2].dp.toPx() * 0.8f, Offset(s[0] * w + px * depth, y * h + py * depth))
             }
             // Vignette keeps text readable at the bottom.
             drawRect(Brush.verticalGradient(listOf(Color.Transparent, c.bg.copy(alpha = 0.6f)), startY = h * 0.55f, endY = h))
@@ -140,11 +140,15 @@ fun AuroraBackground(energy: Float, modifier: Modifier = Modifier, content: @Com
     }
 }
 
-/** Frosted-glass surface: translucent fill, hairline border with a lit top edge, cursor spotlight on desktop. */
+/**
+ * The app's card: an opaque night-ink tile (the aurora glows around it, never through it), a hairline edge
+ * lit from the top, one soft shadow tinted like the night behind it, and a cursor spotlight on desktop.
+ * [strong]: the raised variant for the card that matters most on a screen.
+ */
 @Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(28.dp),
+    shape: Shape = RoundedCornerShape(Radius.card),
     padding: Dp = 18.dp,
     strong: Boolean = false,
     glow: Color? = null,
@@ -156,23 +160,13 @@ fun GlassCard(
     val hovered by interaction.collectIsHoveredAsState()
     val lit by animateFloatAsState(if (hovered) 1f else 0f, Motion.quick(260))
     var m = modifier
-    if (onClick != null) m = m.pressScale(interaction, 0.975f, hover = 1.012f)
-    // Neverlose-style heavy black shadows, drawn only OUTSIDE the outline (see outerShadow): a dense dark
-    // rim hugging the edge, a soft mid shadow and a wide heavy tail. The glass itself keeps its colour.
-    m = m.outerShadow(shape, if (strong) 1f else 0.85f)
+    if (onClick != null) m = m.pressScale(interaction, 0.98f, hover = 1.006f)
+    m = m.softShadow(shape, if (strong) 1f else 0.8f)
     m = m.clip(shape)
-        .background(
-            Brush.verticalGradient(
-                listOf(
-                    Color.White.copy(alpha = (if (strong) 0.10f else 0.065f) + 0.03f * lit),
-                    Color.White.copy(alpha = 0.025f + 0.015f * lit),
-                ),
-            ),
-        )
-    if (glow != null) m = m.background(Brush.radialGradient(listOf(glow.copy(alpha = 0.16f), Color.Transparent)))
-    // Soft inner depth: edges of the glass sink a little, and a thin light line catches the top edge.
-    m = m.innerShadow(shape, androidx.compose.ui.graphics.shadow.Shadow(radius = 18.dp, color = Color.Black.copy(alpha = 0.32f * LocalDesign.current.shadow.coerceAtMost(1f))))
-        .innerShadow(shape, androidx.compose.ui.graphics.shadow.Shadow(radius = 2.dp, color = Color.White.copy(alpha = 0.07f), offset = androidx.compose.ui.unit.DpOffset(0.dp, 1.dp)))
+        .background(if (strong) c.surface2 else c.surface1)
+        // The top edge catches a little light; nothing else is lit.
+        .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.035f + 0.025f * lit), Color.Transparent), endY = 260f))
+    if (glow != null) m = m.background(Brush.radialGradient(listOf(glow.copy(alpha = 0.13f), Color.Transparent)))
     val stageForCard = app.ghostly.ui.stage.LocalStage.current
     if (stageForCard != null) m = m.drawWithContent {
         drawContent()
@@ -185,8 +179,8 @@ fun GlassCard(
             1.dp,
             Brush.verticalGradient(
                 listOf(
-                    lerp(Color.White.copy(alpha = 0.16f), c.accent.copy(alpha = 0.55f), lit),
-                    Color.White.copy(alpha = 0.04f + 0.06f * lit),
+                    lerp(Color.White.copy(alpha = 0.10f), c.accent.copy(alpha = 0.5f), lit),
+                    Color.White.copy(alpha = 0.035f + 0.04f * lit),
                 ),
             ),
             shape,
@@ -352,7 +346,25 @@ fun Modifier.outerShadow(shape: Shape, weight0: Float = 1f): Modifier = drawBehi
     }
 }
 
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.softLayer(shape: Shape, radius: Float, dy: Float, alpha: Float) {
+/**
+ * One soft shadow under [shape], tinted like the night it falls on (never pure black): a short dense rim and
+ * a gentle tail. Cut out of the shape like [outerShadow], so translucent content never shows it through.
+ * Scaled by the server-tunable [ShadowLook] like the old heavy one.
+ */
+fun Modifier.softShadow(shape: Shape, weight0: Float = 1f): Modifier = drawBehind {
+    val weight = weight0 * ShadowLook.strength.coerceAtMost(1.2f)
+    if (weight <= 0.001f) return@drawBehind
+    val s = ShadowLook.spread
+    val cut = androidx.compose.ui.graphics.Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawBehind)) }
+    clipPath(cut, androidx.compose.ui.graphics.ClipOp.Difference) {
+        softLayer(shape, radius = 6.dp.toPx() * s, dy = 2.dp.toPx() * s, alpha = 0.35f * weight, tint = SHADOW_TINT)
+        softLayer(shape, radius = 26.dp.toPx() * s, dy = 12.dp.toPx() * s, alpha = 0.32f * weight, tint = SHADOW_TINT)
+    }
+}
+
+private val SHADOW_TINT = Color(0xFF030207)
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.softLayer(shape: Shape, radius: Float, dy: Float, alpha: Float, tint: Color = Color.Black) {
     val steps = 14
     for (i in steps downTo 1) {
         val k = i.toFloat() / steps
@@ -362,7 +374,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.softLayer(shape: Sh
         if (a <= 0.001f) continue
         val outline = shape.createOutline(Size(size.width + grow * 2, size.height + grow * 2), layoutDirection, this)
         translate(-grow, -grow + dy * k) {
-            drawOutline(outline, Color.Black.copy(alpha = a))
+            drawOutline(outline, tint.copy(alpha = a))
         }
     }
 }

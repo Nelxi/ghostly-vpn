@@ -208,24 +208,19 @@ private fun MainSettings(controller: GhostlyController, contentPadding: PaddingV
     val profiles by controller.profiles.collectAsState()
     val ghostly = remember(profiles) { controller.ghostlyProfile() }
     PageScaffold(tr("Настройки"), contentPadding, null) {
-        // Ghostly's own subscription: the account (what the bot and the site do) is one tap away.
-        if (ghostly != null) {
+        // The Ghostly account lives in the app now (its own tab); these rows lead straight to its parts.
+        val signedIn = controller.cabinet.api.hasSession
+        if (ghostly != null || signedIn) {
             val go: (String) -> Unit = { section -> controller.haptic(); controller.openAccount(section) }
             SectionTitle(tr("Аккаунт Ghostly"))
             Group {
-                SettingRow(tr("Личный кабинет"), ghostly.name, Icons.Rounded.AccountCircle, onClick = { go("cabinet") }) { Chevron() }
-                SettingRow(tr("Продлить или сменить тариф"), tr("Картой или по СБП, дни прибавятся к текущему сроку"), Icons.Rounded.Payments, onClick = { go("renew") }) { Chevron() }
-                SettingRow(tr("Устройства, трафик, промокоды"), tr("Отключить устройство, докупить гигабайты, ввести промокод, баланс и рефералы"), Icons.Rounded.Devices, onClick = { go("cabinet") }) { Chevron() }
-                SettingRow(tr("Уведомления"), tr("Сообщения сервиса об этой подписке"), Icons.Rounded.Notifications, onClick = { go("notices") }) { Chevron() }
-                ghostly.supportUrl?.let { support ->
+                SettingRow(tr("Личный кабинет"), ghostly?.name ?: tr("Подписка, баланс и устройства"), Icons.Rounded.AccountCircle, onClick = { go("cabinet") }) { Chevron() }
+                SettingRow(tr("Продлить или сменить тариф"), tr("Картой, по СБП или с баланса, дни прибавятся к текущему сроку"), Icons.Rounded.Payments, onClick = { go("renew") }) { Chevron() }
+                SettingRow(tr("Устройства"), tr("Отключить или запретить устройство на подписке"), Icons.Rounded.Devices, onClick = { go("devices") }) { Chevron() }
+                SettingRow(tr("Пополнить баланс"), tr("Для продления, трафика и устройств"), Icons.Rounded.Savings, onClick = { go("topup") }) { Chevron() }
+                ghostly?.supportUrl?.let { support ->
                     SettingRow(tr("Поддержка"), tr("Чат в Telegram, отвечаем сами"), Icons.Rounded.SupportAgent, onClick = { controller.haptic(); controller.platform.openUrl(support) }) { Chevron() }
                 }
-                Text(
-                    tr("Кабинет открывается в браузере уже с вашим аккаунтом — на устройстве, где подписку добавили первой. ") +
-                        tr("На другом своём устройстве войдите на сайте один раз и подтвердите его: дальше откроется так же. ") +
-                        tr("Пароль и двухэтапная защита меняются только после обычного входа на сайте."),
-                    style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
-                )
             }
         }
 

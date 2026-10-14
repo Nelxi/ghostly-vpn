@@ -41,6 +41,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Home
@@ -82,9 +83,9 @@ private val NAV_GAP = 6.dp
 
 /** Desktop / tablet layout: glass sidebar + roomy content area. */
 @Composable
-internal fun DesktopShell(controller: GhostlyController, tab: Tab, onTab: (Tab) -> Unit, onAdd: () -> Unit) {
+internal fun DesktopShell(controller: GhostlyController, tabs: List<Tab>, tab: Tab, onTab: (Tab) -> Unit, onAdd: () -> Unit) {
     Row(Modifier.fillMaxSize()) {
-        Sidebar(controller, tab, onTab, onAdd)
+        Sidebar(controller, tabs, tab, onTab, onAdd)
         AnimatedContent(
             targetState = tab,
             transitionSpec = {
@@ -101,6 +102,11 @@ internal fun DesktopShell(controller: GhostlyController, tab: Tab, onTab: (Tab) 
                         ServersScreen(controller, PaddingValues(top = 20.dp, bottom = 24.dp), onAdd = onAdd)
                     }
                 }
+                Tab.ACCOUNT -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                    Box(Modifier.widthIn(max = 1040.dp).fillMaxSize()) {
+                        app.ghostly.ui.screens.cabinet.CabinetScreen(controller, PaddingValues(top = 20.dp, bottom = 24.dp), wide = true)
+                    }
+                }
                 Tab.SETTINGS -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                     Box(Modifier.widthIn(max = 820.dp).fillMaxSize()) {
                         SettingsScreen(controller, PaddingValues(top = 20.dp, bottom = 24.dp))
@@ -113,7 +119,7 @@ internal fun DesktopShell(controller: GhostlyController, tab: Tab, onTab: (Tab) 
 }
 
 @Composable
-private fun Sidebar(controller: GhostlyController, tab: Tab, onTab: (Tab) -> Unit, onAdd: () -> Unit) {
+private fun Sidebar(controller: GhostlyController, tabs: List<Tab>, tab: Tab, onTab: (Tab) -> Unit, onAdd: () -> Unit) {
     val c = Ghost.colors
     val state by controller.state.collectAsState()
     val profiles by controller.profiles.collectAsState()
@@ -135,7 +141,7 @@ private fun Sidebar(controller: GhostlyController, tab: Tab, onTab: (Tab) -> Uni
         }
 
         // Navigation with a liquid indicator sliding between items.
-        val index = Tab.entries.indexOf(tab)
+        val index = tabs.indexOf(tab).coerceAtLeast(0)
         val indicatorY by animateDpAsState((NAV_ITEM_H + NAV_GAP) * index, Motion.bouncy())
         Box {
             Box(
@@ -144,9 +150,15 @@ private fun Sidebar(controller: GhostlyController, tab: Tab, onTab: (Tab) -> Uni
                     .border(1.dp, c.accent.copy(alpha = 0.32f), RoundedCornerShape(16.dp)),
             )
             Column(verticalArrangement = Arrangement.spacedBy(NAV_GAP)) {
-                NavItem(Icons.Rounded.Home, tr("Главная"), tab == Tab.HOME) { onTab(Tab.HOME) }
-                NavItem(Icons.Rounded.Dns, tr("Серверы"), tab == Tab.SERVERS) { onTab(Tab.SERVERS) }
-                NavItem(Icons.Rounded.Settings, tr("Настройки"), tab == Tab.SETTINGS) { onTab(Tab.SETTINGS) }
+                tabs.forEach { t ->
+                    val icon = when (t) {
+                        Tab.HOME -> Icons.Rounded.Home
+                        Tab.SERVERS -> Icons.Rounded.Dns
+                        Tab.ACCOUNT -> Icons.Rounded.AccountCircle
+                        Tab.SETTINGS -> Icons.Rounded.Settings
+                    }
+                    NavItem(icon, t.title, tab == t) { onTab(t) }
+                }
             }
         }
         Spacer(Modifier.height(14.dp))

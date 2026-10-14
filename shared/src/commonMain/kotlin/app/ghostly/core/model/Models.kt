@@ -26,7 +26,17 @@ data class Profile(
     val servers: List<Server> = emptyList(),
     /** Whole Clash/mihomo config (YAML subscription, kept as JSON): runs on mihomo with its groups and rules. */
     val mihomo: JsonObject? = null,
+    /**
+     * The same subscription in the other core's format (Xray JSON ↔ Clash YAML), from its last fetch on
+     * that core. A core switch swaps it in at once, so the subscription never vanishes while the
+     * refetch is under way or fails (the tunnel is restarting at that moment).
+     */
+    val stash: ProfileContent? = null,
 )
+
+/** What a subscription fetch fills in: the servers and, for a Clash/mihomo profile, its whole config. */
+@Serializable
+data class ProfileContent(val servers: List<Server> = emptyList(), val mihomo: JsonObject? = null)
 
 /** The provider's info block with an optional button (Happ `sub-info-*` headers). */
 @Serializable

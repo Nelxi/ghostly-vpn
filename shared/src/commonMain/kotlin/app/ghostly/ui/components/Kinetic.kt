@@ -174,7 +174,7 @@ fun AnnouncementCard(controller: GhostlyController, modifier: Modifier = Modifie
     GlassCard(
         modifier.fillMaxWidth().orbitBorder(true, c.accent, 26.dp),
         padding = 14.dp, strong = true,
-        onClick = b.url?.let { u -> { controller.platform.openUrl(u) } },
+        onClick = b.url?.let { u -> { controller.openLink(u) } },
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(c.accent.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
