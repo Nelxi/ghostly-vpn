@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.draw.innerShadow
 import androidx.compose.animation.core.Animatable
@@ -109,12 +110,13 @@ fun GlassCard(
  */
 fun Modifier.plate(shape: Shape, strong: Boolean = false, lit: () -> Float = { 0f }): Modifier = composed {
     val c = Ghost.colors
-    val night = LocalNight.current
     val fill = if (strong) c.plate.copy(alpha = (c.plate.alpha + 0.05f).coerceAtMost(1f)) else c.plate
+    // From the theme (switched once on connect), not the scene's animated energy: reading that here made
+    // every plate redraw on every frame of the 2-second colour spread.
+    val e = c.lit
     clip(shape)
         .drawBehind {
             drawRect(fill)
-            val e = night.energy
             // Sky light on the plate: a faint wash from the top, and the edge that catches it.
             if (e > 0.01f) drawRect(Brush.verticalGradient(listOf(c.accent.copy(alpha = 0.045f * e), Color.Transparent), endY = 90.dp.toPx()))
             val edge = lerp(PLATE_EDGE_GREY, lerp(PLATE_EDGE_LIT, c.accent.copy(alpha = PLATE_EDGE_LIT.alpha), 0.35f), e)
@@ -305,14 +307,30 @@ fun Modifier.outerShadow(shape: Shape, weight0: Float = 1f): Modifier = drawBehi
  * a gentle tail. Cut out of the shape like [outerShadow], so translucent content never shows it through.
  * Scaled by the server-tunable [ShadowLook] like the old heavy one.
  */
-fun Modifier.softShadow(shape: Shape, weight0: Float = 1f): Modifier = drawBehind {
+fun Modifier.softShadow(shape: Shape, weight0: Float = 1f): Modifier = drawWithCache {
     val weight = weight0 * ShadowLook.strength.coerceAtMost(1.2f)
-    if (weight <= 0.001f) return@drawBehind
     val s = ShadowLook.spread
-    val cut = androidx.compose.ui.graphics.Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawBehind)) }
-    clipPath(cut, androidx.compose.ui.graphics.ClipOp.Difference) {
-        softLayer(shape, radius = 6.dp.toPx() * s, dy = 2.dp.toPx() * s, alpha = 0.35f * weight, tint = SHADOW_TINT)
-        softLayer(shape, radius = 26.dp.toPx() * s, dy = 12.dp.toPx() * s, alpha = 0.32f * weight, tint = SHADOW_TINT)
+    // Built once per size (and look): the grown outlines are geometry, replayed on every draw.
+    val cut = androidx.compose.ui.graphics.Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }
+    val layers = if (weight <= 0.001f) emptyList() else
+        shadowRings(shape, 6.dp.toPx() * s, 2.dp.toPx() * s, 0.35f * weight) + shadowRings(shape, 26.dp.toPx() * s, 12.dp.toPx() * s, 0.32f * weight)
+    onDrawBehind {
+        if (layers.isEmpty()) return@onDrawBehind
+        clipPath(cut, androidx.compose.ui.graphics.ClipOp.Difference) {
+            layers.forEach { (outline, offset, color) -> translate(offset.x, offset.y) { drawOutline(outline, color) } }
+        }
+    }
+}
+
+/** The rings of one soft layer: each the shape grown a step further with a falling alpha. */
+private fun androidx.compose.ui.draw.CacheDrawScope.shadowRings(shape: Shape, radius: Float, dy: Float, alpha: Float): List<Triple<androidx.compose.ui.graphics.Outline, Offset, Color>> {
+    val steps = 14
+    return (steps downTo 1).mapNotNull { i ->
+        val k = i.toFloat() / steps
+        val grow = radius * k
+        val a = (alpha.coerceAtMost(0.95f) * (1f - k) * (1f - k) * 2.2f / steps).coerceIn(0f, 1f)
+        if (a <= 0.001f) null
+        else Triple(shape.createOutline(Size(size.width + grow * 2, size.height + grow * 2), layoutDirection, this), Offset(-grow, -grow + dy * k), SHADOW_TINT.copy(alpha = a))
     }
 }
 

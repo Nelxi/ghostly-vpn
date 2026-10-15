@@ -303,7 +303,7 @@ fun GhostlyApp(controller: GhostlyController) {
                                 }
                             }
                         }
-                        val heading = rememberHeading(tab)
+                        val heading = rememberPageMove(tab)
                         AnimatedContent(
                             targetState = tab,
                             // The pages ride the camera (see travel): no transition of their own, the old one is
@@ -311,7 +311,7 @@ fun GhostlyApp(controller: GhostlyController) {
                             transitionSpec = { travelSpec() },
                             modifier = Modifier.fillMaxSize().predictiveCard(tabPeek, app.ghostly.ui.screens.peekBrush()),
                         ) { t ->
-                            Box(Modifier.fillMaxSize().travel(this@AnimatedContent, heading), contentAlignment = Alignment.TopCenter) {
+                            Box(Modifier.fillMaxSize().travel(this@AnimatedContent, heading, leaving = t != tab), contentAlignment = Alignment.TopCenter) {
                                 Box(Modifier.widthIn(max = 620.dp).fillMaxSize()) {
                                     when (t) {
                                         Tab.HOME -> HomeScreen(controller, onPickServer = { pickerOpen = true }, contentPadding = pad)
@@ -532,13 +532,30 @@ private fun BoxScope.PickerSheet(
 /** The first screen's key for the night's camera (nothing added yet). */
 internal const val ONBOARDING = "onboarding"
 
-/** Which way the camera travels to [to]: 1 to a later tab or page (the world slides left), -1 back. */
+/**
+ * One page change: which way it goes ([heading] 1 to a later tab or page, -1 back) and its clock (0 → 1).
+ * As in Kasane, the clock starts on the first frame the new page has been drawn, not at the tap: building
+ * a heavy page (the server list, settings) takes a few hundred ms on a phone and would otherwise eat most
+ * of the 460 ms before anything is seen.
+ */
+internal class PageMove(val heading: Int, val progress: androidx.compose.runtime.State<Float>)
+
 @Composable
-internal fun <T : Enum<T>> rememberHeading(to: T): Int {
+internal fun <T : Enum<T>> rememberPageMove(to: T): PageMove {
     var last by remember { mutableStateOf(to) }
     val heading = remember(to) { if (to.ordinal >= last.ordinal) 1 else -1 }
     SideEffect { last = to }
-    return heading
+    val clock = remember { androidx.compose.animation.core.Animatable(1f) }
+    var first by remember { mutableStateOf(true) }
+    LaunchedEffect(to) {
+        if (first) { first = false; return@LaunchedEffect }
+        clock.snapTo(0f)
+        // the frame that builds the new page, then the first one that shows it
+        androidx.compose.runtime.withFrameNanos { }
+        androidx.compose.runtime.withFrameNanos { }
+        clock.animateTo(1f, androidx.compose.animation.core.tween(PAGE_MS, easing = androidx.compose.animation.core.LinearEasing))
+    }
+    return remember(heading, clock) { PageMove(heading, clock.asState()) }
 }
 
 /**
@@ -548,7 +565,7 @@ internal fun <T : Enum<T>> rememberHeading(to: T): Int {
 internal fun travelSpec(): androidx.compose.animation.ContentTransform =
     androidx.compose.animation.ContentTransform(
         targetContentEnter = androidx.compose.animation.EnterTransition.None,
-        initialContentExit = scaleOut(androidx.compose.animation.core.tween(PAGE_MS), targetScale = 1f),
+        initialContentExit = scaleOut(androidx.compose.animation.core.tween(PAGE_MS + 400), targetScale = 1f),
         sizeTransform = androidx.compose.animation.SizeTransform(clip = false),
     )
 
@@ -565,23 +582,18 @@ internal fun travelSpec(): androidx.compose.animation.ContentTransform =
  * The night behind keeps living and moves its camera at the same moment (NightScene).
  */
 @Composable
-internal fun Modifier.travel(scope: androidx.compose.animation.AnimatedVisibilityScope, heading: Int): Modifier {
+internal fun Modifier.travel(scope: androidx.compose.animation.AnimatedVisibilityScope, move: PageMove, leaving: Boolean): Modifier {
     val reduce = app.ghostly.ui.theme.LocalReduceMotion.current
-    val t by scope.transition.animateFloat(
-        transitionSpec = { androidx.compose.animation.core.tween(PAGE_MS, easing = androidx.compose.animation.core.LinearEasing) },
-        label = "travel",
-    ) {
-        when (it) {
-            androidx.compose.animation.EnterExitState.PreEnter -> -1f
-            androidx.compose.animation.EnterExitState.Visible -> 0f
-            androidx.compose.animation.EnterExitState.PostExit -> 1f
-        }
-    }
-    val back = heading < 0
+    val back = move.heading < 0
+    // AnimatedContent keeps a leaving page only while its own transition still animates something: this
+    // holds it for the whole change (the page clock may start a few frames late).
+    scope.transition.animateFloat(
+        transitionSpec = { androidx.compose.animation.core.tween(PAGE_MS + 400) },
+        label = "hold",
+    ) { if (it == androidx.compose.animation.EnterExitState.Visible) 0f else 1f }
     return graphicsLayer {
-        val leaving = t > 0f
         // One clock for both pages: 0 when the change starts, 1 when it is over.
-        val p = if (leaving) t else 1f + t
+        val p = move.progress.value
         val blurMax = 7.5.dp.toPx()
         val incoming = smootherstep(((p - 0.06f) / 0.72f).coerceIn(0f, 1f))
         if (reduce) {

@@ -145,7 +145,7 @@ fun SettingsScreen(controller: GhostlyController, contentPadding: PaddingValues)
             MainSettings(controller, contentPadding) {}
         }
     }
-    val heading = app.ghostly.ui.rememberHeading(page)
+    val heading = app.ghostly.ui.rememberPageMove(page)
     AnimatedContent(
         modifier = Modifier.fillMaxSize().predictiveCard(peek, peekBrush()),
         targetState = page,
@@ -153,7 +153,7 @@ fun SettingsScreen(controller: GhostlyController, contentPadding: PaddingValues)
         transitionSpec = { app.ghostly.ui.travelSpec() },
     ) { p ->
         val back = { page = Page.MAIN }
-        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().travel(this@AnimatedContent, heading)) {
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().travel(this@AnimatedContent, heading, leaving = p != page)) {
         when (p) {
             Page.MAIN -> MainSettings(controller, contentPadding) { page = it }
             Page.ROUTING -> RoutingPage(controller, contentPadding, back)

@@ -115,12 +115,16 @@ class NightState {
     /** The page on screen (a tab, the first screen…): whose anchors the camera follows. */
     var page: Any by mutableStateOf(Unit)
 
-    internal val ghosts = mutableStateMapOf<Any, Rect>()
-    internal val skies = mutableStateMapOf<Any, SkyAnchor>()
+    // Plain maps on purpose: pages report their anchors on every scroll frame (up to the monitor's 300 Hz),
+    // and a snapshot map would redraw the whole night that often. The scene reads them on its own ~60 Hz
+    // ambient tick instead.
+    internal val ghosts = HashMap<Any, Rect>()
+    internal val skies = HashMap<Any, SkyAnchor>()
     internal val rig = GhostRig()
 
     /** Last pointer position in root pixels while it is over the window (a mouse, or a finger that is down). */
-    internal var pointer by mutableStateOf<Offset?>(null)
+    // Plain too: the mouse moves at the monitor's rate; the eyes catch up on the scene's own tick.
+    internal var pointer: Offset? = null
     internal var mouse = false
 
     internal var energySource: State<Float> = mutableFloatStateOf(0f)

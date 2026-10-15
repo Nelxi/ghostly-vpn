@@ -95,13 +95,13 @@ private val NAV_GAP = 6.dp
 internal fun DesktopShell(controller: GhostlyController, tabs: List<Tab>, tab: Tab, onTab: (Tab) -> Unit, onAdd: () -> Unit) {
     Row(Modifier.fillMaxSize()) {
         Sidebar(controller, tabs, tab, onTab, onAdd)
-        val heading = rememberHeading(tab)
+        val heading = rememberPageMove(tab)
         AnimatedContent(
             targetState = tab,
             transitionSpec = { travelSpec() },
             modifier = Modifier.weight(1f).fillMaxHeight(),
         ) { t ->
-          Box(Modifier.fillMaxSize().travel(this@AnimatedContent, heading)) {
+          Box(Modifier.fillMaxSize().travel(this@AnimatedContent, heading, leaving = t != tab)) {
             when (t) {
                 Tab.HOME -> HomeDesktop(controller, onAdd, onServers = { onTab(Tab.SERVERS) })
                 Tab.SERVERS -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
