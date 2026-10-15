@@ -35,6 +35,33 @@ object AmbientMotion {
     const val STEP_MS = 16L
 }
 
+/**
+ * A 0 → 1 clock for transitions that must not be eaten by a stall. [run] advances by the real time between
+ * frames, but by at most [maxStepMs] per frame: when building a heavy page stalls a frame for 200 ms the
+ * transition just continues from where it was (it lasts a little longer) instead of jumping ahead by those
+ * 200 ms and showing two or three frames of a "cut". The first frame only sets the reference.
+ */
+class StepClock(initial: Float = 1f) {
+    private val state = androidx.compose.runtime.mutableFloatStateOf(initial)
+    val value: Float get() = state.floatValue
+
+    fun set(v: Float) { state.floatValue = v }
+
+    suspend fun run(durationMs: Int, maxStepMs: Long = 34L) {
+        state.floatValue = 0f
+        var acc = 0L
+        var last = -1L
+        while (acc < durationMs) {
+            androidx.compose.runtime.withFrameNanos { t ->
+                if (last >= 0L) acc += ((t - last) / 1_000_000L).coerceIn(0L, maxStepMs)
+                last = t
+                state.floatValue = (acc.toFloat() / durationMs).coerceAtMost(1f)
+            }
+        }
+        state.floatValue = 1f
+    }
+}
+
 /** Milliseconds of the shared ambient clock; provided at the root of the app (GhostlyApp) from [rememberAmbientClock]. */
 val LocalAmbientTime = staticCompositionLocalOf<State<Long>> { mutableLongStateOf(0L) }
 
@@ -42,11 +69,24 @@ private val start = TimeSource.Monotonic.markNow()
 
 /** One clock for the whole app: a single coroutine, paused while [AmbientMotion.visible] is false. */
 @Composable
-fun rememberAmbientClock(): State<Long> {
+fun rememberAmbientClock(frameSync: Boolean = false): State<Long> {
     val time = remember { mutableLongStateOf(start.elapsedNow().inWholeMilliseconds) }
     val visible by AmbientMotion.visible.collectAsState()
-    LaunchedEffect(visible) {
+    LaunchedEffect(visible, frameSync) {
         if (!visible) return@LaunchedEffect
+        if (frameSync) {
+            // Phones: tick on the display's frames (at most ~60 a second), so motion steps evenly with the
+            // screen instead of drifting against a 90/120 Hz refresh and stuttering.
+            var last = 0L
+            while (true) {
+                androidx.compose.runtime.withFrameMillis { }
+                val now = start.elapsedNow().inWholeMilliseconds
+                if (now - last >= AmbientMotion.STEP_MS - 2) {
+                    last = now
+                    time.longValue = now
+                }
+            }
+        }
         while (true) {
             time.longValue = start.elapsedNow().inWholeMilliseconds
             delay(AmbientMotion.STEP_MS)

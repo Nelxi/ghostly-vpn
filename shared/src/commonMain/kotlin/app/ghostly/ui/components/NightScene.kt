@@ -50,6 +50,8 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -330,8 +332,8 @@ private val OFF_GHOST = Color(0xFFB3B8C4)
  * The camera's travel between shots: it eases out of one station, flies, and settles into the next. Pages
  * ride the same curve over the same time (see `travel` in App.kt), so the interface moves with the world.
  */
-val TRAVEL = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
-const val TRAVEL_MS = 720
+val TRAVEL = CubicBezierEasing(0.45f, 0f, 0.2f, 1f)
+const val TRAVEL_MS = 950
 
 // ============================================================================ the world
 
@@ -437,6 +439,9 @@ private class Camera {
     var lastMs = 0L
     /** Which way the current move goes: 1 to a later page, -1 back. */
     var heading = 1f
+    /** The page last drawn, and whether its move has been captured but not started yet. */
+    var drawnPage: Any? = null
+    var pending = false
 }
 
 /** The aurora's small offscreen picture. */
@@ -503,23 +508,29 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
 
     // A new page: the camera moves from the shot it drew last to the new one.
     val cam = remember { Camera() }
-    val move = remember { Animatable(1f) }
+    val move = remember { StepClock(1f) }
     var lastPage by remember { mutableStateOf(page) }
     LaunchedEffect(page) {
         val before = lastPage
         lastPage = page
         cam.heading = if (page is Enum<*> && before is Enum<*> && page.ordinal < before.ordinal) -1f else 1f
         if (cam.ghost == null) return@LaunchedEffect
-        cam.fromGhost = cam.ghost
-        cam.fromHorizon = cam.horizon
-        cam.fromYaw = cam.yaw
-        cam.fromZoom = cam.zoom
-        move.snapTo(0f)
-        move.animateTo(1f, if (reduce) tween(220) else tween(TRAVEL_MS, easing = androidx.compose.animation.core.LinearEasing))
+        // The start of the move was captured by the frame that first drew the new page (see `pending`). Wait
+        // that frame out like the pages do (rememberPageMove): the camera and the interface start together.
+        androidx.compose.runtime.withFrameNanos { }
+        move.set(0f)
+        cam.pending = false
+        move.run(if (reduce) 220 else TRAVEL_MS)
     }
 
     var origin by remember { mutableStateOf(Offset.Zero) }
     val buffer = remember { AuroraBuffer() }
+    // The ghost and its reflection are dozens of fresh curves a frame, re-tessellated by the GPU each time:
+    // on a phone that was more than half of every frame. They are recorded into layers ~30 times a second
+    // and those are replayed in between; floating, leaning and pressing move the layer at full rate.
+    val ghostLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    val mirrorLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    val ghostRec = remember { LongArray(2) { Long.MIN_VALUE } } // [time, size]
     val isles = remember { arrayOf(Path(), Path(), Path(), Path()) }
 
     Box(
@@ -544,7 +555,7 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
         // Its own layer: the scene ticks every frame, the interface above it is not redrawn for that.
         Canvas(
             Modifier.fillMaxSize().graphicsLayer {
-                val p = move.value
+                val p = if (cam.pending) 0f else move.value
                 if (p >= 1f || reduce) return@graphicsLayer
                 // The night takes part in the page change like Kasane's menu background: it drifts a
                 // touch in depth and softens out of focus at the cut, then comes back sharp.
@@ -569,7 +580,19 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
             fun wave(ms: Long, shift: Float = 0f): Float = sin(TAU * (loop(ms) + shift))
 
             // ---- the shot (moving between pages)
-            val p = move.value
+            // The page changed in this very frame, before the move's clock was reset: hold the shot where it
+            // was instead of jumping to the new one for a frame (that was the blink).
+            if (cam.drawnPage != page) {
+                if (cam.drawnPage != null && cam.ghost != null) {
+                    cam.fromGhost = cam.ghost
+                    cam.fromHorizon = cam.horizon
+                    cam.fromYaw = cam.yaw
+                    cam.fromZoom = cam.zoom
+                    cam.pending = true
+                }
+                cam.drawnPage = page
+            }
+            val p = if (cam.pending) 0f else move.value
             val k = TRAVEL.transform(p)
             val moving = p < 1f
             val skyT = night.skies[page]
@@ -930,28 +953,30 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
                     val sat = max(max(ghostLit, b * 0.55f), max(max(hoverA.value * 0.4f, showtime.value), er * 0.6f)).coerceIn(0f, 1f)
                     val tone = lerp(OFF_GHOST, palette.ghostTone, sat)
                     if (gy + gs * 0.3f < hz) {
-                        val shape = mascotShape(phase, motion)
-                        val gTop = gy - gs / 2f
-                        val mirrorTop = 2f * hz - (gy + gs / 2f)
-                        val fadeLen = max(h * 0.32f, 1f)
-                        val body = SolidColor(lerp(tone, Color.White, 0.55f))
-                        val flame = SolidColor(tone)
-                        val slices = 6
-                        for (i in 0 until slices) {
-                            val y0 = mirrorTop + gs * i / slices
-                            val y1 = mirrorTop + gs * (i + 1) / slices
-                            val depth = ((y0 + y1) / 2f - hz) / fadeLen
-                            // a small ghost in a page's corner sits close to the horizon: its reflection stays faint
-                        val small = 0.45f + 0.55f * smooth((gs - 70.dp.toPx()) / 120.dp.toPx())
-                        val a = (0.20f + 0.08f * ghostLit) * small * (1f - depth).coerceIn(0f, 1f)
-                            if (a <= 0.004f) continue
-                            val dx = sin(TAU * (loop(2_600) + i * 0.23f)) * (1.2f + i * 0.5f).dp.toPx() * motion
-                            clipRect(0f, y0, w, y1 + 0.5f) {
-                                withTransform({ translate(gx - gs / 2f + dx, 2f * hz - gTop); scale(1f, -1f, Offset.Zero) }) {
-                                    drawMascotShape(shape, gs, phase, er, motion, body, flame, a)
+                        val l = ceil(gs * 2f).toInt().coerceAtLeast(1)
+                        if (now - ghostRec[0] >= 40L || ghostRec[1] != l.toLong() || mirrorLayer.size.width != l) {
+                            val shape = mascotShape(phase, motion)
+                            val body = SolidColor(lerp(tone, Color.White, 0.55f))
+                            val flame = SolidColor(tone)
+                            mirrorLayer.compositingStrategy = androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
+                            mirrorLayer.record(this, layoutDirection, androidx.compose.ui.unit.IntSize(l, l)) {
+                                translate((l - gs) / 2f, (l - gs) / 2f) {
+                                    drawMascotShape(shape, gs, phase, er, motion, body, flame, 1f)
                                 }
+                                // the far end of the reflection (the head, once mirrored) fades into the water
+                                drawRect(
+                                    Brush.verticalGradient(0f to Color.Transparent, 0.45f to Color.White.copy(alpha = 0.35f), 0.85f to Color.White, startY = 0f, endY = l.toFloat()),
+                                    blendMode = BlendMode.DstIn,
+                                )
                             }
                         }
+                        val small = 0.45f + 0.55f * smooth((gs - 70.dp.toPx()) / 120.dp.toPx())
+                        val depth = ((2f * hz - gy) - hz) / max(h * 0.32f, 1f)
+                        mirrorLayer.alpha = ((0.22f + 0.08f * ghostLit) * small * (1f - depth * 0.6f)).coerceIn(0f, 1f)
+                        val sway = sin(TAU * loop(2_600)) * 1.5.dp.toPx() * motion
+                        val lx = gx - l / 2f + sway
+                        val ly = 2f * hz - (gy - l / 2f)
+                        withTransform({ translate(lx, ly); scale(1f, -1f, Offset.Zero) }) { drawLayer(mirrorLayer) }
                     }
                     // the aurora's rays, mirrored near the horizon
                     if (showAurora) RAYS.forEach { r ->
@@ -1039,19 +1064,33 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
                 val sat = max(max(ghostLit, b * 0.55f), max(max(hv * 0.4f, show), er * 0.6f)).coerceIn(0f, 1f)
                 val tone = lerp(lerp(OFF_GHOST, palette.ghostTone, sat), Color(0xFFFF9AA9), er * 0.55f)
                 val scaleK = press.value * (1f + 0.045f * beat)
-                val left = gx - gs / 2f + look.x * gs * 0.015f
-                val top = gy - gs / 2f + bob + look.y * gs * 0.01f - sq * gs * 0.06f
+                val l = ceil(gs * 2f).toInt().coerceAtLeast(1)
+                if (now - ghostRec[0] >= 40L || ghostRec[1] != l.toLong() || ghostLayer.size.width != l) {
+                    ghostRec[0] = now
+                    ghostRec[1] = l.toLong()
+                    val waveR = rig.waveR.value
+                    val waveL = rig.waveL.value
+                    // Offscreen: the layer is kept as a picture and only re-rendered when re-recorded, every other
+                    // frame just shows it.
+                    ghostLayer.compositingStrategy = androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
+                    ghostLayer.record(this, layoutDirection, androidx.compose.ui.unit.IntSize(l, l)) {
+                        val inset = (l - gs) / 2f
+                        withTransform({
+                            translate(inset + look.x * gs * 0.015f, inset + look.y * gs * 0.01f - sq * gs * 0.06f)
+                            scale(1f + 0.14f * sq, 1f - 0.14f * sq, Offset(gs / 2f, gs * 0.82f))
+                        }) {
+                            drawMascot(
+                                gs, blink, ghostLit, er, tone, sleepy, look, expr, sing, show,
+                                phase, waveR, waveL, motion, doze = doze, mono = 1f - sat,
+                            )
+                        }
+                    }
+                }
                 withTransform({
                     rotate(heading * lift * 13f, Offset(gx, gy))
                     scale(scaleK, scaleK, Offset(gx, gy))
-                    translate(left, top)
-                    scale(1f + 0.14f * sq, 1f - 0.14f * sq, Offset(gs / 2f, gs * 0.82f))
-                }) {
-                    drawMascot(
-                        gs, blink, ghostLit, er, tone, sleepy, look, expr, sing, show,
-                        phase, rig.waveR.value, rig.waveL.value, motion, doze = doze, mono = 1f - sat,
-                    )
-                }
+                    translate(gx - l / 2f, gy - l / 2f + bob)
+                }) { drawLayer(ghostLayer) }
                 // connecting: a sonar ring around the ghost
                 if (b > 0.01f) {
                     val q = loop(1_500)

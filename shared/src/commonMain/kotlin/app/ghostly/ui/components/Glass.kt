@@ -324,7 +324,10 @@ fun Modifier.softShadow(shape: Shape, weight0: Float = 1f): Modifier = drawWithC
 
 /** The rings of one soft layer: each the shape grown a step further with a falling alpha. */
 private fun androidx.compose.ui.draw.CacheDrawScope.shadowRings(shape: Shape, radius: Float, dy: Float, alpha: Float): List<Triple<androidx.compose.ui.graphics.Outline, Offset, Color>> {
-    val steps = 14
+    // Few rings: the night behind the interface changes every frame, so the GPU redraws every shadow every
+    // frame too; 28 stacked rings per plate cost a phone a third of its frame time. On the dark scene 4 per
+    // layer look the same.
+    val steps = 4
     return (steps downTo 1).mapNotNull { i ->
         val k = i.toFloat() / steps
         val grow = radius * k

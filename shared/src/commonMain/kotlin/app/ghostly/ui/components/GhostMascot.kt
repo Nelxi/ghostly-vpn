@@ -183,10 +183,11 @@ private fun DrawScope.soft(cx: Float, cy: Float, rx: Float, ry: Float, color: Co
 
 /** A stroke with blurred edges (three passes). */
 private fun DrawScope.softStroke(p: Path, color: Color, width: Float, alpha: Float, blur: Float) {
-    val n = 7
+    // 3 passes (was 7, same total weight): every pass is a fresh stroke tessellation on the GPU.
+    val n = 3
     for (j in 0 until n) {
         val w = width * 0.5f + (width * 0.5f + blur * 2.6f) * (1f - j / (n - 1f))
-        drawPath(p, color.copy(alpha = alpha * 0.13f), style = Stroke(w, cap = StrokeCap.Round))
+        drawPath(p, color.copy(alpha = alpha * 0.13f * 7f / n), style = Stroke(w, cap = StrokeCap.Round))
     }
 }
 

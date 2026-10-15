@@ -67,11 +67,15 @@ val LocalStage = compositionLocalOf<StageState?> { null }
 @Composable
 fun rememberStage(controller: GhostlyController, enabled: Boolean): StageState? {
     val source = controller.platform.stage ?: return null
-    DisposableEffect(source, enabled) {
-        if (enabled) source.start() else source.stop()
+    // Hidden in the tray or minimized there is nothing to show: the loopback capture and its 60 Hz analysis
+    // stop too, so they cost nothing while a game runs.
+    val visible by app.ghostly.ui.components.AmbientMotion.visible.collectAsState()
+    val on = enabled && visible
+    DisposableEffect(source, on) {
+        if (on) source.start() else source.stop()
         onDispose { source.stop() }
     }
-    if (!enabled) return null
+    if (!on) return null
     val audio = source.audio.collectAsState()
     val track = source.track.collectAsState()
     return remember(source) { StageState(audio, track, source::positionMs) }

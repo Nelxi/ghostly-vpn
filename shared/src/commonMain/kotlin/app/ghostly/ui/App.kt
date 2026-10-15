@@ -176,7 +176,7 @@ fun GhostlyApp(controller: GhostlyController) {
     val accent = settings.monet.takeIf { it }?.let { controller.platform.systemAccent() }
         ?: design.accentArgb()?.takeIf { settings.accent == app.ghostly.core.model.ThemeAccent.GHOST } ?: settings.accent.argb
     // One clock for every looping decoration, paused while the app is off screen (see Ambient.kt).
-    val ambientTime = app.ghostly.ui.components.rememberAmbientClock()
+    val ambientTime = app.ghostly.ui.components.rememberAmbientClock(frameSync = !controller.platform.isDesktop)
     GhostlyTheme(accent, settings.reduceMotion, protected = state is VpnState.Connected) { androidx.compose.runtime.CompositionLocalProvider(app.ghostly.ui.components.LocalAmbientTime provides ambientTime, app.ghostly.ui.components.LocalHaptic provides { controller.haptic(app.ghostly.core.vpn.Haptic.TICK) }, app.ghostly.ui.components.LocalHapticOf provides { k -> controller.haptic(k) }, app.ghostly.ui.components.LocalHoverSound provides { controller.hoverSound() }, app.ghostly.ui.theme.LocalDesign provides design, androidx.compose.ui.platform.LocalLayoutDirection provides if (app.ghostly.i18n.L10n.isRtl) androidx.compose.ui.unit.LayoutDirection.Rtl else androidx.compose.ui.unit.LayoutDirection.Ltr) {
         // GHOSTLY_DEMO=tab:<NAME> (screenshots) opens on that tab.
         var tab by rememberSaveable {
@@ -545,17 +545,21 @@ internal fun <T : Enum<T>> rememberPageMove(to: T): PageMove {
     var last by remember { mutableStateOf(to) }
     val heading = remember(to) { if (to.ordinal >= last.ordinal) 1 else -1 }
     SideEffect { last = to }
-    val clock = remember { androidx.compose.animation.core.Animatable(1f) }
-    var first by remember { mutableStateOf(true) }
+    val clock = remember { app.ghostly.ui.components.StepClock(1f) }
+    // The page whose change the clock is running for. Until the effect below resets the clock, a new page
+    // reads 0 (not the finished 1 of the last change): no frame with the new page fully shown and the old one
+    // gone, which was the blink.
+    val startedFor = remember { mutableStateOf(to) }
     LaunchedEffect(to) {
-        if (first) { first = false; return@LaunchedEffect }
-        clock.snapTo(0f)
-        // the frame that builds the new page, then the first one that shows it
+        if (startedFor.value == to) return@LaunchedEffect
+        clock.set(0f)
+        startedFor.value = to
+        // the frame that builds and first shows the new page: the clock starts right after it
         androidx.compose.runtime.withFrameNanos { }
-        androidx.compose.runtime.withFrameNanos { }
-        clock.animateTo(1f, androidx.compose.animation.core.tween(PAGE_MS, easing = androidx.compose.animation.core.LinearEasing))
+        clock.run(PAGE_MS)
     }
-    return remember(heading, clock) { PageMove(heading, clock.asState()) }
+    val progress = remember(clock, to) { androidx.compose.runtime.derivedStateOf { if (startedFor.value != to) 0f else clock.value } }
+    return remember(heading, progress) { PageMove(heading, progress) }
 }
 
 /**
@@ -565,7 +569,7 @@ internal fun <T : Enum<T>> rememberPageMove(to: T): PageMove {
 internal fun travelSpec(): androidx.compose.animation.ContentTransform =
     androidx.compose.animation.ContentTransform(
         targetContentEnter = androidx.compose.animation.EnterTransition.None,
-        initialContentExit = scaleOut(androidx.compose.animation.core.tween(PAGE_MS + 400), targetScale = 1f),
+        initialContentExit = scaleOut(androidx.compose.animation.core.tween(PAGE_MS + 700), targetScale = 1f),
         sizeTransform = androidx.compose.animation.SizeTransform(clip = false),
     )
 
@@ -588,13 +592,13 @@ internal fun Modifier.travel(scope: androidx.compose.animation.AnimatedVisibilit
     // AnimatedContent keeps a leaving page only while its own transition still animates something: this
     // holds it for the whole change (the page clock may start a few frames late).
     scope.transition.animateFloat(
-        transitionSpec = { androidx.compose.animation.core.tween(PAGE_MS + 400) },
+        transitionSpec = { androidx.compose.animation.core.tween(PAGE_MS + 700) },
         label = "hold",
     ) { if (it == androidx.compose.animation.EnterExitState.Visible) 0f else 1f }
     return graphicsLayer {
         // One clock for both pages: 0 when the change starts, 1 when it is over.
         val p = move.progress.value
-        val blurMax = 7.5.dp.toPx()
+        val blurMax = 10.dp.toPx()
         val incoming = smootherstep(((p - 0.06f) / 0.72f).coerceIn(0f, 1f))
         if (reduce) {
             alpha = if (leaving) 1f - incoming else incoming
@@ -622,9 +626,10 @@ internal fun Modifier.travel(scope: androidx.compose.animation.AnimatedVisibilit
     }
 }
 
-internal const val PAGE_MS = 460
-private const val DEPTH_NEAR = 1.045f
-private const val DEPTH_FAR = 0.965f
+// Kasane's values, a touch deeper and longer: on a phone's small screen the original read as a cut.
+internal const val PAGE_MS = 560
+private const val DEPTH_NEAR = 1.06f
+private const val DEPTH_FAR = 0.94f
 private fun easeOutCubic(v: Float): Float { val i = 1f - v; return 1f - i * i * i }
 private fun easeOutQuint(v: Float): Float { val i = 1f - v; return 1f - i * i * i * i * i }
 private fun smootherstep(v: Float): Float = v * v * v * (v * (v * 6f - 15f) + 10f)
