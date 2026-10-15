@@ -135,7 +135,7 @@ internal enum class Tab {
  * The camera's shot of the night on each tab: it moves sideways one step per tab (far things slide less) and
  * stands back from the ghost everywhere but Home.
  */
-internal val Tab.yaw: Float get() = ordinal * 0.33f
+internal val Tab.yaw: Float get() = ordinal * 1f
 internal val Tab.zoom: Float
     get() = when (this) {
         Tab.HOME -> 1f
@@ -545,7 +545,7 @@ internal fun <T : Enum<T>> rememberHeading(to: T): Int {
 internal fun travelSpec(): androidx.compose.animation.ContentTransform =
     androidx.compose.animation.ContentTransform(
         targetContentEnter = androidx.compose.animation.EnterTransition.None,
-        initialContentExit = scaleOut(androidx.compose.animation.core.tween(app.ghostly.ui.components.TRAVEL_MS), targetScale = 1f),
+        initialContentExit = scaleOut(androidx.compose.animation.core.tween(app.ghostly.ui.components.TRAVEL_MS / 2), targetScale = 1f),
         sizeTransform = androidx.compose.animation.SizeTransform(clip = false),
     )
 
@@ -574,22 +574,22 @@ internal fun Modifier.travel(scope: androidx.compose.animation.AnimatedVisibilit
             alpha = 1f - a
             return@graphicsLayer
         }
-        // t > 0: leaving, t < 0: arriving. They turn on the edge they share: the leaving face's front edge.
-        val leaving = t > 0f
-        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (leaving) 1f else 0f, 0.5f).let {
-            if (heading < 0) androidx.compose.ui.graphics.TransformOrigin(1f - it.pivotFractionX, 0.5f) else it
+        // The scene does the travelling; the interface only breathes in depth: the leaving page swells a
+        // touch and dissolves early, the arriving one comes up from slightly smaller and drifts in from the
+        // side the camera heads to.
+        if (t > 0f) {
+            val k = (t / 0.35f).coerceIn(0f, 1f)
+            val s = 1f + 0.06f * k
+            scaleX = s; scaleY = s
+            alpha = 1f - k
+            translationX = -heading * k * 24.dp.toPx()
+        } else {
+            val k = ((a - 0.0f) / 0.75f).coerceIn(0f, 1f) // 1 → 0 as it arrives
+            val s = 1f - 0.07f * k
+            scaleX = s; scaleY = s
+            alpha = (1f - k * 1.25f).coerceIn(0f, 1f)
+            translationX = heading * k * 40.dp.toPx()
         }
-        translationX = -heading * t * size.width
-        // Seen from outside the cube: the shared edge comes forward, the outer edges swing back.
-        rotationY = heading * t * 64f
-        // The whole cube stands back a little mid-turn (both faces by the same amount, around the edge they
-        // share, so they stay joined), like the camera pulling away as it travels.
-        val back = 1f - 0.07f * kotlin.math.sin(kotlin.math.PI.toFloat() * a)
-        scaleX = back
-        scaleY = back
-        cameraDistance = 12f * density
-        // The far end of the swing dims, so a face edge-on never shows as a sliver.
-        alpha = (1f - a * a * a).coerceIn(0f, 1f)
     }
 }
 

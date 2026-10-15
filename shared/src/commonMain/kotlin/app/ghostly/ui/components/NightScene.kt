@@ -431,6 +431,8 @@ private class Camera {
     var fromZoom = 1f
     var look = Offset.Zero
     var lastMs = 0L
+    /** Which way the current move goes: 1 to a later page, -1 back. */
+    var heading = 1f
 }
 
 /** The aurora's small offscreen picture. */
@@ -498,7 +500,11 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
     // A new page: the camera moves from the shot it drew last to the new one.
     val cam = remember { Camera() }
     val move = remember { Animatable(1f) }
+    var lastPage by remember { mutableStateOf(page) }
     LaunchedEffect(page) {
+        val before = lastPage
+        lastPage = page
+        cam.heading = if (page is Enum<*> && before is Enum<*> && page.ordinal < before.ordinal) -1f else 1f
         if (cam.ghost == null) return@LaunchedEffect
         cam.fromGhost = cam.ghost
         cam.fromHorizon = cam.horizon
@@ -532,7 +538,23 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
             },
     ) {
         // Its own layer: the scene ticks every frame, the interface above it is not redrawn for that.
-        Canvas(Modifier.fillMaxSize().graphicsLayer()) {
+        Canvas(
+            Modifier.fillMaxSize().graphicsLayer {
+                val p = move.value
+                if (p >= 1f || reduce) return@graphicsLayer
+                val k = TRAVEL.transform(p)
+                val lift = sin(PI.toFloat() * k)
+                // the swing peaks early (the camera turns first, then glides): a skewed bump
+                val turn = sin(PI.toFloat() * k) * (1f - 0.35f * k)
+                rotationY = -cam.heading * turn * 13f
+                rotationZ = cam.heading * lift * 2.4f
+                rotationX = lift * 4f
+                cameraDistance = 9f * density
+                // grown so the turned edges never show past the window
+                val grow = 1f + 0.3f * lift
+                scaleX = grow; scaleY = grow
+            },
+        ) {
             val now = time.value
             val w = size.width
             val h = size.height
