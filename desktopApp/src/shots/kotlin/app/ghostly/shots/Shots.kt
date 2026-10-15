@@ -101,15 +101,14 @@ private fun render(shot: Shot, out: File) {
     try {
         // Let entrance animations and delayed effects settle: frames on a real clock.
         val t0 = System.nanoTime()
-        val film = shot.film.toMutableList()
+        // A filmstrip keeps every frame rendered inside its window (software rendering of the 3D pages is slow,
+        // so fixed instants would mostly be missed).
+        val window = if (shot.film.isEmpty()) LongRange.EMPTY else shot.film.first()..shot.film.last()
         while (true) {
             val ms = (System.nanoTime() - t0) / 1_000_000
             if (ms >= shot.settleMs) break
             val frame = scene.render(System.nanoTime() - t0)
-            if (film.isNotEmpty() && ms >= film.first()) {
-                val at = film.removeAt(0)
-                frame.encodeToData(EncodedImageFormat.PNG)?.let { File(out, "${shot.name}-$at.png").writeBytes(it.bytes) }
-            }
+            if (ms in window) frame.encodeToData(EncodedImageFormat.PNG)?.let { File(out, "${shot.name}-$ms.png").writeBytes(it.bytes) }
             Thread.sleep(8)
         }
         val image = scene.render(System.nanoTime() - t0)

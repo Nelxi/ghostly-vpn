@@ -248,7 +248,7 @@ private fun BalanceRow(controller: GhostlyController, st: CabinetState, open: (C
         Column(Modifier.weight(1f)) {
             Text(tr("Баланс"), style = MaterialTheme.typography.labelMedium, color = c.ink2)
             Spacer(Modifier.height(4.dp))
-            Text(rub(st.balance), style = MaterialTheme.typography.displayLarge.copy(fontFeatureSettings = "tnum"), maxLines = 1)
+            app.ghostly.ui.components.RollingText(rub(st.balance), style = MaterialTheme.typography.displayLarge.copy(fontFeatureSettings = "tnum"))
         }
         SoftButton(tr("Пополнить"), { controller.haptic(); open(CabSheet.Topup) }, Modifier.padding(bottom = 6.dp))
     }

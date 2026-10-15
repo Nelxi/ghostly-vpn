@@ -95,12 +95,13 @@ private val NAV_GAP = 6.dp
 internal fun DesktopShell(controller: GhostlyController, tabs: List<Tab>, tab: Tab, onTab: (Tab) -> Unit, onAdd: () -> Unit) {
     Row(Modifier.fillMaxSize()) {
         Sidebar(controller, tabs, tab, onTab, onAdd)
+        val heading = rememberHeading(tab)
         AnimatedContent(
             targetState = tab,
-            transitionSpec = { tabEnter() togetherWith tabExit() },
+            transitionSpec = { travelSpec() },
             modifier = Modifier.weight(1f).fillMaxHeight(),
         ) { t ->
-          Box(Modifier.fillMaxSize()) {
+          Box(Modifier.fillMaxSize().travel(this@AnimatedContent, heading)) {
             when (t) {
                 Tab.HOME -> HomeDesktop(controller, onAdd, onServers = { onTab(Tab.SERVERS) })
                 Tab.SERVERS -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -269,17 +270,21 @@ private fun StatusChip(state: VpnState, onClick: () -> Unit) {
             Box(Modifier.size(10.dp).clip(CircleShape).background(color))
         }
         Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                when {
-                    connected -> tr("Защищено")
-                    busy -> tr("Подождите…")
-                    state is VpnState.Failed -> tr("Ошибка")
-                    else -> tr("Выключено")
-                },
-                style = MaterialTheme.typography.labelLarge, color = c.ink,
-            )
-            Text(if (connected) tr("Нажми, чтобы отключить") else tr("Нажми, чтобы подключить"), style = MaterialTheme.typography.bodySmall)
+        AnimatedContent(
+            when {
+                connected -> tr("Защищено") to tr("Нажми, чтобы отключить")
+                busy -> tr("Подождите…") to tr("Нажми, чтобы подключить")
+                state is VpnState.Failed -> tr("Ошибка") to tr("Нажми, чтобы подключить")
+                else -> tr("Выключено") to tr("Нажми, чтобы подключить")
+            },
+            transitionSpec = { (fadeIn(tween(220, delayMillis = 60)) + slideInVertically(tween(300)) { it / 3 }) togetherWith fadeOut(tween(120)) },
+            modifier = Modifier.weight(1f),
+            label = "chip",
+        ) { (head, hint) ->
+            Column {
+                Text(head, style = MaterialTheme.typography.labelLarge, color = c.ink)
+                Text(hint, style = MaterialTheme.typography.bodySmall)
+            }
         }
     }
 }

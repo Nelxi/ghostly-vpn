@@ -80,9 +80,8 @@ internal fun SignInBody(controller: GhostlyController, u: CabinetUi.SignedOut, o
     var form by remember { mutableStateOf(false) }
     var register by remember { mutableStateOf(false) }
 
+    // The night's own ghost watches from the header: no second one here.
     Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        GhostMark(Modifier.size(112.dp).appear(0), happy = 0.7f)
-        Spacer(Modifier.height(10.dp))
         Text(
             if (hasSub) tr("Ваш аккаунт Ghostly") else tr("Ghostly без браузера"),
             style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center,

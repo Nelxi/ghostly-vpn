@@ -1,6 +1,7 @@
 package app.ghostly.ui.screens
 
 import app.ghostly.ui.tabSky
+import app.ghostly.ui.travel
 import app.ghostly.ui.components.nightGhost
 import app.ghostly.ui.components.hoverSound
 import androidx.compose.animation.AnimatedContent
@@ -144,16 +145,15 @@ fun SettingsScreen(controller: GhostlyController, contentPadding: PaddingValues)
             MainSettings(controller, contentPadding) {}
         }
     }
+    val heading = app.ghostly.ui.rememberHeading(page)
     AnimatedContent(
         modifier = Modifier.fillMaxSize().predictiveCard(peek, peekBrush()),
         targetState = page,
-        transitionSpec = {
-            val forward = targetState != Page.MAIN
-            // slide only (a fade cuts the groups' shadows); the old page leaves at once
-            slideInHorizontally(app.ghostly.ui.theme.Motion.quick(320)) { if (forward) it / 4 else -it / 4 } togetherWith androidx.compose.animation.ExitTransition.None
-        },
+        // The pages turn like the tabs do: deeper into a section forwards, back out the other way.
+        transitionSpec = { app.ghostly.ui.travelSpec() },
     ) { p ->
         val back = { page = Page.MAIN }
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().travel(this@AnimatedContent, heading)) {
         when (p) {
             Page.MAIN -> MainSettings(controller, contentPadding) { page = it }
             Page.ROUTING -> RoutingPage(controller, contentPadding, back)
@@ -163,6 +163,7 @@ fun SettingsScreen(controller: GhostlyController, contentPadding: PaddingValues)
             Page.ADVANCED -> AdvancedPage(controller, contentPadding, back) { page = it }
             Page.ABOUT -> AboutPage(controller, contentPadding, back)
             Page.LOGS -> LogsPage(controller, contentPadding) { page = Page.ADVANCED }
+        }
         }
     }}
 }

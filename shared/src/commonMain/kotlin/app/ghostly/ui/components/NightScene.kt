@@ -322,8 +322,12 @@ private val MOON = Color(0xFFD9DFEB)
 private val MOONLIGHT = Color(0xFFDFE5F2)
 private val OFF_GHOST = Color(0xFFB3B8C4)
 
-/** The camera's easing between shots: an unhurried start and a long settle. */
-private val CAMERA = CubicBezierEasing(0.45f, 0f, 0.15f, 1f)
+/**
+ * The camera's travel between shots: it eases out of one station, flies, and settles into the next. Pages
+ * ride the same curve over the same time (see `travel` in App.kt), so the interface moves with the world.
+ */
+val TRAVEL = CubicBezierEasing(0.32f, 0f, 0.12f, 1f)
+const val TRAVEL_MS = 950
 
 // ============================================================================ the world
 
@@ -354,6 +358,9 @@ private val CURTAINS = listOf(
     Curtain(-0.75f, -0.02f, 0.32f, 0.60f, 0.06f, 0.47f, 0.70f, false) { it.warm },
     Curtain(-0.06f, 1.06f, 0.22f, 0.74f, 0.07f, 0.38f, 0.95f, true) { it.main },
     Curtain(0.98f, 1.95f, 0.25f, 0.70f, 0.07f, 0.83f, 0.85f, true) { it.main },
+    Curtain(1.95f, 2.75f, 0.33f, 0.62f, 0.06f, 0.11f, 0.78f, false) { it.warm },
+    Curtain(2.45f, 3.20f, 0.31f, 0.64f, 0.05f, 0.71f, 0.62f, false) { it.cold },
+    Curtain(1.85f, 3.05f, 0.23f, 0.72f, 0.07f, 0.53f, 0.92f, true) { it.main },
 )
 
 /** How far things slide as the camera moves sideways (`yaw`): the farther, the less. */
@@ -382,8 +389,14 @@ private val RAYS: List<Ray> = Random(5).let { r ->
 }
 
 /** Islands on the horizon: world x of the centre, half width (screen widths), height (sky heights). */
-private val FAR_ISLES = floatArrayOf(0.16f, 0.11f, 0.020f, 1.02f, 0.17f, 0.030f, 1.55f, 0.14f, 0.024f, -0.42f, 0.16f, 0.026f)
-private val NEAR_ISLES = floatArrayOf(-0.04f, 0.15f, 0.036f, 0.9f, 0.09f, 0.022f, 1.32f, 0.19f, 0.042f, 1.9f, 0.12f, 0.03f)
+private val FAR_ISLES = floatArrayOf(
+    0.16f, 0.11f, 0.020f, 1.02f, 0.17f, 0.030f, 1.55f, 0.14f, 0.024f, -0.42f, 0.16f, 0.026f,
+    2.05f, 0.15f, 0.028f, 2.62f, 0.12f, 0.022f, 3.2f, 0.18f, 0.03f,
+)
+private val NEAR_ISLES = floatArrayOf(
+    -0.04f, 0.15f, 0.036f, 0.9f, 0.09f, 0.022f, 1.32f, 0.19f, 0.042f, 1.9f, 0.12f, 0.03f,
+    2.4f, 0.16f, 0.038f, 2.95f, 0.1f, 0.026f, 3.45f, 0.2f, 0.044f, 4.0f, 0.13f, 0.032f,
+)
 
 /** Fireflies around the ghost, in ghost sizes from its centre. */
 private val FIREFLIES = floatArrayOf(
@@ -492,7 +505,7 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
         cam.fromYaw = cam.yaw
         cam.fromZoom = cam.zoom
         move.snapTo(0f)
-        move.animateTo(1f, if (reduce) tween(220) else tween(1050, easing = CAMERA))
+        move.animateTo(1f, if (reduce) tween(220) else tween(TRAVEL_MS, easing = androidx.compose.animation.core.LinearEasing))
     }
 
     var origin by remember { mutableStateOf(Offset.Zero) }
@@ -534,7 +547,7 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
 
             // ---- the shot (moving between pages)
             val p = move.value
-            val k = CAMERA.transform(p)
+            val k = TRAVEL.transform(p)
             val moving = p < 1f
             val skyT = night.skies[page]
             val ghostT = night.ghosts[page]?.translate(-origin)
@@ -544,15 +557,19 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
             val tYaw = skyT?.yaw ?: cam.yaw
             val tZoom = skyT?.zoom ?: cam.zoom
             val ghostR = if (moving && cam.fromGhost != null) androidx.compose.ui.geometry.lerp(cam.fromGhost!!, tGhost, k) else tGhost
-            val hz = (if (moving) cam.fromHorizon + (tHorizon - cam.fromHorizon) * k else tHorizon).coerceIn(-h, h)
+            // Mid-flight the camera lifts and stands back: the horizon rises a little, the world shrinks a little.
+            val lift = if (moving) sin(PI.toFloat() * k) * motion else 0f
+            val hz = ((if (moving) cam.fromHorizon + (tHorizon - cam.fromHorizon) * k else tHorizon) - lift * 22.dp.toPx()).coerceIn(-h, h)
             val yaw = if (moving) cam.fromYaw + (tYaw - cam.fromYaw) * k else tYaw
-            val zoom = (if (moving) cam.fromZoom + (tZoom - cam.fromZoom) * k else tZoom).coerceIn(0.5f, 1.5f)
+            val zoom = ((if (moving) cam.fromZoom + (tZoom - cam.fromZoom) * k else tZoom) * (1f - 0.1f * lift)).coerceIn(0.5f, 1.5f)
+            // Which way the world slides: the ghost leans into it.
+            val heading = if (moving) (if (tYaw >= cam.fromYaw) 1f else -1f) else 0f
             cam.ghost = ghostR
             cam.horizon = hz
             cam.yaw = yaw
             cam.zoom = zoom
             // The ghost arcs up a little on the way, like it is carried by the camera move.
-            val arc = if (moving) -sin(PI.toFloat() * p) * 30.dp.toPx() * motion else 0f
+            val arc = if (moving) -sin(PI.toFloat() * k) * 30.dp.toPx() * motion else 0f
             val gs = ghostR.width
             val gx = ghostR.center.x
             val gy = ghostR.center.y + arc
@@ -871,12 +888,14 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
                             drawLine(moonTint.copy(alpha = a), Offset(x - half, y), Offset(x + half, y), (1f + 0.6f * t).dp.toPx(), StrokeCap.Round)
                         }
                     }
-                    // the surface: faint long glints drifting, denser near the horizon
-                    for (i in 0 until 12) {
+                    // the surface: faint long glints drifting, denser near the horizon; the nearer a row, the
+                    // faster it slides past as the camera travels (the water lies flat towards the viewer)
+                    for (i in 0 until 14) {
                         val y = hz + (3f + 1.9f * (i + 1f).pow(1.55f)).dp.toPx() * zoom
                         val drift = loop(26_000L + i * 1_700L)
+                        val depth = 0.55f + 0.12f * i
                         for (j in 0 until 3) {
-                            val u = ((j * 0.41f + i * 0.17f + drift) % 1.3f) - 0.15f
+                            val u = (((j * 0.41f + i * 0.17f + drift - yaw * depth) % 1.3f) + 1.3f) % 1.3f - 0.15f
                             val x0 = u * w
                             val len = w * (0.08f + 0.05f * ((i + j) % 3))
                             val a = (0.028f + 0.03f * e) * (0.6f + 0.4f * wave(3_700, i * 0.11f + j * 0.3f))
@@ -899,7 +918,9 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
                             val y0 = mirrorTop + gs * i / slices
                             val y1 = mirrorTop + gs * (i + 1) / slices
                             val depth = ((y0 + y1) / 2f - hz) / fadeLen
-                            val a = (0.20f + 0.08f * ghostLit) * (1f - depth).coerceIn(0f, 1f)
+                            // a small ghost in a page's corner sits close to the horizon: its reflection stays faint
+                        val small = 0.45f + 0.55f * smooth((gs - 70.dp.toPx()) / 120.dp.toPx())
+                        val a = (0.20f + 0.08f * ghostLit) * small * (1f - depth).coerceIn(0f, 1f)
                             if (a <= 0.004f) continue
                             val dx = sin(TAU * (loop(2_600) + i * 0.23f)) * (1.2f + i * 0.5f).dp.toPx() * motion
                             clipRect(0f, y0, w, y1 + 0.5f) {
@@ -998,6 +1019,7 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
                 val left = gx - gs / 2f + look.x * gs * 0.015f
                 val top = gy - gs / 2f + bob + look.y * gs * 0.01f - sq * gs * 0.06f
                 withTransform({
+                    rotate(heading * lift * 13f, Offset(gx, gy))
                     scale(scaleK, scaleK, Offset(gx, gy))
                     translate(left, top)
                     scale(1f + 0.14f * sq, 1f - 0.14f * sq, Offset(gs / 2f, gs * 0.82f))

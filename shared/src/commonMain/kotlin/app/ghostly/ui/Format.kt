@@ -74,6 +74,12 @@ object Format {
         return tr("{0} {1} {2}", d, tr(MONTHS[(m - 1).toInt()]), y)
     }
 
+    /** "12 октября": [date] without the year, for tight places. */
+    fun dateShort(epochSec: Long, offsetMin: Int): String {
+        val full = date(epochSec, offsetMin)
+        return full.substringBeforeLast(' ').ifEmpty { full }
+    }
+
     private val MONTHS = listOf("января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря")
 
     fun plural(n: Long, one: String, few: String, many: String): String = app.ghostly.i18n.L10n.plural(n, one, few, many)

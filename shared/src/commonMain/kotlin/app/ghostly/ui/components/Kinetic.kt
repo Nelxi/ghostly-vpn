@@ -36,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -168,11 +169,18 @@ fun AnnouncementCard(controller: GhostlyController, modifier: Modifier = Modifie
     val c = Ghost.colors
     val design = LocalDesign.current
     val dismissed by controller.design.dismissed.collectAsState()
-    val b = design.banner ?: return
-    if (b.id in dismissed) return
-    if (b.until > 0 && GhostlyController.now() / 1000 > b.until) return
+    val live = design.banner?.takeIf { it.id !in dismissed && (it.until <= 0 || GhostlyController.now() / 1000 <= it.until) }
+    // The last one stays drawn while it folds away.
+    var last by remember { androidx.compose.runtime.mutableStateOf<app.ghostly.core.design.Banner?>(live) }
+    if (live != null) last = live
+    androidx.compose.animation.AnimatedVisibility(
+        live != null, modifier,
+        enter = fadeIn(tween(260, delayMillis = 60)) + androidx.compose.animation.expandVertically(tween(380, easing = Motion.Ease)),
+        exit = fadeOut(tween(160)) + androidx.compose.animation.shrinkVertically(tween(320, easing = Motion.Ease)),
+    ) {
+    val b = last ?: return@AnimatedVisibility
     GlassCard(
-        modifier.fillMaxWidth(),
+        Modifier.fillMaxWidth(),
         padding = 14.dp, strong = true,
         onClick = b.url?.let { u -> { controller.openLink(u) } },
     ) {
@@ -190,5 +198,6 @@ fun AnnouncementCard(controller: GhostlyController, modifier: Modifier = Modifie
                 modifier = Modifier.size(30.dp).clip(CircleShape).hoverSound().clickable { controller.design.dismiss(b.id) }.padding(6.dp),
             )
         }
+    }
     }
 }

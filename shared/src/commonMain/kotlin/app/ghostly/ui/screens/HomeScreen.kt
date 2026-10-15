@@ -1,6 +1,15 @@
 package app.ghostly.ui.screens
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -239,58 +248,64 @@ private fun HomePlates(m: HomeModel, controller: GhostlyController, onPickServer
 // ============================================================================ desktop
 
 /**
- * Wide layout, the same shot opened up: a big sky over the whole width with the ghost in the middle, and on
- * the water the tunnel's state, the plates and live traffic, with the servers at hand on the right.
+ * Wide layout: the main column has the shot (the ghost in its sky, the tunnel's state and the plates on the
+ * water), the servers stand at full height on the right as before. The night still fills the window behind.
  */
 @Composable
 fun HomeDesktop(controller: GhostlyController, onAdd: () -> Unit, onServers: () -> Unit = {}) {
     val m = rememberHome(controller)
     val c = Ghost.colors
+    val density = LocalDensity.current
     BoxWithConstraints(Modifier.fillMaxSize().padding(start = 28.dp, end = 24.dp, top = 22.dp, bottom = 22.dp)) {
-        val skyH = (maxHeight * 0.5f).coerceIn(300.dp, 560.dp)
-        val panel = (maxWidth * 0.34f).coerceIn(300.dp, 400.dp)
-        val showPanel = maxWidth - panel - 22.dp >= 470.dp
-        Column(Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxWidth().height(skyH).tabSky(Tab.HOME)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(greeting(m.now, controller.platform.utcOffsetMinutes()), style = MaterialTheme.typography.headlineMedium)
-                        m.profile?.let { app.ghostly.ui.components.FlagText(it.name, style = MaterialTheme.typography.bodyMedium, color = c.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                    }
-                    app.ghostly.ui.components.NoticeBell(controller)
-                    m.profile?.supportUrl?.let { url ->
-                        Spacer(Modifier.width(8.dp))
-                        IconBubble(Icons.Rounded.SupportAgent, onClick = { controller.platform.openUrl(url) })
-                    }
-                }
-                AnnouncementCard(controller, Modifier.widthIn(max = 760.dp).padding(top = 12.dp))
-                BoxWithConstraints(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                    val ghost = minOf(maxHeight * 0.84f, 280.dp).coerceAtLeast(96.dp)
-                    Box(Modifier.size(ghost).nightGhost(Tab.HOME, ghostLabel(m)) { toggle(controller) })
-                }
-            }
-            Spacer(Modifier.height(24.dp))
-            Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
-                Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) {
-                    StatusBlock(m, controller, Modifier.padding(start = 4.dp))
-                    Spacer(Modifier.height(22.dp))
-                    HomePlates(m, controller, onPickServer = onServers)
-                    AnimatedVisibility(m.orb == OrbState.CONNECTED, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-                        Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            SpeedPlate(tr("Загрузка"), Icons.Rounded.ArrowDownward, m.traffic.downSpeed, m.traffic.downTotal, m.down, c.ok, Modifier.weight(1f).appear(2))
-                            SpeedPlate(tr("Отдача"), Icons.Rounded.ArrowUpward, m.traffic.upSpeed, m.traffic.upTotal, m.up, c.accent, Modifier.weight(1f).appear(3))
+        // The servers panel narrows first and hides when the main column would drop under 480 dp (they stay
+        // one click away on the «Серверы» tab).
+        val panel = (maxWidth * 0.36f).coerceIn(320.dp, 400.dp)
+        val showPanel = maxWidth - panel - 22.dp >= 480.dp
+        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+            BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
+                var belowH by remember { mutableStateOf(250.dp) }
+                val skyH by animateDpAsState((maxHeight - belowH).coerceIn(250.dp, 430.dp), Motion.soft())
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                    Column(Modifier.fillMaxWidth().height(skyH).tabSky(Tab.HOME)) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(greeting(m.now, controller.platform.utcOffsetMinutes()), style = MaterialTheme.typography.headlineMedium)
+                                m.profile?.let { app.ghostly.ui.components.FlagText(it.name, style = MaterialTheme.typography.bodyMedium, color = c.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                            }
+                            app.ghostly.ui.components.NoticeBell(controller)
+                            m.profile?.supportUrl?.let { url ->
+                                Spacer(Modifier.width(8.dp))
+                                IconBubble(Icons.Rounded.SupportAgent, onClick = { controller.platform.openUrl(url) })
+                            }
+                        }
+                        AnnouncementCard(controller, Modifier.widthIn(max = 760.dp).padding(top = 12.dp))
+                        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                            val ghost = minOf(maxHeight * 0.86f, 250.dp).coerceAtLeast(96.dp)
+                            Box(Modifier.size(ghost).nightGhost(Tab.HOME, ghostLabel(m)) { toggle(controller) })
                         }
                     }
-                    m.profile?.notice?.let { n ->
-                        Spacer(Modifier.height(12.dp))
-                        GlassCard(Modifier.fillMaxWidth(), padding = 14.dp) { ProviderNoticeBlock(n, controller) }
+                    Column(Modifier.fillMaxWidth().onSizeChanged { belowH = with(density) { it.height.toDp() } }) {
+                        Spacer(Modifier.height(22.dp))
+                        StatusBlock(m, controller, Modifier.padding(start = 4.dp))
+                        Spacer(Modifier.height(20.dp))
+                        HomePlates(m, controller, onPickServer = onServers)
+                        AnimatedVisibility(m.orb == OrbState.CONNECTED, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                            Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                SpeedPlate(tr("Загрузка"), Icons.Rounded.ArrowDownward, m.traffic.downSpeed, m.traffic.downTotal, m.down, c.ok, Modifier.weight(1f))
+                                SpeedPlate(tr("Отдача"), Icons.Rounded.ArrowUpward, m.traffic.upSpeed, m.traffic.upTotal, m.up, c.accent, Modifier.weight(1f))
+                            }
+                        }
+                        m.profile?.notice?.let { n ->
+                            Spacer(Modifier.height(12.dp))
+                            GlassCard(Modifier.fillMaxWidth(), padding = 14.dp) { ProviderNoticeBlock(n, controller) }
+                        }
+                        Spacer(Modifier.height(8.dp))
                     }
-                    Spacer(Modifier.height(8.dp))
                 }
-                if (showPanel) GlassCard(Modifier.width(panel).fillMaxHeight().appear(1), padding = 0.dp, strong = true) {
-                    Text(tr("Серверы"), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 20.dp, end = 12.dp, top = 18.dp))
-                    ServersScreen(controller, PaddingValues(bottom = 12.dp), onAdd = onAdd, showHeader = false, compact = true)
-                }
+            }
+            if (showPanel) GlassCard(Modifier.width(panel).fillMaxHeight().appear(1), padding = 0.dp, strong = true) {
+                Text(tr("Серверы"), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 20.dp, end = 12.dp, top = 18.dp))
+                ServersScreen(controller, PaddingValues(bottom = 12.dp), onAdd = onAdd, showHeader = false, compact = true)
             }
         }
     }
@@ -309,9 +324,17 @@ private fun greeting(nowMs: Long, offsetMin: Int): String {
 
 // ============================================================================ pieces
 
+/** What the line under the status headline shows. */
+private enum class StatusLine { SINGING, CONNECTED, FAILED, CONNECTING, DISCONNECTING, IDLE }
+
+/** Which switch stands beside the headline. */
+private enum class SwitchKind { CONNECT, DISCONNECT, CANCEL, WAIT, RETRY }
+
 /**
- * Under the horizon: what the tunnel is doing in big letters, a line about it, and the switch beside them.
- * Off it is the one coloured thing on the screen; on it turns into a quiet plate.
+ * Under the horizon: what the tunnel is doing in big letters with its switch beside them (off it is the one
+ * coloured thing on the screen, on it turns into a quiet plate), and a line about it across the full width.
+ * Every change moves: the headline types itself, the switch morphs, the line slides and the block's height
+ * follows smoothly — a song starting or a connection dropping never makes the layout jump.
  */
 @Composable
 private fun StatusBlock(m: HomeModel, controller: GhostlyController, modifier: Modifier = Modifier) {
@@ -324,64 +347,121 @@ private fun StatusBlock(m: HomeModel, controller: GhostlyController, modifier: M
         OrbState.CONNECTED -> tr("Под защитой")
         OrbState.ERROR -> tr("Не удалось подключиться")
     }
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        BoxWithConstraints(Modifier.weight(1f)) {
-            val room = maxWidth
-            Column {
+    Column(modifier.fillMaxWidth().animateContentSize(androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 260f))) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            BoxWithConstraints(Modifier.weight(1f)) {
+                val room = maxWidth
                 FittedKinetic(title, MaterialTheme.typography.displayMedium, if (m.orb == OrbState.ERROR) c.bad else c.ink, room, 22.sp)
-                Spacer(Modifier.height(6.dp))
-                val line = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp, color = c.ink2, fontFeatureSettings = "tnum")
-                when {
-                    singing && stage != null && m.state !is VpnState.Failed -> app.ghostly.ui.stage.SungLine(stage)
-                    m.state is VpnState.Connected -> Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(placeName(m) + " · ", style = line, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                        RollingText(Format.duration(m.now - m.state.since), style = line)
-                    }
-                    m.state is VpnState.Failed -> Column {
-                        Text(m.state.message, style = MaterialTheme.typography.bodySmall, color = c.ink3, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                        Row(
-                            Modifier.padding(top = 6.dp).clip(RoundedCornerShape(10.dp)).hoverSound()
-                                .clickable { controller.platform.copyToClipboard(m.state.message); controller.haptic() }
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(Icons.Rounded.ContentCopy, null, tint = c.accent, modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(tr("Скопировать ошибку"), style = MaterialTheme.typography.labelMedium, color = c.accent)
-                        }
-                    }
-                    m.state == VpnState.Connecting -> Text(tr("Устанавливаю туннель"), style = line, maxLines = 2)
-                    m.state == VpnState.Disconnecting -> Text(placeName(m), style = line, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    else -> Text(
-                        if (controller.platform.isDesktop) tr("Нажми на призрака, чтобы включить") else tr("Коснись призрака, чтобы включить"),
-                        style = line, maxLines = 2,
-                    )
+            }
+            Spacer(Modifier.width(12.dp))
+            val kind = when {
+                m.orb == OrbState.CONNECTED -> SwitchKind.DISCONNECT
+                m.state == VpnState.Connecting -> SwitchKind.CANCEL
+                m.state == VpnState.Disconnecting -> SwitchKind.WAIT
+                m.orb == OrbState.ERROR -> SwitchKind.RETRY
+                else -> SwitchKind.CONNECT
+            }
+            AnimatedContent(
+                kind,
+                transitionSpec = {
+                    (fadeIn(tween(220, delayMillis = 70)) + scaleIn(tween(380, easing = Motion.Ease), initialScale = 0.86f)) togetherWith
+                        (fadeOut(tween(120)) + scaleOut(tween(180), targetScale = 0.9f)) using SizeTransform(clip = false)
+                },
+                contentAlignment = Alignment.CenterEnd,
+                label = "switch",
+            ) { k ->
+                val go = { toggle(controller) }
+                when (k) {
+                    SwitchKind.DISCONNECT -> SoftButton(tr("Отключить"), go, icon = Icons.Rounded.PowerSettingsNew)
+                    SwitchKind.CANCEL -> SoftButton(tr("Отменить"), go, icon = Icons.Rounded.Close)
+                    SwitchKind.WAIT -> SoftButton(tr("Отключаю…"), {}, tint = c.ink3)
+                    SwitchKind.RETRY -> AccentButton(tr("Ещё раз"), go, icon = Icons.Rounded.Refresh)
+                    SwitchKind.CONNECT -> AccentButton(tr("Подключить"), go, icon = Icons.Rounded.PowerSettingsNew, enabled = m.server != null || m.mihomoGroups > 0)
                 }
-                if (m.state is VpnState.Connected && !singing) {
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        val lineKind = when {
+            singing && stage != null && m.state !is VpnState.Failed -> StatusLine.SINGING
+            m.state is VpnState.Connected -> StatusLine.CONNECTED
+            m.state is VpnState.Failed -> StatusLine.FAILED
+            m.state == VpnState.Connecting -> StatusLine.CONNECTING
+            m.state == VpnState.Disconnecting -> StatusLine.DISCONNECTING
+            else -> StatusLine.IDLE
+        }
+        val line = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp, color = c.ink2, fontFeatureSettings = "tnum")
+        AnimatedContent(
+            lineKind,
+            transitionSpec = {
+                (fadeIn(tween(260, delayMillis = 90)) + slideInVertically(tween(420, easing = Motion.Ease)) { it / 3 }) togetherWith
+                    (fadeOut(tween(140)) + slideOutVertically(tween(220)) { -it / 4 }) using SizeTransform(clip = false)
+            },
+            modifier = Modifier.fillMaxWidth(),
+            label = "line",
+        ) { k ->
+            when (k) {
+                // The song: the ghost sings it across the full width.
+                StatusLine.SINGING -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    stage?.let { app.ghostly.ui.stage.SungLine(it) }
+                }
+                StatusLine.CONNECTED -> Column {
+                    val since = (m.state as? VpnState.Connected)?.since
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(placeName(m) + " · ", style = line, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        if (since != null) RollingText(Format.duration(m.now - since), style = line)
+                    }
                     Spacer(Modifier.height(6.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         val small = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum")
                         Icon(Icons.Rounded.ArrowDownward, null, tint = c.ok, modifier = Modifier.size(13.dp))
                         Spacer(Modifier.width(3.dp))
                         RollingText(Format.speed(m.traffic.downSpeed), style = small, color = c.ink3)
-                        Spacer(Modifier.width(12.dp))
+                        Spacer(Modifier.width(14.dp))
                         Icon(Icons.Rounded.ArrowUpward, null, tint = c.accent, modifier = Modifier.size(13.dp))
                         Spacer(Modifier.width(3.dp))
                         RollingText(Format.speed(m.traffic.upSpeed), style = small, color = c.ink3)
                     }
                 }
+                StatusLine.FAILED -> Column {
+                    val message = (m.state as? VpnState.Failed)?.message.orEmpty()
+                    Text(message, style = MaterialTheme.typography.bodySmall, color = c.ink3, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    Row(
+                        Modifier.padding(top = 6.dp).clip(RoundedCornerShape(10.dp)).hoverSound()
+                            .clickable { controller.platform.copyToClipboard(message); controller.haptic() }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Rounded.ContentCopy, null, tint = c.accent, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(tr("Скопировать ошибку"), style = MaterialTheme.typography.labelMedium, color = c.accent)
+                    }
+                }
+                StatusLine.CONNECTING -> Text(tr("Устанавливаю туннель"), style = line, maxLines = 2)
+                StatusLine.DISCONNECTING -> Text(placeName(m), style = line, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                StatusLine.IDLE -> Text(
+                    if (controller.platform.isDesktop) tr("Нажми на призрака, чтобы включить") else tr("Коснись призрака, чтобы включить"),
+                    style = line, maxLines = 2,
+                )
             }
         }
-        Spacer(Modifier.width(12.dp))
-        val go = { toggle(controller) }
-        when {
-            m.orb == OrbState.CONNECTED -> SoftButton(tr("Отключить"), go, icon = Icons.Rounded.PowerSettingsNew)
-            m.state == VpnState.Connecting -> SoftButton(tr("Отменить"), go, icon = Icons.Rounded.Close)
-            m.state == VpnState.Disconnecting -> SoftButton(tr("Отключаю…"), {}, tint = c.ink3)
-            m.orb == OrbState.ERROR -> AccentButton(tr("Ещё раз"), go, icon = Icons.Rounded.Refresh)
-            else -> AccentButton(tr("Подключить"), go, icon = Icons.Rounded.PowerSettingsNew, enabled = m.server != null || m.mihomoGroups > 0)
-        }
     }
+}
+
+/** A server's name without the decoration a plate has no room for: leading emoji, a note in brackets. */
+private fun plainName(name: String): String =
+    name.replace(Regex("^[^\\p{L}\\p{N}]+"), "").substringBefore(" (").trim().ifEmpty { name }
+
+/** One line of text that cross-fades (with a small rise) when it changes instead of flipping at once. */
+@Composable
+private fun SwapText(text: String, style: TextStyle, color: Color = Color.Unspecified) {
+    AnimatedContent(
+        text,
+        transitionSpec = {
+            (fadeIn(tween(220, delayMillis = 60)) + slideInVertically(tween(300, easing = Motion.Ease)) { it / 3 }) togetherWith
+                fadeOut(tween(120)) using SizeTransform(clip = false)
+        },
+        label = "swap",
+    ) { t -> Text(t, style = style, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis) }
 }
 
 /** "Нидерланды" for a server with a flag, otherwise its own title. */
@@ -389,7 +469,7 @@ private fun placeName(m: HomeModel): String {
     val s = m.server ?: return tr("Сервер не выбран")
     if (m.mihomoGroups > 0) return tr("Селекторы")
     val t = s.title()
-    return t.flag?.let { countryName(it) } ?: t.title
+    return t.flag?.let { countryName(it) } ?: plainName(t.title)
 }
 
 /** The status headline, letters flying in; shrinks to stay on one line beside the switch. */
@@ -398,14 +478,17 @@ private fun FittedKinetic(text: String, style: TextStyle, color: Color, maxWidth
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val fitted = remember(text, style, maxWidth) {
-        var size = style.fontSize
+        fun at(size: Float) = style.copy(fontSize = size.sp, lineHeight = (size * 1.08f).sp, letterSpacing = (size * -0.03f).sp)
+        // KineticText sets every letter on its own (no kerning between them): measure it the same way.
+        fun width(size: Float): Int = text.sumOf { ch -> measurer.measure(ch.toString(), at(size), maxLines = 1, softWrap = false).size.width }
+        var size = style.fontSize.value
         val limit = with(density) { maxWidth.toPx() }
-        while (size.value > min.value && measurer.measure(text, style.copy(fontSize = size), maxLines = 1, softWrap = false).size.width > limit) {
-            size = (size.value - 1f).sp
-        }
-        style.copy(fontSize = size, lineHeight = (size.value * 1.08f).sp, letterSpacing = (size.value * -0.03f).sp)
+        while (size > min.value && width(size) > limit) size -= 1f
+        at(size) to (width(size) <= limit)
     }
-    KineticText(text, style = fitted, color = color)
+    // Too long even small (a long error, a long language): two lines of plain text rather than a cut word.
+    if (fitted.second) KineticText(text, style = fitted.first, color = color)
+    else Text(text, style = fitted.first, color = color, maxLines = 2, overflow = TextOverflow.Ellipsis)
 }
 
 /** Where the traffic goes: the server (flag, country, ping) or, on mihomo, its selectors. */
@@ -428,9 +511,9 @@ private fun ServerPlate(m: HomeModel, onClick: () -> Unit, modifier: Modifier) {
                     m.mihomoGroups > 0 -> tr("Селекторы")
                     server == null -> tr("Не выбран")
                     t?.flag != null -> countryName(t.flag)
-                    else -> t?.title.orEmpty()
+                    else -> plainName(t?.title.orEmpty())
                 }
-                Text(name, style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                SwapText(name, MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp))
                 Spacer(Modifier.height(3.dp))
                 val sub = when {
                     m.mihomoGroups > 0 -> tr("группы: {0}", m.mihomoGroups)
@@ -442,11 +525,11 @@ private fun ServerPlate(m: HomeModel, onClick: () -> Unit, modifier: Modifier) {
                             else -> null
                         }
                         // The country is the title already: the line names the server itself (or its protocol).
-                        val what = if (t?.flag != null) (listOfNotNull(t.title, t.subtitle).joinToString(" · ")) else (server.transportLabel() ?: server.protocolLabel())
+                        val what = if (t?.flag != null) plainName(listOfNotNull(t.title, t.subtitle).joinToString(" · ")) else (server.transportLabel() ?: server.protocolLabel())
                         listOfNotNull(ping, what.ifBlank { null }).joinToString(" · ")
                     }
                 }
-                Text(sub, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp, fontFeatureSettings = "tnum"), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                SwapText(sub, MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp, fontFeatureSettings = "tnum"))
             }
         }
     }
@@ -485,11 +568,11 @@ private fun SubscriptionPlate(profile: Profile, now: Long, controller: GhostlyCo
                     left <= 0 -> tr("Истекла")
                     else -> "$num $unit"
                 }
-                app.ghostly.ui.components.FlagText(head, style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp), color = if (tone == c.bad || tone == c.warn) tone else c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                SwapText(head, MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp), if (tone == c.bad || tone == c.warn) tone else c.ink)
                 Spacer(Modifier.height(3.dp))
                 val sub = when {
                     info == null -> Format.updatedAgo(profile.updatedAt, now)
-                    !info.unlimitedTime && left > 0 -> tr("до {0}", Format.date(info.expire, controller.platform.utcOffsetMinutes()))
+                    !info.unlimitedTime && left > 0 -> tr("до {0}", Format.dateShort(info.expire, controller.platform.utcOffsetMinutes()))
                     info.unlimitedTraffic -> "${Format.bytes(info.used)} · ∞"
                     else -> tr("{0} из {1}", Format.bytes(info.used), Format.bytes(info.total))
                 }

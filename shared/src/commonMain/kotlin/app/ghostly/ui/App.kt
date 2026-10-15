@@ -54,6 +54,7 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Dns
@@ -299,14 +300,15 @@ fun GhostlyApp(controller: GhostlyController) {
                                 }
                             }
                         }
+                        val heading = rememberHeading(tab)
                         AnimatedContent(
                             targetState = tab,
-                            // In step with the camera: the old page dissolves as the camera starts to move, the new
-                            // one settles in while it arrives.
-                            transitionSpec = { tabEnter() togetherWith tabExit() },
+                            // The pages ride the camera (see travel): no transition of their own, the old one is
+                            // kept until its turn is over.
+                            transitionSpec = { travelSpec() },
                             modifier = Modifier.fillMaxSize().predictiveCard(tabPeek, app.ghostly.ui.screens.peekBrush()),
                         ) { t ->
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                            Box(Modifier.fillMaxSize().travel(this@AnimatedContent, heading), contentAlignment = Alignment.TopCenter) {
                                 Box(Modifier.widthIn(max = 620.dp).fillMaxSize()) {
                                     when (t) {
                                         Tab.HOME -> HomeScreen(controller, onPickServer = { pickerOpen = true }, contentPadding = pad)
@@ -527,21 +529,70 @@ private fun BoxScope.PickerSheet(
 /** The first screen's key for the night's camera (nothing added yet). */
 internal const val ONBOARDING = "onboarding"
 
+/** Which way the camera travels to [to]: 1 to a later tab or page (the world slides left), -1 back. */
+@Composable
+internal fun <T : Enum<T>> rememberHeading(to: T): Int {
+    var last by remember { mutableStateOf(to) }
+    val heading = remember(to) { if (to.ordinal >= last.ordinal) 1 else -1 }
+    SideEffect { last = to }
+    return heading
+}
+
 /**
- * A tab comes in as the camera arrives: it fades in, rises a little and grows into place. (A whole-screen
- * page: the fade's layer can't cut any card's shadow.)
+ * Tabs bring no transition of their own: [travel] moves them. The leaving page is held for the whole turn by
+ * an exit that changes nothing (a scale to 1) and lasts as long as the travel.
  */
-internal fun tabEnter(): androidx.compose.animation.EnterTransition =
-    fadeIn(androidx.compose.animation.core.tween(460, delayMillis = 90)) +
-        scaleIn(androidx.compose.animation.core.tween(760, easing = CAMERA_IN), initialScale = 0.965f) +
-        slideInVertically(androidx.compose.animation.core.tween(760, easing = CAMERA_IN)) { it / 36 }
+internal fun travelSpec(): androidx.compose.animation.ContentTransform =
+    androidx.compose.animation.ContentTransform(
+        targetContentEnter = androidx.compose.animation.EnterTransition.None,
+        initialContentExit = scaleOut(androidx.compose.animation.core.tween(app.ghostly.ui.components.TRAVEL_MS), targetScale = 1f),
+        sizeTransform = androidx.compose.animation.SizeTransform(clip = false),
+    )
 
-/** The page that is left dissolves into the camera move, swelling slightly as if passed through. */
-internal fun tabExit(): androidx.compose.animation.ExitTransition =
-    fadeOut(androidx.compose.animation.core.tween(200)) +
-        scaleOut(androidx.compose.animation.core.tween(220), targetScale = 1.025f)
+/**
+ * A page rides the camera's travel: the pages are faces of one turning cube. The leaving face swings away
+ * around the edge it shares with the arriving one, the arriving face swings in on that same edge, so the
+ * two never part — and the night behind them travels the same way with depth. Same curve and time as the
+ * camera (TRAVEL / TRAVEL_MS). With reduced motion: a plain cross-fade.
+ */
+@Composable
+internal fun Modifier.travel(scope: androidx.compose.animation.AnimatedVisibilityScope, heading: Int): Modifier {
+    val reduce = app.ghostly.ui.theme.LocalReduceMotion.current
+    val t by scope.transition.animateFloat(
+        transitionSpec = { androidx.compose.animation.core.tween(if (reduce) 260 else app.ghostly.ui.components.TRAVEL_MS, easing = if (reduce) androidx.compose.animation.core.LinearEasing else app.ghostly.ui.components.TRAVEL) },
+        label = "travel",
+    ) {
+        when (it) {
+            androidx.compose.animation.EnterExitState.PreEnter -> -1f
+            androidx.compose.animation.EnterExitState.Visible -> 0f
+            androidx.compose.animation.EnterExitState.PostExit -> 1f
+        }
+    }
+    return graphicsLayer {
+        val a = kotlin.math.abs(t)
+        if (reduce) {
+            alpha = 1f - a
+            return@graphicsLayer
+        }
+        // t > 0: leaving, t < 0: arriving. They turn on the edge they share: the leaving face's front edge.
+        val leaving = t > 0f
+        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(if (leaving) 1f else 0f, 0.5f).let {
+            if (heading < 0) androidx.compose.ui.graphics.TransformOrigin(1f - it.pivotFractionX, 0.5f) else it
+        }
+        translationX = -heading * t * size.width
+        // Seen from outside the cube: the shared edge comes forward, the outer edges swing back.
+        rotationY = heading * t * 64f
+        // The whole cube stands back a little mid-turn (both faces by the same amount, around the edge they
+        // share, so they stay joined), like the camera pulling away as it travels.
+        val back = 1f - 0.07f * kotlin.math.sin(kotlin.math.PI.toFloat() * a)
+        scaleX = back
+        scaleY = back
+        cameraDistance = 12f * density
+        // The far end of the swing dims, so a face edge-on never shows as a sliver.
+        alpha = (1f - a * a * a).coerceIn(0f, 1f)
+    }
+}
 
-private val CAMERA_IN = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f)
 
 /** The logo's ghost as a flat glyph (100×110 box), for the dock. */
 private val GHOST_GLYPH: androidx.compose.ui.graphics.Path by lazy {
