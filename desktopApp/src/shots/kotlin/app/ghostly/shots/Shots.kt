@@ -162,7 +162,7 @@ private class ShotPlatform(override val dataDir: String, override val demo: Stri
     override val osVersion = if (desktop) "11" else "16"
     override val deviceModel = if (desktop) "Desktop" else "Nothing A059"
     override val hwid = "shot-device-0001"
-    override val appVersion = "0.3.36"
+    override val appVersion = "0.3.39"
     override val isDesktop: Boolean get() = desktop
     override fun openUrl(url: String) {}
     override fun copyToClipboard(text: String) {}
