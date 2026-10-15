@@ -1,5 +1,6 @@
 package app.ghostly.ui.components
 
+import androidx.compose.ui.graphics.Color
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -51,9 +52,10 @@ fun UpdateBanner(controller: GhostlyController, modifier: Modifier = Modifier, c
         val o = offer ?: return@AnimatedVisibility
         val busy = step is UpdateStep.Downloading || step is UpdateStep.Verifying || step is UpdateStep.Installing
         Column(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(if (compact) 16.dp else 22.dp))
-                .background(Brush.linearGradient(listOf(c.accent.copy(alpha = 0.22f), c.ok.copy(alpha = 0.10f))))
-                .border(1.dp, c.accent.copy(alpha = 0.4f), RoundedCornerShape(if (compact) 16.dp else 22.dp))
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(if (compact) app.ghostly.ui.components.Radius.tile else app.ghostly.ui.components.Radius.card))
+                .background(c.surface2)
+                .background(Brush.verticalGradient(listOf(c.accent.copy(alpha = 0.10f), Color.Transparent)))
+                .border(1.dp, c.accent.copy(alpha = 0.35f), RoundedCornerShape(if (compact) app.ghostly.ui.components.Radius.tile else app.ghostly.ui.components.Radius.card))
                 .padding(if (compact) 12.dp else 14.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {

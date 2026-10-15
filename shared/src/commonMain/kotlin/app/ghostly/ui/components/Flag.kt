@@ -18,6 +18,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.inset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
@@ -58,6 +59,27 @@ private fun String.codePointAtCompat(i: Int): Int {
 fun FlagIcon(flag: String, height: Dp, modifier: Modifier = Modifier) {
     val code = flagCode(flag) ?: return
     FlagBox(code, modifier.size(height * 1.4f, height), height)
+}
+
+/** A flag cut into a circle (the home screen's server plate), with a hairline ring around it. */
+@Composable
+fun FlagCircle(flag: String, size: Dp, modifier: Modifier = Modifier) {
+    val code = flagCode(flag) ?: return
+    val painter = FLAGS[code]
+    val shape = androidx.compose.foundation.shape.CircleShape
+    if (painter == null) {
+        Box(modifier.size(size).clip(shape).background(Ghost.colors.accent.copy(alpha = 0.22f)), contentAlignment = Alignment.Center) {
+            Text(code, fontSize = (size.value * 0.36f).sp, fontWeight = FontWeight.Bold, color = Ghost.colors.ink)
+        }
+        return
+    }
+    Canvas(modifier.size(size).clip(shape)) {
+        // the flag is wider than tall: its middle fills the circle
+        val extra = size.toPx() * 0.2f
+        inset(-extra, 0f, -extra, 0f) { painter() }
+        drawRect(Color.White.copy(alpha = 0.08f), size = Size(this.size.width, this.size.height * 0.45f))
+        drawCircle(Color.White.copy(alpha = 0.16f), style = Stroke(1f))
+    }
 }
 
 /** A flag filling [modifier]'s size; [height] only scales the corner radius and the badge text. */

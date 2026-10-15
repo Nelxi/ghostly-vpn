@@ -28,6 +28,9 @@ import kotlin.math.sin
 
 private val BODY_BASE = Color(0xFFCFC4FF)
 private val EYE_STOPS = arrayOf(0f to Color(0xFF1D1238), 0.6f to Color(0xFF0C0619), 1f to Color(0xFF05020B))
+/** The colourless night's cloth and eyes. */
+private val MONO_BASE = Color(0xFFD3D6DE)
+private val MONO_EYE = arrayOf(Color(0xFF2A2D35), Color(0xFF15171C), Color(0xFF07080A))
 private const val EX1 = 88f
 private const val EX2 = 119f
 private const val EY = 70f
@@ -50,9 +53,13 @@ fun DrawScope.drawMascot(
     s: Float, blink: Float, happy: Float, sad: Float, accent: Color, sleepy: Float,
     look: Offset = Offset.Zero, expr: GhostExpr = GhostExpr.NONE, sing: Float = 0f, showtime: Float = 0f,
     phase: Float = 0f, waveR: Float = 0f, waveL: Float = 0f, motion: Float = 1f,
+    /** 0..1: fast asleep, the eyes become closed arcs (the grey night of the home screen). */
+    doze: Float = 0f,
+    /** 0..1: drained of colour (the unprotected night): cloth, shadows and eyes turn to moonlit greys. */
+    mono: Float = 0f,
 ) {
     val tone = accent
-    val deep = lerp(accent, Color(0xFF2A0FB0), 0.5f)
+    val deep = lerp(lerp(accent, Color(0xFF2A0FB0), 0.5f), Color(0xFF3E424D), mono)
     val k = s / 200f * 1.12f
     val tilt = 30f + 2.5f * motion * sin(phase) + 7f * sad
     // Pointer direction in the ghost's own (tilted) frame.
@@ -77,19 +84,19 @@ fun DrawScope.drawMascot(
         FLAMES.forEachIndexed { i, f -> drawPath(flamePath(f, i, phase, motion), flameBrush, alpha = f[14] * (0.88f + 0.12f * sin(5 * phase + i * 1.9f))) }
 
         // Arms come out from behind the body.
-        if (waveL > 0.01f) arm(left = true, waveL, phase, tone)
-        if (waveR > 0.01f) arm(left = false, waveR, phase, tone)
+        if (waveL > 0.01f) arm(left = true, waveL, phase, tone, mono)
+        if (waveR > 0.01f) arm(left = false, waveR, phase, tone, mono)
 
         // Body, painted, fading to smoke towards the tail.
         drawContext.canvas.saveLayer(Rect(-80f, -80f, 280f, 280f), Paint())
-        paintCloth(body, tone, deep, accent)
+        paintCloth(body, tone, deep, accent, mono)
         drawRect(
             Brush.horizontalGradient(0f to Color.White, 0.7f to Color.White.copy(alpha = 0.85f), 1f to Color.White.copy(alpha = 0.35f), startX = 70f, endX = 16f),
             Offset(-80f, -80f), Size(360f, 360f), blendMode = BlendMode.DstIn,
         )
         drawContext.canvas.restore()
 
-        face(blink, happy, sad, sleepy, lk, expr, sing, showtime, deep)
+        face(blink, happy, sad, sleepy, lk, expr, sing, showtime, deep, doze, mono)
         if (showtime > 0.01f) stage(showtime, sing, lk, tone)
     }
 
@@ -104,6 +111,29 @@ fun DrawScope.drawMascot(
             val p = Path().apply { moveTo(zx, zy); lineTo(zx + z, zy); lineTo(zx, zy + z); lineTo(zx + z, zy + z) }
             drawPath(p, Color.White.copy(alpha = 0.6f * al * sin(t * PI.toFloat())), style = Stroke(s * 0.014f, cap = StrokeCap.Round))
         }
+    }
+}
+
+/** The ghost's silhouette (body and flames, no face or arms) for reflections, built once per frame. */
+internal class MascotShape(val body: Path, val flames: List<Path>)
+
+internal fun mascotShape(phase: Float, motion: Float): MascotShape =
+    MascotShape(bodyPath(phase, motion), FLAMES.mapIndexed { i, f -> flamePath(f, i, phase, motion) })
+
+/**
+ * Draws [shape] in a [s]×[s] box in exactly the pose [drawMascot] gives the ghost (same tilt and sway),
+ * the body filled with [body] and the flames with [flame] (local 200×200 coordinates).
+ */
+internal fun DrawScope.drawMascotShape(shape: MascotShape, s: Float, phase: Float, sad: Float, motion: Float, body: Brush, flame: Brush, alpha: Float) {
+    val k = s / 200f * 1.12f
+    val tilt = 30f + 2.5f * motion * sin(phase) + 7f * sad
+    withTransform({
+        translate(s / 2 - 100f * k + 4f * k, s / 2 - 100f * k)
+        scale(k, k, Offset.Zero)
+        rotate(tilt, Offset(100f, 100f))
+    }) {
+        shape.flames.forEachIndexed { i, p -> drawPath(p, flame, alpha = alpha * FLAMES[i][14]) }
+        drawPath(shape.body, body, alpha = alpha)
     }
 }
 
@@ -165,8 +195,8 @@ private fun line(vararg v: Float) = Path().apply {
 }
 
 /** Cloth: base colour, tail tint, inner light, back shadow, folds running to the flame points, rim light. */
-private fun DrawScope.paintCloth(body: Path, tone: Color, deep: Color, accent: Color) {
-    drawPath(body, lerp(BODY_BASE, accent, 0.10f))
+private fun DrawScope.paintCloth(body: Path, tone: Color, deep: Color, accent: Color, mono: Float = 0f) {
+    drawPath(body, lerp(lerp(BODY_BASE, accent, 0.10f), MONO_BASE, mono))
     clipPath(body) {
         soft(52f, 196f, 54f, 40f, tone, 1f, 10f)
         soft(34f, 204f, 30f, 22f, deep, 1f, 10f)
@@ -189,7 +219,7 @@ private fun DrawScope.paintCloth(body: Path, tone: Color, deep: Color, accent: C
 }
 
 /** Arm from behind the body; [up] 0..1 raises it, then it waves. The left one is the mirror image. */
-private fun DrawScope.arm(left: Boolean, up: Float, ph: Float, tone: Color) {
+private fun DrawScope.arm(left: Boolean, up: Float, ph: Float, tone: Color, mono: Float = 0f) {
     val p = Path().apply {
         moveTo(144f, 92f); cubicTo(156f, 86f, 164f, 74f, 168f, 60f)
         cubicTo(171f, 48f, 188f, 46f, 190f, 58f)
@@ -208,7 +238,7 @@ private fun DrawScope.arm(left: Boolean, up: Float, ph: Float, tone: Color) {
         translate(6f * e, -2f * e)
         rotate(angle, shoulder)
     }) {
-        drawPath(p, lerp(BODY_BASE, Color.White, 0.25f), alpha = e.coerceAtMost(1f))
+        drawPath(p, lerp(lerp(BODY_BASE, Color.White, 0.25f), MONO_BASE, mono), alpha = e.coerceAtMost(1f))
         clipPath(p) {
             soft(172f, 66f, 18f, 16f, Color.White, 1f, 6f)
             soft(150f, 110f, 12f, 10f, tone, 0.35f, 6f)
@@ -233,10 +263,13 @@ private fun eye(cx: Float, cy: Float, rx: Float, ry: Float, q: Float): Path {
 /** Matte dark eyes with a soft socket shadow — calm, a little mysterious (no highlights, no blush). */
 private fun DrawScope.face(
     blink: Float, happy: Float, sad: Float, sleepy: Float, lk: Offset, expr: GhostExpr,
-    sing: Float, showtime: Float, deep: Color,
+    sing: Float, showtime: Float, deep: Color, doze: Float = 0f, mono: Float = 0f,
 ) {
+    val eyeStops = if (mono < 0.01f) EYE_STOPS else Array(EYE_STOPS.size) { i -> EYE_STOPS[i].first to lerp(EYE_STOPS[i].second, MONO_EYE[i], mono) }
     val ox = lk.x * 3.5f
     val oy = lk.y * 3f
+    // Asleep only while nothing else is going on with the face.
+    val shut = if (expr == GhostExpr.NONE && showtime < 0.05f) doze.coerceIn(0f, 1f) else 0f
     fun one(x: Float, rx: Float, ry: Float, q: Float, rot: Float, dy: Float) {
         val cx = x + ox
         val cy = EY + oy + dy
@@ -245,15 +278,22 @@ private fun DrawScope.face(
             val ryy = (ry * blink).coerceAtLeast(1.2f)
             drawPath(
                 eye(cx, cy, rx, ryy, q),
-                Brush.radialGradient(*EYE_STOPS, center = Offset(cx - rx * 0.1f, cy + ryy * 0.4f), radius = maxOf(rx, ryy) * 1.5f),
+                Brush.radialGradient(*eyeStops, center = Offset(cx - rx * 0.1f, cy + ryy * 0.4f), radius = maxOf(rx, ryy) * 1.5f),
             )
         }
     }
     // Calm oval; sad droops and tilts outward; sleepy lowers the lids; happy pushes the lower lid up a bit.
     fun calm(x: Float, side: Float, scale: Float = 1f) {
         val rx = (10.4f - 1.4f * sad) * scale
-        val ry = (15.8f - 3.3f * sad) * scale * (1f - 0.55f * sleepy)
-        one(x, rx, ry, 0.35f * happy, side * 16f * sad, 4f * sad + 5f * sleepy)
+        val ry = (15.8f - 3.3f * sad) * scale * (1f - 0.55f * sleepy) * (1f - shut)
+        if (shut < 0.97f) one(x, rx, ry, 0.35f * happy, side * 16f * sad, 4f * sad + 5f * sleepy)
+        if (shut > 0.03f) {
+            // A closed eye: a soft arc curving down, like a sleeping smile.
+            val cx = x + ox
+            val cy = EY + oy + 5f * sleepy + 2f
+            val arc = Path().apply { moveTo(cx - rx * 0.92f, cy); quadraticTo(cx, cy + 9f, cx + rx * 0.92f, cy) }
+            drawPath(arc, lerp(Color(0xFF0C0619), Color(0xFF23262E), mono).copy(alpha = shut), style = Stroke(3.4f, cap = StrokeCap.Round))
+        }
     }
     fun squint(x: Float) = one(x, 9.8f, 11.5f, 1f, 0f, 0f)
     fun spiral(x: Float) {

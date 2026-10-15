@@ -290,12 +290,47 @@ fun ActionWide(icon: ImageVector, label: String, onClick: () -> Unit, modifier: 
             .then(if (primary) Modifier.background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.14f), Color.Transparent))) else Modifier.border(1.dp, c.hairline, RoundedCornerShape(Radius.tile)))
             .graphicsLayer { alpha = if (enabled) 1f else 0.45f }
             .hoverSound().clickable(interaction, null, enabled = enabled, onClick = onClick)
-            .padding(horizontal = 14.dp),
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, null, tint = if (primary) c.accentInk else c.accent, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(10.dp))
         Text(label, style = MaterialTheme.typography.labelLarge, color = if (primary) c.accentInk else c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/**
+ * The middle of a ring: a number over its unit, both trimmed to their glyphs so the pair sits in the
+ * optical centre of the ring (default line heights push it up).
+ */
+@Composable
+fun RingLabel(number: String, unit: String?, big: Boolean = true) {
+    val c = Ghost.colors
+    val trim = androidx.compose.ui.text.style.LineHeightStyle(
+        androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+        androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
+    )
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        val numberStyle = (if (big) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.titleLarge)
+        Text(
+            number,
+            style = numberStyle.copy(
+                fontWeight = FontWeight.ExtraBold, fontFeatureSettings = "tnum", letterSpacing = 0.sp,
+                lineHeight = numberStyle.fontSize, lineHeightStyle = trim, textAlign = TextAlign.Center,
+            ),
+        )
+        if (unit != null) {
+            Spacer(Modifier.height(if (big) 4.dp else 3.dp))
+            Text(
+                unit,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = if (big) 11.sp else 9.5.sp, lineHeight = if (big) 11.sp else 9.5.sp, lineHeightStyle = trim,
+                    letterSpacing = 0.sp, textAlign = TextAlign.Center,
+                ),
+                color = c.ink3,
+            )
+        }
     }
 }
 
@@ -340,7 +375,7 @@ fun Skeleton(modifier: Modifier, corner: Dp = Radius.tile) {
 /** Heading of a block: plain sentence case, no eyebrow capitals. */
 @Composable
 fun BlockTitle(text: String, modifier: Modifier = Modifier, trailing: @Composable (() -> Unit)? = null) {
-    Row(modifier.fillMaxWidth().padding(start = 4.dp, top = 22.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.fillMaxWidth().padding(start = 6.dp, end = 2.dp, top = 24.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(text, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold), color = Ghost.colors.ink, modifier = Modifier.weight(1f))
         trailing?.invoke()
     }

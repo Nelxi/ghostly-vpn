@@ -38,22 +38,43 @@ private data class Shot(
     val widthDp: Int = 412,
     val heightDp: Int = 915,
     val scale: Float = 2f,
-    val connected: Boolean = false,
+    /** idle / connected / connecting / failed */
+    val vpn: String = "idle",
     val cabinet: CabinetUi? = null,
     val desktop: Boolean = false,
     val onboarded: Boolean = true,
+    /** Demo spec instead of `tab:<tab>` (e.g. `tabs:1500` steps through the tabs). */
+    val demo: String? = null,
+    /** Milliseconds to settle before the picture. */
+    val settleMs: Long = 2600,
+    /** Extra pictures at these milliseconds (a filmstrip of a transition): <name>-<ms>.png. */
+    val film: List<Long> = emptyList(),
 )
 
 private val SHOTS = listOf(
     Shot("home", "HOME"),
-    Shot("home-connected", "HOME", connected = true),
+    Shot("home-on", "HOME", vpn = "connected"),
+    Shot("home-connecting", "HOME", vpn = "connecting"),
+    Shot("home-error", "HOME", vpn = "failed"),
     Shot("servers", "SERVERS"),
+    Shot("servers-on", "SERVERS", vpn = "connected"),
     Shot("settings", "SETTINGS"),
-    Shot("cabinet", "ACCOUNT", cabinet = CabinetUi.Ready(Samples.state), heightDp = 1500),
+    Shot("settings-on", "SETTINGS", vpn = "connected"),
+    Shot("cabinet", "ACCOUNT", cabinet = CabinetUi.Ready(Samples.state)),
+    Shot("cabinet-on", "ACCOUNT", vpn = "connected", cabinet = CabinetUi.Ready(Samples.state)),
+    Shot("cabinet-long", "ACCOUNT", cabinet = CabinetUi.Ready(Samples.state), heightDp = 1500),
     Shot("cabinet-signin", "ACCOUNT", cabinet = CabinetUi.SignedOut(Samples.anon, why = "not_first_device")),
     Shot("cabinet-loading", "ACCOUNT", cabinet = CabinetUi.Loading),
     Shot("onboarding", "HOME", onboarded = false),
-    Shot("desktop-home", "HOME", widthDp = 1180, heightDp = 780, scale = 1.25f, desktop = true, connected = true),
+    Shot("small", "HOME", widthDp = 360, heightDp = 640, scale = 2f),
+    Shot("small-on", "HOME", widthDp = 360, heightDp = 640, scale = 2f, vpn = "connected"),
+    // Home → Settings (tabs:1500 switches at 1.5 s): the camera on its way.
+    Shot("move", "HOME", demo = "tabs:1500", settleMs = 2900, film = listOf(1500, 1600, 1700, 1800, 1950, 2150, 2400), scale = 1f),
+    Shot("move-on", "HOME", vpn = "connected", demo = "tabs:1500", settleMs = 2900, film = listOf(1600, 1800, 2000, 2300), scale = 1f),
+    Shot("desktop-home", "HOME", widthDp = 1180, heightDp = 780, scale = 1.25f, desktop = true, vpn = "connected"),
+    Shot("desktop-home-off", "HOME", widthDp = 1180, heightDp = 780, scale = 1.25f, desktop = true),
+    Shot("desktop-servers", "SERVERS", widthDp = 1180, heightDp = 780, scale = 1.25f, desktop = true, vpn = "connected"),
+    Shot("desktop-settings", "SETTINGS", widthDp = 1180, heightDp = 780, scale = 1.25f, desktop = true),
     Shot("desktop-cabinet", "ACCOUNT", widthDp = 1180, heightDp = 900, scale = 1.25f, desktop = true, cabinet = CabinetUi.Ready(Samples.state)),
 )
 
@@ -71,8 +92,8 @@ fun main(args: Array<String>) {
 private fun render(shot: Shot, out: File) {
     val dir = Files.createTempDirectory("ghostly-shot-").toFile()
     seed(dir, shot)
-    val platform = ShotPlatform(dir.absolutePath, "tab:" + shot.tab, shot.desktop)
-    val controller = GhostlyController(platform, ShotBackend(shot.connected))
+    val platform = ShotPlatform(dir.absolutePath, shot.demo ?: ("tab:" + shot.tab), shot.desktop)
+    val controller = GhostlyController(platform, ShotBackend(shot.vpn))
     shot.cabinet?.let { controller.cabinet.preview(it) }
     val w = (shot.widthDp * shot.scale).toInt()
     val h = (shot.heightDp * shot.scale).toInt()
@@ -80,9 +101,16 @@ private fun render(shot: Shot, out: File) {
     try {
         // Let entrance animations and delayed effects settle: frames on a real clock.
         val t0 = System.nanoTime()
-        repeat(150) {
-            scene.render(System.nanoTime() - t0)
-            Thread.sleep(16)
+        val film = shot.film.toMutableList()
+        while (true) {
+            val ms = (System.nanoTime() - t0) / 1_000_000
+            if (ms >= shot.settleMs) break
+            val frame = scene.render(System.nanoTime() - t0)
+            if (film.isNotEmpty() && ms >= film.first()) {
+                val at = film.removeAt(0)
+                frame.encodeToData(EncodedImageFormat.PNG)?.let { File(out, "${shot.name}-$at.png").writeBytes(it.bytes) }
+            }
+            Thread.sleep(8)
         }
         val image = scene.render(System.nanoTime() - t0)
         val png = image.encodeToData(EncodedImageFormat.PNG) ?: error("no png")
@@ -142,9 +170,16 @@ private class ShotPlatform(override val dataDir: String, override val demo: Stri
     override fun readClipboard(): String? = null
 }
 
-private class ShotBackend(connected: Boolean) : VpnBackend {
-    override val state = MutableStateFlow<VpnState>(if (connected) VpnState.Connected(System.currentTimeMillis() - 754_000, "srv1") else VpnState.Idle)
-    override val traffic = MutableStateFlow(if (connected) Traffic(180_000, 2_400_000, 34_000_000, 812_000_000) else Traffic())
+private class ShotBackend(vpn: String) : VpnBackend {
+    override val state = MutableStateFlow<VpnState>(
+        when (vpn) {
+            "connected" -> VpnState.Connected(System.currentTimeMillis() - 754_000, "srv1")
+            "connecting" -> VpnState.Connecting
+            "failed" -> VpnState.Failed("Сервер не ответил за 10 секунд: проверь интернет или выбери другой сервер")
+            else -> VpnState.Idle
+        },
+    )
+    override val traffic = MutableStateFlow(if (vpn == "connected") Traffic(180_000, 2_400_000, 34_000_000, 812_000_000) else Traffic())
     override suspend fun connect(server: Server, settings: AppSettings) {}
     override suspend fun disconnect() {}
     override suspend fun ping(server: Server, url: String): Long = 84

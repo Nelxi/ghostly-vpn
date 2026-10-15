@@ -27,14 +27,19 @@ import app.ghostly.resources.onest_regular
 import app.ghostly.resources.onest_semibold
 import org.jetbrains.compose.resources.Font
 
-/** Palette from the Ghostly site (core.css tokens). */
+/**
+ * The interface's colours. They follow the night behind it (see NightScene): moonlit greys while the VPN is
+ * off, a violet tint once it is protected ([protectedNight] / [greyNight]); the accent stays the same in both.
+ */
 @Immutable
 data class GhostColors(
-    val bg: Color = Color(0xFF07050B),
+    val bg: Color = Color(0xFF05040A),
     val bgRaised: Color = Color(0xFF0E0A16),
-    val ink: Color = Color(0xFFF4F1FA),
-    val ink2: Color = Color(0xFFBDB5D0),
-    val ink3: Color = Color(0xFF847D98),
+    val ink: Color = Color(0xFFF6F3FF),
+    val ink2: Color = Color(0xFFB6ABDB),
+    val ink3: Color = Color(0xFFA59DC5),
+    /** Quiet icons: the dock's other tabs, chevrons. */
+    val ink4: Color = Color(0xFF8C84AA),
     val accent: Color = Color(0xFFA88DFF),
     val accent2: Color = Color(0xFF7C5CF0),
     val accentInk: Color = Color(0xFF150A2C),
@@ -44,14 +49,39 @@ data class GhostColors(
     val line: Color = Color(0x14FFFFFF),
     val glass: Color = Color(0x0DFFFFFF),
     val glassStrong: Color = Color(0x17FFFFFF),
-    /** Cards: an opaque night-ink tile (the aurora only glows around it, not through it). */
-    val surface1: Color = Color(0xFF13111B),
-    /** Tiles inside cards, raised rows. */
+    /** Sheets and dialogs: opaque night ink. */
+    val surface1: Color = Color(0xFF110F1A),
+    /** Tiles inside plates, raised rows. */
     val surface2: Color = Color(0xFF1A1724),
     /** Inputs, steppers, pressed states. */
     val surface3: Color = Color(0xFF231F2F),
     /** 1px edges. */
     val hairline: Color = Color(0x12FFFFFF),
+    /** Plates over the night: translucent, the scene shows through a little. */
+    val plate: Color = Color(0xD60C0B13),
+    /** The light caught by a plate's top edge. */
+    val plateEdge: Color = Color(0x26C8B4FF),
+    /** 1 in the protected (coloured) night, 0 in the grey one: for the few things that blend the two. */
+    val lit: Float = 1f,
+)
+
+/** The protected night's interface (the defaults). */
+val protectedNight = GhostColors()
+
+/** The unprotected night's interface: moonlit greys. */
+val greyNight = GhostColors(
+    bg = Color(0xFF040406),
+    bgRaised = Color(0xFF0D0E12),
+    ink = Color(0xFFEEF0F4),
+    ink2 = Color(0xFFA3A9B6),
+    ink3 = Color(0xFF8E94A3),
+    ink4 = Color(0xFF7D8392),
+    surface1 = Color(0xFF101116),
+    surface2 = Color(0xFF18191F),
+    surface3 = Color(0xFF202229),
+    plate = Color(0xD60C0D11),
+    plateEdge = Color(0x12FFFFFF),
+    lit = 0f,
 )
 
 object Motion {
@@ -84,31 +114,34 @@ fun onestFamily(): FontFamily = FontFamily(
 )
 
 @Composable
-fun GhostlyTheme(accentArgb: Long, reduceMotion: Boolean, content: @Composable () -> Unit) {
+fun GhostlyTheme(accentArgb: Long, reduceMotion: Boolean, protected: Boolean = false, content: @Composable () -> Unit) {
     val target = Color(accentArgb.toInt())
     val accent by animateColorAsState(target, Motion.quick(500))
-    val colors = GhostColors(
+    // Switched at once, not animated: an animation would recompose the whole interface on every frame while
+    // the scene behind it is busy spreading its colour (the scene and the plates' edges fade on their own).
+    val base = if (protected) protectedNight else greyNight
+    val colors = base.copy(
         accent = accent,
         // Deeper companion shade of the accent for gradients (site: #a88dff → #7c5cf0).
         accent2 = lerp(accent, Color(0xFF3A1F9E), 0.38f),
         accentInk = lerp(accent, Color.Black, 0.86f),
     )
     val family = onestFamily()
-    val base = TextStyle(fontFamily = family, color = colors.ink)
+    val text = TextStyle(fontFamily = family, color = colors.ink)
     val typography = Typography(
-        displayLarge = base.copy(fontSize = 44.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1.2).sp),
-        displayMedium = base.copy(fontSize = 34.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.8).sp),
-        headlineMedium = base.copy(fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.8).sp),
-        headlineSmall = base.copy(fontSize = 21.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp),
-        titleLarge = base.copy(fontSize = 18.sp, fontWeight = FontWeight.SemiBold),
-        titleMedium = base.copy(fontSize = 16.sp, fontWeight = FontWeight.SemiBold),
-        titleSmall = base.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
-        bodyLarge = base.copy(fontSize = 16.sp, lineHeight = 22.sp),
-        bodyMedium = base.copy(fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink2),
-        bodySmall = base.copy(fontSize = 12.sp, lineHeight = 16.sp, color = colors.ink3),
-        labelLarge = base.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
-        labelMedium = base.copy(fontSize = 13.sp, fontWeight = FontWeight.Medium),
-        labelSmall = base.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.4.sp),
+        displayLarge = text.copy(fontSize = 54.sp, lineHeight = 56.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-2.1).sp),
+        displayMedium = text.copy(fontSize = 34.sp, lineHeight = 36.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-1.0).sp),
+        headlineMedium = text.copy(fontSize = 30.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.9).sp),
+        headlineSmall = text.copy(fontSize = 21.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp),
+        titleLarge = text.copy(fontSize = 18.sp, fontWeight = FontWeight.SemiBold),
+        titleMedium = text.copy(fontSize = 16.sp, fontWeight = FontWeight.SemiBold),
+        titleSmall = text.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
+        bodyLarge = text.copy(fontSize = 16.sp, lineHeight = 22.sp),
+        bodyMedium = text.copy(fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink2),
+        bodySmall = text.copy(fontSize = 12.sp, lineHeight = 16.sp, color = colors.ink3),
+        labelLarge = text.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
+        labelMedium = text.copy(fontSize = 13.sp, fontWeight = FontWeight.Medium),
+        labelSmall = text.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.4.sp),
     )
     val scheme = darkColorScheme(
         primary = colors.accent,
@@ -118,12 +151,12 @@ fun GhostlyTheme(accentArgb: Long, reduceMotion: Boolean, content: @Composable (
         onBackground = colors.ink,
         surface = colors.bgRaised,
         onSurface = colors.ink,
-        surfaceVariant = Color(0xFF1A1424),
+        surfaceVariant = colors.surface2,
         onSurfaceVariant = colors.ink2,
-        surfaceContainer = Color(0xFF120D1C),
-        surfaceContainerHigh = Color(0xFF171121),
-        surfaceContainerHighest = Color(0xFF1D1629),
-        surfaceContainerLow = Color(0xFF0E0A16),
+        surfaceContainer = colors.surface1,
+        surfaceContainerHigh = colors.surface2,
+        surfaceContainerHighest = colors.surface3,
+        surfaceContainerLow = colors.bgRaised,
         outline = colors.line,
         outlineVariant = colors.line,
         error = colors.bad,

@@ -1,6 +1,11 @@
 package app.ghostly.ui
 
 import app.ghostly.ui.components.pageFade
+import app.ghostly.ui.components.plate
+import app.ghostly.ui.components.softShadow
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.animation.ExitTransition
 import app.ghostly.ui.components.hoverSound
 import app.ghostly.ui.components.outerShadow
@@ -56,6 +61,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -81,22 +87,22 @@ import app.ghostly.i18n.tr
 private val NAV_ITEM_H = 48.dp
 private val NAV_GAP = 6.dp
 
-/** Desktop / tablet layout: glass sidebar + roomy content area. */
+/**
+ * Desktop / tablet layout: the night fills the whole window, a floating plate holds the navigation and the
+ * page stands in the rest. Tabs change with the same camera move as on the phone.
+ */
 @Composable
 internal fun DesktopShell(controller: GhostlyController, tabs: List<Tab>, tab: Tab, onTab: (Tab) -> Unit, onAdd: () -> Unit) {
     Row(Modifier.fillMaxSize()) {
         Sidebar(controller, tabs, tab, onTab, onAdd)
         AnimatedContent(
             targetState = tab,
-            transitionSpec = {
-                // no fade (it cuts or delays the shadows): the old page leaves at once, the new one slides in
-                slideInVertically(Motion.quick(360)) { it / 28 } togetherWith ExitTransition.None
-            },
+            transitionSpec = { tabEnter() togetherWith tabExit() },
             modifier = Modifier.weight(1f).fillMaxHeight(),
         ) { t ->
           Box(Modifier.fillMaxSize()) {
             when (t) {
-                Tab.HOME -> HomeDesktop(controller, onAdd)
+                Tab.HOME -> HomeDesktop(controller, onAdd, onServers = { onTab(Tab.SERVERS) })
                 Tab.SERVERS -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                     Box(Modifier.widthIn(max = 980.dp).fillMaxSize()) {
                         ServersScreen(controller, PaddingValues(top = 20.dp, bottom = 24.dp), onAdd = onAdd)
@@ -125,10 +131,12 @@ private fun Sidebar(controller: GhostlyController, tabs: List<Tab>, tab: Tab, on
     val profiles by controller.profiles.collectAsState()
     val connected = state is VpnState.Connected
 
+    val panel = RoundedCornerShape(26.dp)
     Column(
-        Modifier.width(250.dp).fillMaxHeight()
-            .background(Brush.horizontalGradient(listOf(Color(0x66100B19), Color(0x33100B19))))
-            .padding(horizontal = 16.dp, vertical = 20.dp),
+        Modifier.padding(start = 14.dp, top = 14.dp, bottom = 14.dp).width(236.dp).fillMaxHeight()
+            .softShadow(panel, 1f)
+            .plate(panel, strong = true)
+            .padding(horizontal = 14.dp, vertical = 18.dp),
     ) {
         // Brand
         Row(Modifier.padding(start = 6.dp, bottom = 26.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -145,17 +153,16 @@ private fun Sidebar(controller: GhostlyController, tabs: List<Tab>, tab: Tab, on
         val indicatorY by animateDpAsState((NAV_ITEM_H + NAV_GAP) * index, Motion.bouncy())
         Box {
             Box(
-                Modifier.offset(y = indicatorY).fillMaxWidth().height(NAV_ITEM_H).outerShadow(RoundedCornerShape(16.dp), 0.6f).clip(RoundedCornerShape(16.dp))
-                    .background(Brush.horizontalGradient(listOf(c.accent.copy(alpha = 0.26f), c.accent2.copy(alpha = 0.10f))))
-                    .border(1.dp, c.accent.copy(alpha = 0.32f), RoundedCornerShape(16.dp)),
+                Modifier.offset(y = indicatorY).fillMaxWidth().height(NAV_ITEM_H).clip(RoundedCornerShape(NAV_ITEM_H / 2))
+                    .background(androidx.compose.ui.graphics.lerp(Color.White.copy(alpha = 0.08f), c.accent.copy(alpha = 0.18f), c.lit)),
             )
             Column(verticalArrangement = Arrangement.spacedBy(NAV_GAP)) {
                 tabs.forEach { t ->
                     val icon = when (t) {
                         Tab.HOME -> Icons.Rounded.Home
-                        Tab.SERVERS -> Icons.Rounded.Dns
-                        Tab.ACCOUNT -> Icons.Rounded.AccountCircle
-                        Tab.SETTINGS -> Icons.Rounded.Settings
+                        Tab.SERVERS -> Icons.Outlined.Public
+                        Tab.ACCOUNT -> Icons.Outlined.Person
+                        Tab.SETTINGS -> Icons.Outlined.Tune
                     }
                     NavItem(icon, t.title, tab == t) { onTab(t) }
                 }
@@ -170,8 +177,8 @@ private fun Sidebar(controller: GhostlyController, tabs: List<Tab>, tab: Tab, on
         val profile = remember(profiles) { controller.selectedServer()?.let { controller.profileOf(it.id) } ?: profiles.firstOrNull() }
         profile?.info?.let { info ->
             Column(
-                Modifier.fillMaxWidth().outerShadow(RoundedCornerShape(20.dp), 0.8f).clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.045f))
-                    .border(1.dp, c.line, RoundedCornerShape(20.dp)).spotlight(c.accent, 140.dp).padding(14.dp),
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White.copy(alpha = 0.04f))
+                    .border(1.dp, c.hairline, RoundedCornerShape(18.dp)).spotlight(c.accent, 140.dp).padding(14.dp),
             ) {
                 app.ghostly.ui.components.FlagText(profile.name, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(2.dp))
@@ -215,8 +222,8 @@ private fun NavItem(icon: ImageVector, label: String, active: Boolean, tint: Col
     val hoverBg by animateFloatAsState(if (hovered && !active) 1f else 0f, Motion.quick())
     val wiggle by animateFloatAsState(if (hovered) -10f else 0f, Motion.bouncy())
     Row(
-        Modifier.fillMaxWidth().height(NAV_ITEM_H).clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.04f * hoverBg))
+        Modifier.fillMaxWidth().height(NAV_ITEM_H).clip(RoundedCornerShape(NAV_ITEM_H / 2))
+            .background(Color.White.copy(alpha = 0.05f * hoverBg))
             .pointerHoverIcon(PointerIcon.Hand)
             .hoverSound().clickable(interaction, null, onClick = onClick)
             .padding(horizontal = 14.dp),
@@ -246,10 +253,9 @@ private fun StatusChip(state: VpnState, onClick: () -> Unit) {
     val pulse by ambientFloat(0f, 1f, 1600)
     val interaction = remember { MutableInteractionSource() }
     Row(
-        Modifier.fillMaxWidth().outerShadow(RoundedCornerShape(16.dp), 0.8f).clip(RoundedCornerShape(16.dp))
-            .background(color.copy(alpha = 0.10f))
-            .border(1.dp, color.copy(alpha = 0.28f), RoundedCornerShape(16.dp))
-            .sheen(interaction, color, 0.16f)
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+            .background(Color.White.copy(alpha = 0.04f))
+            .border(1.dp, color.copy(alpha = 0.35f), RoundedCornerShape(18.dp))
             .pointerHoverIcon(PointerIcon.Hand)
             .hoverSound().clickable(interaction, null, onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 12.dp),

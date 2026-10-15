@@ -168,9 +168,9 @@ private fun NoticeCard(n: Notice, more: Int, controller: GhostlyController) {
             }
             .shadow(28.dp, shape, ambientColor = look.a, spotColor = look.a.copy(alpha = 0.6f))
             .clip(shape)
-            .background(Brush.verticalGradient(listOf(androidx.compose.ui.graphics.lerp(Color(0xF01A1328), look.a, 0.10f), Color(0xF20E091A))))
-            .background(Brush.radialGradient(listOf(look.a.copy(alpha = 0.22f), Color.Transparent), radius = 420f, center = androidx.compose.ui.geometry.Offset(0f, 0f)))
-            .border(1.dp, Brush.linearGradient(listOf(look.a.copy(alpha = 0.7f), Color.White.copy(alpha = 0.06f), look.b.copy(alpha = 0.45f))), shape)
+            .background(c.surface2)
+            .background(Brush.radialGradient(listOf(look.a.copy(alpha = 0.16f), Color.Transparent), radius = 420f, center = androidx.compose.ui.geometry.Offset(0f, 0f)))
+            .border(1.dp, Brush.verticalGradient(listOf(look.a.copy(alpha = 0.55f), c.hairline)), shape)
             .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 13.dp),
     ) {
         Row {
@@ -183,7 +183,7 @@ private fun NoticeCard(n: Notice, more: Int, controller: GhostlyController) {
                 ) { GhostMark(Modifier.size(28.dp), pokeable = false) }
                 Box(
                     Modifier.align(Alignment.BottomEnd).offset(3.dp, 3.dp).size(20.dp).clip(CircleShape)
-                        .background(Color(0xFF1C1529)).padding(3.dp).clip(CircleShape).background(look.a),
+                        .background(c.surface2).padding(3.dp).clip(CircleShape).background(look.a),
                     contentAlignment = Alignment.Center,
                 ) { Icon(look.icon, null, tint = Color.White, modifier = Modifier.size(10.dp)) }
             }
@@ -293,9 +293,9 @@ fun NoticeBell(controller: GhostlyController) {
         androidx.compose.ui.window.Dialog(onDismissRequest = { open = false }) {
             val items by controller.notices.history.collectAsState()
             Column(
-                Modifier.widthIn(max = 480.dp).fillMaxWidth().heightIn(max = 640.dp).clip(RoundedCornerShape(26.dp))
-                    .background(Color(0xFF130E1D))
-                    .border(1.dp, Brush.verticalGradient(listOf(c.accent.copy(alpha = 0.4f), Color.White.copy(alpha = 0.05f))), RoundedCornerShape(26.dp))
+                Modifier.widthIn(max = 480.dp).fillMaxWidth().heightIn(max = 640.dp).clip(RoundedCornerShape(app.ghostly.ui.components.Radius.card))
+                    .background(c.surface1)
+                    .border(1.dp, c.hairline, RoundedCornerShape(app.ghostly.ui.components.Radius.card))
                     .padding(18.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -322,9 +322,9 @@ private fun NoticeRow(n: Notice, controller: GhostlyController) {
     val c = Ghost.colors
     val look = lookOf(n.kind)
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
-            .background(Brush.verticalGradient(listOf(look.a.copy(alpha = 0.12f), Color.White.copy(alpha = 0.02f))))
-            .border(1.dp, look.b.copy(alpha = 0.25f), RoundedCornerShape(18.dp)).padding(14.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(app.ghostly.ui.components.Radius.tile))
+            .background(c.surface2)
+            .border(1.dp, look.b.copy(alpha = 0.22f), RoundedCornerShape(app.ghostly.ui.components.Radius.tile)).padding(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(22.dp).clip(CircleShape).background(look.a), contentAlignment = Alignment.Center) {

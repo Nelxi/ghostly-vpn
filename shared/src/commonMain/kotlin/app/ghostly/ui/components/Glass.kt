@@ -56,7 +56,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.ghostly.ui.theme.Ghost
-import app.ghostly.ui.theme.LocalDesign
 import app.ghostly.ui.theme.LocalReduceMotion
 import app.ghostly.ui.theme.Motion
 import kotlinx.coroutines.delay
@@ -68,82 +67,10 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * The site's backdrop: deep violet night, slowly drifting aurora blobs and twinkling "ghost dust".
- * [energy] 0..1 brightens it (connected state) and pulls a blob towards mint.
- */
-@Composable
-fun AuroraBackground(energy: Float, modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
-    val c = Ghost.colors
-    val reduce = LocalReduceMotion.current
-    val phase by ambientFloat(0f, (2 * PI).toFloat(), if (reduce) 70_000 else 30_000, LinearEasing)
-    val drift by ambientFloat(0f, 1f, if (reduce) 120_000 else 60_000, LinearEasing)
-    val e by animateFloatAsState(energy, tween(1400, easing = Motion.Ease))
-    val stars = remember {
-        val r = Random(7)
-        List(44) { floatArrayOf(r.nextFloat(), r.nextFloat(), 0.5f + r.nextFloat() * 1.3f, r.nextFloat() * 6.28f, 0.4f + r.nextFloat()) }
-    }
-    // Parallax: the aurora leans away from the cursor, stars (nearer) move more — depth for free.
-    var mouse by remember { mutableStateOf(Offset.Zero) }
-    val par by androidx.compose.animation.core.animateOffsetAsState(mouse, androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 18f))
-    val remote = LocalDesign.current
-    val stage = app.ghostly.ui.stage.LocalStage.current
-    Box(
-        modifier.fillMaxSize().background(c.bg).pointerInput(Unit) {
-            awaitPointerEventScope {
-                while (true) {
-                    val ev = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
-                    val p = ev.changes.firstOrNull()?.position ?: continue
-                    if (!reduce) mouse = Offset(p.x / size.width - 0.5f, p.y / size.height - 0.5f)
-                }
-            }
-        },
-    ) {
-        Canvas(Modifier.fillMaxSize()) {
-            val w = size.width
-            val h = size.height
-            val m = maxOf(w, h)
-            val px = -par.x * 46.dp.toPx() * remote.parallax
-            val py = -par.y * 34.dp.toPx() * remote.parallax
-            // Stage: the aurora breathes with the bass (dark songs dim it only with design `stageDim`).
-            val sa = stage?.a
-            val glow = remote.aurora * (1f + (sa?.let {
-                (it.bass * 0.6f + it.beat * 0.2f) * (1f - it.mood) - it.mood * 0.9f * remote.stageDim
-            } ?: 0f)).coerceAtLeast(0.12f)
-            fun blob(cx0: Float, cy0: Float, r0: Float, color: Color, alpha0: Float) {
-                val cx = cx0 + px; val cy = cy0 + py
-                val r = r0 * (1f + (sa?.let { it.bass * 0.10f } ?: 0f))
-                val alpha = (alpha0 * glow).coerceIn(0f, 1f)
-                drawCircle(
-                    Brush.radialGradient(
-                        listOf(color.copy(alpha = alpha), color.copy(alpha = alpha * 0.4f), Color.Transparent),
-                        center = Offset(cx, cy), radius = r,
-                    ),
-                    radius = r, center = Offset(cx, cy),
-                )
-            }
-            // Two slow lights: violet from the top corner, and from below one that turns mint when protected.
-            blob(w * (0.12f + 0.10f * cos(phase)), h * (0.02f + 0.05f * sin(phase * 2)), m * 0.66f, c.accent2, 0.26f + 0.10f * e)
-            blob(w * (0.92f + 0.06f * sin(phase)), h * (0.28f + 0.06f * cos(phase)), m * 0.42f, c.accent, 0.09f + 0.06f * e)
-            blob(w * (0.50f + 0.20f * cos(phase + 2f)), h * (1.04f + 0.04f * sin(phase)), m * 0.70f, lerp(c.accent2, c.ok, e), 0.12f + 0.14f * e)
-
-            // Ghost dust: tiny stars drifting up and twinkling.
-            stars.forEach { s ->
-                val y = ((s[1] - drift * s[4] * 0.35f) % 1f + 1f) % 1f
-                val tw = (0.5f + 0.5f * sin(phase * 3f * s[4] + s[3])) * (1f + (sa?.let { it.treble * 1.2f } ?: 0f))
-                val depth = 1.2f + s[4] * 1.4f
-                drawCircle(Color.White.copy(alpha = (0.06f + 0.22f * tw) * (0.7f + 0.3f * e)), s[2].dp.toPx() * 0.8f, Offset(s[0] * w + px * depth, y * h + py * depth))
-            }
-            // Vignette keeps text readable at the bottom.
-            drawRect(Brush.verticalGradient(listOf(Color.Transparent, c.bg.copy(alpha = 0.6f)), startY = h * 0.55f, endY = h))
-        }
-        content()
-    }
-}
-
-/**
- * The app's card: an opaque night-ink tile (the aurora glows around it, never through it), a hairline edge
- * lit from the top, one soft shadow tinted like the night behind it, and a cursor spotlight on desktop.
- * [strong]: the raised variant for the card that matters most on a screen.
+ * The app's card: a plate over the night. Translucent dark ink (the scene shows through a little), a hairline
+ * edge, a top edge that catches the light of the sky (violet once protected, the colour fading in with the
+ * scene), one soft shadow tinted like the night, and a cursor spotlight on desktop.
+ * [strong]: a slightly denser plate for the one that matters most on a screen.
  */
 @Composable
 fun GlassCard(
@@ -161,11 +88,7 @@ fun GlassCard(
     val lit by animateFloatAsState(if (hovered) 1f else 0f, Motion.quick(260))
     var m = modifier
     if (onClick != null) m = m.pressScale(interaction, 0.98f, hover = 1.006f)
-    m = m.softShadow(shape, if (strong) 1f else 0.8f)
-    m = m.clip(shape)
-        .background(if (strong) c.surface2 else c.surface1)
-        // The top edge catches a little light; nothing else is lit.
-        .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.035f + 0.025f * lit), Color.Transparent), endY = 260f))
+    m = m.softShadow(shape, if (strong) 0.9f else 0.7f).plate(shape, strong) { lit }
     if (glow != null) m = m.background(Brush.radialGradient(listOf(glow.copy(alpha = 0.13f), Color.Transparent)))
     val stageForCard = app.ghostly.ui.stage.LocalStage.current
     if (stageForCard != null) m = m.drawWithContent {
@@ -175,19 +98,50 @@ fun GlassCard(
         if (k > 0.02f) drawRect(Brush.verticalGradient(listOf(c.accent.copy(alpha = 0.22f * k), Color.Transparent), endY = size.height * 0.5f))
     }
     m = m.spotlight(c.accent)
+    m = if (onClick != null) m.hoverSound().clickable(interactionSource = interaction, indication = null, onClick = onClick)
+    else m.hoverable(interaction) // plain cards light up under the cursor too, like the site
+    Column(m.padding(padding), content = content)
+}
+
+/**
+ * A plate over the night (cards, the dock, the sidebar, pills): clipped to [shape], translucent ink, the
+ * lit top edge and a hairline border. [lit] 0..1 (hover) warms the border towards the accent.
+ */
+fun Modifier.plate(shape: Shape, strong: Boolean = false, lit: () -> Float = { 0f }): Modifier = composed {
+    val c = Ghost.colors
+    val night = LocalNight.current
+    val fill = if (strong) c.plate.copy(alpha = (c.plate.alpha + 0.05f).coerceAtMost(1f)) else c.plate
+    clip(shape)
+        .drawBehind {
+            drawRect(fill)
+            val e = night.energy
+            // Sky light on the plate: a faint wash from the top, and the edge that catches it.
+            if (e > 0.01f) drawRect(Brush.verticalGradient(listOf(c.accent.copy(alpha = 0.045f * e), Color.Transparent), endY = 90.dp.toPx()))
+            val edge = lerp(PLATE_EDGE_GREY, lerp(PLATE_EDGE_LIT, c.accent.copy(alpha = PLATE_EDGE_LIT.alpha), 0.35f), e)
+            drawRect(edge, topLeft = Offset(0f, 1.dp.toPx()), size = Size(size.width, 1.dp.toPx()))
+        }
         .border(
             1.dp,
             Brush.verticalGradient(
                 listOf(
-                    lerp(Color.White.copy(alpha = 0.10f), c.accent.copy(alpha = 0.5f), lit),
-                    Color.White.copy(alpha = 0.035f + 0.04f * lit),
+                    lerp(Color.White.copy(alpha = 0.085f), c.accent.copy(alpha = 0.5f), lit()),
+                    Color.White.copy(alpha = 0.05f + 0.04f * lit()),
                 ),
             ),
             shape,
         )
-    m = if (onClick != null) m.hoverSound().clickable(interactionSource = interaction, indication = null, onClick = onClick)
-    else m.hoverable(interaction) // plain cards light up under the cursor too, like the site
-    Column(m.padding(padding), content = content)
+}
+
+private val PLATE_EDGE_GREY = Color(0x12FFFFFF)
+private val PLATE_EDGE_LIT = Color(0x26C8B4FF)
+
+/** A soft coloured glow under a lit control (the accent button), cut out of the shape like [softShadow]. */
+fun Modifier.glowShadow(shape: Shape, color: Color, weight: Float = 1f): Modifier = drawBehind {
+    if (weight <= 0.001f) return@drawBehind
+    val cut = androidx.compose.ui.graphics.Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawBehind)) }
+    clipPath(cut, androidx.compose.ui.graphics.ClipOp.Difference) {
+        softLayer(shape, radius = 22.dp.toPx(), dy = 10.dp.toPx(), alpha = 0.55f * weight, tint = color)
+    }
 }
 
 /**

@@ -143,7 +143,7 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
         // Expiry and traffic
         if (info != null) {
             Spacer(Modifier.height(16.dp))
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.05f)).padding(14.dp)) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(app.ghostly.ui.components.Radius.tile)).background(c.surface2).border(1.dp, c.hairline, RoundedCornerShape(app.ghostly.ui.components.Radius.tile)).padding(14.dp)) {
                 Text(
                     if (info.unlimitedTime) tr("Бессрочно") else Format.expiryPhrase(info.expire, now),
                     style = MaterialTheme.typography.titleMedium,
@@ -208,7 +208,7 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
         val traffic = info != null && info.pools.isEmpty() && info.used > 0
         if (traffic || profile.url != null) {
             Spacer(Modifier.height(12.dp))
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.05f)).padding(horizontal = 14.dp, vertical = 6.dp)) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(app.ghostly.ui.components.Radius.tile)).background(c.surface2).border(1.dp, c.hairline, RoundedCornerShape(app.ghostly.ui.components.Radius.tile)).padding(horizontal = 14.dp, vertical = 6.dp)) {
                 if (traffic) {
                     Fact(tr("Скачано"), Format.bytes(info!!.download))
                     Fact(tr("Отдано"), Format.bytes(info.upload))
@@ -232,7 +232,7 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
             Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { (icon, label, onClick) ->
                     Row(
-                        Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.06f))
+                        Modifier.weight(1f).clip(RoundedCornerShape(app.ghostly.ui.components.Radius.tile)).background(c.surface2).border(1.dp, c.hairline, RoundedCornerShape(app.ghostly.ui.components.Radius.tile))
                             .hoverSound().clickable(onClick = onClick).padding(vertical = 12.dp),
                         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
                     ) {

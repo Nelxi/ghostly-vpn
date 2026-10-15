@@ -1,5 +1,8 @@
 package app.ghostly.ui.screens
 
+import app.ghostly.ui.Tab
+import app.ghostly.ui.tabSky
+import app.ghostly.ui.components.nightGhost
 import app.ghostly.ui.components.hoverSound
 import app.ghostly.ui.components.outerShadow
 import androidx.compose.animation.animateColorAsState
@@ -173,9 +176,15 @@ private fun ServersList(
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
         if (showHeader) item {
-            Row(Modifier.fillMaxWidth().padding(start = LocalListPad.current, end = LocalListPad.current, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(tr("Серверы"), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
-                IconBubble(Icons.Rounded.Add, onAdd, tint = c.accent)
+            // Above the horizon: the title, the ghost keeping watch beside it.
+            Column(Modifier.fillMaxWidth().tabSky(Tab.SERVERS)) {
+                Row(Modifier.fillMaxWidth().padding(start = LocalListPad.current + 4.dp, end = LocalListPad.current, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(tr("Серверы"), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
+                    Box(Modifier.size(64.dp).nightGhost(Tab.SERVERS, label = "Ghostly"))
+                    Spacer(Modifier.width(6.dp))
+                    IconBubble(Icons.Rounded.Add, onAdd, tint = c.accent)
+                }
+                Spacer(Modifier.height(16.dp))
             }
         }
         item {
@@ -274,8 +283,8 @@ private fun ServersList(
 private fun SearchField(value: String, onChange: (String) -> Unit, modifier: Modifier) {
     val c = Ghost.colors
     Row(
-        modifier.height(42.dp).outerShadow(RoundedCornerShape(16.dp), 0.6f).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.06f))
-            .border(1.dp, c.line, RoundedCornerShape(16.dp)).padding(horizontal = 12.dp),
+        modifier.height(44.dp).clip(RoundedCornerShape(app.ghostly.ui.components.Radius.tile)).background(c.surface2)
+            .border(1.dp, c.hairline, RoundedCornerShape(app.ghostly.ui.components.Radius.tile)).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.Rounded.Search, null, tint = c.ink3, modifier = Modifier.size(18.dp))
@@ -407,10 +416,10 @@ private fun BestRow(server: Server, ms: Long?, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = LocalListPad.current, vertical = 4.dp)
             .pressScale(interaction, 0.97f, hover = 1.015f)
-            .clip(RoundedCornerShape(20.dp))
-            .background(Color.White.copy(alpha = 0.045f))
+            .clip(RoundedCornerShape(app.ghostly.ui.components.Radius.tile))
+            .background(c.surface2)
             .spotlight(c.accent, 180.dp)
-            .border(1.dp, c.line, RoundedCornerShape(20.dp))
+            .border(1.dp, c.hairline, RoundedCornerShape(app.ghostly.ui.components.Radius.tile))
             .hoverSound().clickable(interaction, null, onClick = onClick)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -441,7 +450,7 @@ private fun ServerRow(
     val bg by animateColorAsState(
         when {
             selected -> c.accent.copy(alpha = 0.11f)
-            hovered -> Color.White.copy(alpha = 0.045f)
+            hovered -> c.surface2
             else -> Color.Transparent
         },
         Motion.quick(),

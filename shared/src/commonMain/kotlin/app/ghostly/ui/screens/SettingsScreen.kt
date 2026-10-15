@@ -1,5 +1,7 @@
 package app.ghostly.ui.screens
 
+import app.ghostly.ui.tabSky
+import app.ghostly.ui.components.nightGhost
 import app.ghostly.ui.components.hoverSound
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.ui.graphics.graphicsLayer
@@ -168,12 +170,17 @@ fun SettingsScreen(controller: GhostlyController, contentPadding: PaddingValues)
 @Composable
 private fun PageScaffold(title: String, contentPadding: PaddingValues, onBack: (() -> Unit)?, content: @Composable () -> Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(contentPadding).padding(horizontal = 18.dp)) {
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (onBack != null) {
-                IconBubble(Icons.AutoMirrored.Rounded.ArrowBack, onBack)
-                Spacer(Modifier.width(12.dp))
+        // Above the horizon: the title, the ghost keeping watch beside it.
+        Column(Modifier.fillMaxWidth().tabSky(app.ghostly.ui.Tab.SETTINGS)) {
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (onBack != null) {
+                    IconBubble(Icons.AutoMirrored.Rounded.ArrowBack, onBack)
+                    Spacer(Modifier.width(12.dp))
+                }
+                Text(title, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f).padding(start = 4.dp), maxLines = 2)
+                androidx.compose.foundation.layout.Box(Modifier.size(64.dp).nightGhost(app.ghostly.ui.Tab.SETTINGS, label = "Ghostly"))
             }
-            Text(title, style = MaterialTheme.typography.headlineMedium)
+            Spacer(Modifier.height(10.dp))
         }
         androidx.compose.runtime.CompositionLocalProvider(LocalCascade provides remember { Cascade() }) { content() }
         Spacer(Modifier.height(28.dp))
@@ -599,7 +606,7 @@ private fun AppsPage(controller: GhostlyController, contentPadding: PaddingValue
                     style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(6.dp, 10.dp),
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.weight(1f).height(42.dp).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.06f)).padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
+                    Box(Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(app.ghostly.ui.components.Radius.tile)).background(Ghost.colors.surface3).border(1.dp, Ghost.colors.hairline, RoundedCornerShape(app.ghostly.ui.components.Radius.tile)).padding(horizontal = 12.dp), contentAlignment = Alignment.CenterStart) {
                         if (query.isEmpty()) Text(tr("Поиск приложений"), style = MaterialTheme.typography.bodyMedium, color = c.ink3)
                         BasicTextField(query, { query = it }, singleLine = true, textStyle = MaterialTheme.typography.bodyMedium.copy(color = c.ink), cursorBrush = SolidColor(c.accent), modifier = Modifier.fillMaxWidth())
                     }

@@ -108,81 +108,74 @@ fun Tag(text: String, modifier: Modifier = Modifier, color: Color = Ghost.colors
 
 // ---------------------------------------------------------------- buttons
 
-/** Primary action: a solid accent button with a lit top edge (no glow under it). */
+/**
+ * Primary action: the one coloured thing in the grey night. A solid accent pill with dark ink, a lit top
+ * edge and a soft glow of its own colour under it.
+ */
 @Composable
 fun AccentButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, icon: ImageVector? = null, enabled: Boolean = true) {
     val c = Ghost.colors
     val interaction = remember { MutableInteractionSource() }
+    val pill = RoundedCornerShape(50)
     Row(
         modifier
             .pressScale(interaction, 0.97f)
-            .softShadow(RoundedCornerShape(Radius.control), if (enabled) 0.6f else 0f)
-            .clip(RoundedCornerShape(Radius.control))
+            .glowShadow(pill, c.accent, if (enabled) 0.8f else 0f)
+            .clip(pill)
             .background(c.accent)
-            .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.16f), Color.Transparent), endY = 60f))
+            .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.18f), Color.Transparent), endY = 54f))
             .sheen(interaction, strength = 0.18f)
             .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha; alpha = if (enabled) 1f else 0.45f }
             .hoverSound().clickable(interaction, null, enabled = enabled, onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 15.dp),
+            .padding(horizontal = 22.dp, vertical = 15.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        icon?.let { Icon(it, null, tint = c.accentInk, modifier = Modifier.size(19.dp)); Spacer(Modifier.width(9.dp)) }
-        Text(text, style = MaterialTheme.typography.labelLarge, color = c.accentInk)
+        icon?.let { Icon(it, null, tint = c.accentInk, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)) }
+        Text(text, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = c.accentInk, maxLines = 1)
     }
 }
 
+/** Secondary action: a plate pill with a hairline edge (the night shows through it a little). */
 @Composable
 fun SoftButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, icon: ImageVector? = null, tint: Color = Ghost.colors.ink) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
-    val c = Ghost.colors
-    val bg by animateColorAsState(if (hovered) c.surface3 else c.surface2, Motion.quick())
-    val edge by animateColorAsState(if (hovered) c.accent.copy(alpha = 0.45f) else c.hairline, Motion.quick())
+    val lit by animateFloatAsState(if (hovered) 1f else 0f, Motion.quick())
+    val pill = RoundedCornerShape(50)
     Row(
         modifier
             .pressScale(interaction, 0.97f)
-            .clip(RoundedCornerShape(Radius.control))
-            .background(bg)
+            .plate(pill) { lit }
             .sheen(interaction, strength = 0.08f)
-            .border(1.dp, edge, RoundedCornerShape(Radius.control))
             .hoverSound().clickable(interaction, null, onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 14.dp),
+            .padding(horizontal = 20.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        icon?.let { Icon(it, null, tint = tint, modifier = Modifier.size(19.dp)); Spacer(Modifier.width(9.dp)) }
-        Text(text, style = MaterialTheme.typography.labelLarge, color = tint)
+        icon?.let { Icon(it, null, tint = tint, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)) }
+        Text(text, style = MaterialTheme.typography.labelLarge, color = tint, maxLines = 1)
     }
 }
 
 @Composable
 fun IconBubble(icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier, size: Dp = 42.dp, tint: Color = Ghost.colors.ink2, active: Boolean = false) {
     val c = Ghost.colors
-    val feel = LocalHapticOf.current
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
-    val bg by animateColorAsState(
-        when {
-            active -> c.accent.copy(alpha = 0.18f)
-            hovered -> c.surface3
-            else -> c.surface2
-        },
-        Motion.quick(),
-    )
-    val edge by animateColorAsState(if (active || hovered) c.accent.copy(alpha = 0.4f) else c.hairline, Motion.quick())
+    val lit by animateFloatAsState(if (active || hovered) 1f else 0f, Motion.quick())
     val tilt by animateFloatAsState(if (hovered) -8f else 0f, Motion.bouncy())
     Box(
         modifier
             .size(size)
             .pressScale(interaction, 0.88f, hover = 1.06f)
-            .softShadow(CircleShape, 0.5f).clip(CircleShape)
-            .background(bg)
-            .border(1.dp, edge, CircleShape)
+            .softShadow(CircleShape, 0.4f)
+            .plate(CircleShape) { lit }
+            .then(if (active) Modifier.background(c.accent.copy(alpha = 0.16f)) else Modifier)
             .hoverSound().clickable(interaction, null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, null, tint = if (active || hovered) c.accent else tint, modifier = Modifier.size(size * 0.46f).graphicsLayer { rotationZ = tilt })
+        Icon(icon, null, tint = if (active || hovered) c.accent else tint, modifier = Modifier.size(size * 0.45f).graphicsLayer { rotationZ = tilt })
     }
 }
 
@@ -195,7 +188,7 @@ fun GhostSwitch(checked: Boolean, modifier: Modifier = Modifier) {
     val track by animateColorAsState(if (checked) c.accent else Color.White.copy(alpha = 0.12f), Motion.quick())
     // Liquid knob: stretches mid-flight, like a drop being dragged.
     val stretch = (4f * f * (1f - f)).coerceIn(0f, 1f) * 8f
-    Box(modifier.size(46.dp, 26.dp).outerShadow(CircleShape, 0.45f).clip(CircleShape).background(track).padding(3.dp)) {
+    Box(modifier.size(46.dp, 26.dp).clip(CircleShape).background(track).padding(3.dp)) {
         Box(
             Modifier.offset(x = (20f * f - stretch * f).dp).size((20f + stretch).dp, 20.dp).clip(CircleShape)
                 .background(if (checked) c.accentInk else Color.White.copy(alpha = 0.85f)),
@@ -267,8 +260,8 @@ fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> 
         val segW = maxWidth / options.size
         Box(
             Modifier.offset(x = segW * pos).width(segW).fillMaxHeight().softShadow(RoundedCornerShape(11.dp), 0.5f).clip(RoundedCornerShape(11.dp))
-                .background(c.surface1)
-                .border(1.dp, c.accent.copy(alpha = 0.45f), RoundedCornerShape(11.dp)),
+                .background(androidx.compose.ui.graphics.lerp(c.surface1, c.accent, 0.2f))
+                .border(1.dp, c.accent.copy(alpha = 0.4f), RoundedCornerShape(11.dp)),
         )
         Row(Modifier.fillMaxWidth().fillMaxHeight()) {
             options.forEach { (value, label) ->

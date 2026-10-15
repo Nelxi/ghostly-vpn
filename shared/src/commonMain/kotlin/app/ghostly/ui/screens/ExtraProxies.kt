@@ -163,7 +163,7 @@ private fun ServerPicker(server: Server?, lostName: String?, servers: List<Serve
     var open by remember { mutableStateOf(false) }
     Box(modifier) {
         Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.06f)).border(1.dp, c.line, RoundedCornerShape(14.dp))
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(app.ghostly.ui.components.Radius.tile)).background(c.surface3).border(1.dp, c.hairline, RoundedCornerShape(app.ghostly.ui.components.Radius.tile))
                 .hoverSound().clickable { open = true }.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

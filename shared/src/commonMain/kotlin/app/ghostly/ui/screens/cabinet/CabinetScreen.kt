@@ -81,6 +81,12 @@ import app.ghostly.core.account.HistoryItem
 import app.ghostly.core.account.Order
 import app.ghostly.i18n.tr
 import app.ghostly.ui.Format
+import androidx.compose.material.icons.rounded.DesktopWindows
+import app.ghostly.ui.Tab
+import app.ghostly.ui.tabSky
+import app.ghostly.ui.components.nightGhost
+import app.ghostly.ui.components.pressScale
+import androidx.compose.foundation.layout.heightIn
 import app.ghostly.ui.components.AccentButton
 import app.ghostly.ui.components.ActionTile
 import app.ghostly.ui.components.BlockTitle
@@ -160,7 +166,12 @@ fun CabinetScreen(controller: GhostlyController, contentPadding: PaddingValues, 
             Column(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(contentPadding).padding(horizontal = 18.dp),
             ) {
-                Header(controller, u, onClose)
+                // Above the horizon: who is signed in, the ghost, the balance.
+                Column(Modifier.fillMaxWidth().tabSky(Tab.ACCOUNT)) {
+                    Header(controller, u, onClose)
+                    if (u is CabinetUi.Ready) BalanceRow(controller, u.state) { sheet = it }
+                    Spacer(Modifier.height(if (u is CabinetUi.Ready) 36.dp else 22.dp))
+                }
                 when (u) {
                     CabinetUi.Idle, CabinetUi.Loading -> LoadingBody()
                     is CabinetUi.Failed -> FailedBody(u.message) { cab.refresh() }
@@ -188,20 +199,58 @@ internal fun pickSub(st: CabinetState, subId: String?, controller: GhostlyContro
 
 @Composable
 private fun Header(controller: GhostlyController, ui: CabinetUi, onClose: (() -> Unit)?) {
+    val c = Ghost.colors
     val busy by controller.cabinet.busy.collectAsState()
-    Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(tr("Аккаунт"), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
-        if (ui is CabinetUi.Ready) {
-            IconBubble(Icons.Rounded.Refresh, { controller.haptic(); controller.cabinet.refresh() })
-        }
-        if (busy != null) {
-            Spacer(Modifier.width(10.dp))
-            Spinner(Ghost.colors.accent, Modifier.size(18.dp))
-        }
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.Top) {
         onClose?.let {
-            Spacer(Modifier.width(10.dp))
             IconBubble(Icons.Rounded.Close, it)
+            Spacer(Modifier.width(12.dp))
         }
+        Column(Modifier.weight(1f).padding(top = 2.dp, start = 4.dp)) {
+            Text(tr("Аккаунт"), style = MaterialTheme.typography.headlineMedium)
+            Spacer(Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val who = when (ui) {
+                    is CabinetUi.Ready -> ui.state.account.let { a ->
+                        when {
+                            a?.tg?.username != null -> "@${a.tg.username} · Telegram"
+                            a?.login != null -> a.login
+                            else -> tr("Гостевой аккаунт")
+                        }
+                    }
+                    else -> tr("Подписка, баланс и устройства")
+                }
+                Text(who, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp), color = c.ink2, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                if (ui is CabinetUi.Ready) {
+                    Spacer(Modifier.width(4.dp))
+                    Box(
+                        Modifier.size(30.dp).clip(CircleShape).hoverSound().clickable { controller.haptic(); controller.cabinet.refresh() },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (busy != null) Spinner(c.accent, Modifier.size(14.dp))
+                        else Icon(Icons.Rounded.Refresh, tr("Обновить"), tint = c.ink3, modifier = Modifier.size(16.dp))
+                    }
+                } else if (busy != null) {
+                    Spacer(Modifier.width(10.dp))
+                    Spinner(c.accent, Modifier.size(14.dp))
+                }
+            }
+        }
+        Box(Modifier.size(92.dp).nightGhost(Tab.ACCOUNT, label = "Ghostly"))
+    }
+}
+
+/** The balance, big, right on the sky, with «Пополнить» beside it. */
+@Composable
+private fun BalanceRow(controller: GhostlyController, st: CabinetState, open: (CabSheet) -> Unit) {
+    val c = Ghost.colors
+    Row(Modifier.fillMaxWidth().padding(top = 18.dp, start = 4.dp), verticalAlignment = Alignment.Bottom) {
+        Column(Modifier.weight(1f)) {
+            Text(tr("Баланс"), style = MaterialTheme.typography.labelMedium, color = c.ink2)
+            Spacer(Modifier.height(4.dp))
+            Text(rub(st.balance), style = MaterialTheme.typography.displayLarge.copy(fontFeatureSettings = "tnum"), maxLines = 1)
+        }
+        SoftButton(tr("Пополнить"), { controller.haptic(); open(CabSheet.Topup) }, Modifier.padding(bottom = 6.dp))
     }
 }
 
@@ -262,69 +311,36 @@ private fun ReadyBody(controller: GhostlyController, st: CabinetState, wide: Boo
             }
             Column(Modifier.weight(1f)) {
                 ReferralCard(controller, st, Modifier.padding(top = 0.dp).appear(2))
+                Spacer(Modifier.height(12.dp))
                 ActivityBlock(st, open)
                 AccountBlock(controller, st, open)
             }
         }
     } else {
-        Spacer(Modifier.height(10.dp))
         ProfileCard(controller, st, open, Modifier.appear(0))
         OpenOrders(controller, st)
         SubsBlock(controller, st, subs, now, open)
-        ReferralCard(controller, st, Modifier.padding(top = 22.dp).appear(3))
+        ReferralCard(controller, st, Modifier.padding(top = 12.dp).appear(3))
         ActivityBlock(st, open)
         AccountBlock(controller, st, open)
     }
 }
 
-/** Who is signed in and the balance, with «Пополнить». */
+/** What needs saying about the account itself: a discount running out, a guest account without a password. */
 @Composable
 private fun ProfileCard(controller: GhostlyController, st: CabinetState, open: (CabSheet) -> Unit, modifier: Modifier) {
-    val c = Ghost.colors
     val a = st.account
-    val name = a?.tg?.username?.let { "@$it" } ?: a?.login ?: tr("Гостевой аккаунт")
-    Tile(modifier.fillMaxWidth(), padding = 18.dp) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(52.dp).clip(RoundedCornerShape(18.dp))
-                    .background(Brush.linearGradient(listOf(c.accent.copy(alpha = 0.28f), c.accent2.copy(alpha = 0.12f)))),
-                contentAlignment = Alignment.Center,
-            ) { GhostMark(Modifier.size(38.dp), happy = 1f, pokeable = false) }
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(name, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(4.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    when {
-                        a?.tg != null -> Chip("Telegram", Tone.ACCENT, icon = Icons.AutoMirrored.Rounded.Send)
-                        a?.guest == true -> Chip(tr("без пароля"), Tone.WARN)
-                    }
-                    if (a?.login != null && a.tg != null) Chip(a.login, Tone.NEUTRAL)
-                    if (a?.totp == true) Chip(tr("2FA"), Tone.OK, icon = Icons.Rounded.Lock)
-                }
-            }
-        }
-        Spacer(Modifier.height(18.dp))
-        Row(verticalAlignment = Alignment.Bottom) {
-            Column(Modifier.weight(1f)) {
-                Text(tr("Баланс"), style = MaterialTheme.typography.labelMedium, color = c.ink3)
-                Spacer(Modifier.height(2.dp))
-                Text(rub(st.balance), style = MaterialTheme.typography.displayMedium.copy(fontSize = 34.sp, fontFeatureSettings = "tnum"), maxLines = 1)
-            }
-            AccentButton(tr("Пополнить"), { controller.haptic(); open(CabSheet.Topup) }, icon = Icons.Rounded.AccountBalanceWallet)
-        }
-        st.botState?.takeIf { it.discountLeft > 0 }?.let { b ->
-            val pct = b.prices.values.maxOfOrNull { it.percent } ?: 0
-            if (pct > 0) {
-                Spacer(Modifier.height(14.dp))
-                Note(
-                    tr("Скидка {0}% на тарифы после пробного периода. Осталось {1}", pct, Format.remaining(app.ghostly.core.account.Cabinet.now() / 1000 + b.discountLeft, app.ghostly.core.account.Cabinet.now())),
-                    Tone.OK, icon = Icons.Rounded.Redeem,
-                )
-            }
+    val discount = st.botState?.takeIf { it.discountLeft > 0 }?.let { b -> (b.prices.values.maxOfOrNull { it.percent } ?: 0).takeIf { it > 0 }?.let { it to b.discountLeft } }
+    if (discount == null && a?.guest != true) return
+    Tile(modifier.fillMaxWidth().padding(bottom = 12.dp), padding = 16.dp) {
+        discount?.let { (pct, left) ->
+            Note(
+                tr("Скидка {0}% на тарифы после пробного периода. Осталось {1}", pct, Format.remaining(app.ghostly.core.account.Cabinet.now() / 1000 + left, app.ghostly.core.account.Cabinet.now())),
+                Tone.OK, icon = Icons.Rounded.Redeem,
+            )
         }
         if (a?.guest == true) {
-            Spacer(Modifier.height(14.dp))
+            if (discount != null) Spacer(Modifier.height(12.dp))
             Note(tr("Аккаунт без пароля живёт только в этом приложении. Задайте логин и пароль или привяжите Telegram, чтобы не потерять подписку"), Tone.WARN, icon = Icons.Rounded.WarningAmber)
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -390,7 +406,10 @@ private fun SubsBlock(controller: GhostlyController, st: CabinetState, subs: Lis
     }
 }
 
-/** One subscription: days left on a ring, the date, traffic, devices and what can be done with it. */
+/**
+ * One subscription: the plan and its state, the date, days left on a ring, the traffic pools side by side,
+ * then what can be done (renew first). Its devices follow on a plate of their own.
+ */
 @Composable
 private fun SubCard(controller: GhostlyController, st: CabinetState, s: CabinetSub, now: Long, open: (CabSheet) -> Unit, modifier: Modifier) {
     val c = Ghost.colors
@@ -401,88 +420,75 @@ private fun SubCard(controller: GhostlyController, st: CabinetState, s: CabinetS
     val profiles by controller.profiles.collectAsState()
     val inApp = remember(s.id, profiles) { controller.hasSubscription(s.id) }
     val manageable = !s.bot || st.bridge
-    Tile(modifier.fillMaxWidth(), padding = 18.dp) {
+    Column(modifier.fillMaxWidth()) {
+    Tile(Modifier.fillMaxWidth(), padding = 18.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(s.plan.ifBlank { "Ghostly" }, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(s.plan.ifBlank { "Ghostly" }, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Spacer(Modifier.width(8.dp))
                     when {
                         !s.active -> Chip(tr("Закончилась"), Tone.BAD)
                         soon -> Chip(tr("Скоро закончится"), Tone.WARN)
-                        else -> Chip(tr("Активна"), Tone.OK)
+                        else -> Chip(tr("Активна"), Tone.ACCENT)
                     }
-                    if (s.bot) Chip(tr("из бота"), Tone.NEUTRAL, icon = Icons.AutoMirrored.Rounded.Send)
-                    if (inApp) Chip(tr("в приложении"), Tone.ACCENT)
                 }
-            }
-            SubMenu(controller, st, s, open)
-        }
-        Spacer(Modifier.height(16.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            RingProgress(
-                if (s.unlimitedTime) 1f else ((s.expiry - now).coerceAtLeast(0) / 86_400_000f / planDays).coerceAtMost(1f),
-                when { !s.active -> c.bad; soon -> c.warn; else -> c.accent },
-                Modifier.size(92.dp),
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(if (s.unlimitedTime) "∞" else leftNum, style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold, fontFeatureSettings = "tnum"))
-                    Text(if (s.unlimitedTime) tr("без срока") else leftUnit, style = MaterialTheme.typography.labelSmall, color = c.ink3)
-                }
-            }
-            Spacer(Modifier.width(18.dp))
-            Column(Modifier.weight(1f)) {
+                Spacer(Modifier.height(6.dp))
                 Text(
                     when {
                         s.unlimitedTime -> tr("Бессрочно")
                         s.active -> tr("до {0}", Format.date(s.expiry / 1000, controller.platform.utcOffsetMinutes()))
                         else -> tr("закончилась {0}", Format.date(s.expiry / 1000, controller.platform.utcOffsetMinutes()))
                     },
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp), color = c.ink3,
                 )
-                Spacer(Modifier.height(8.dp))
-                val limit = s.devices
-                Row(
-                    Modifier.clip(RoundedCornerShape(10.dp)).hoverSound().clickable(enabled = manageable) { open(CabSheet.Devices(s.id)) }.padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Rounded.Devices, null, tint = c.ink3, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        if (limit > 0) tr("Устройства: {0} из {1}", s.hw.count { it.active }, limit) else tr("Устройства: {0}, без лимита", s.hw.count { it.active }),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    if (manageable) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = c.ink3, modifier = Modifier.size(18.dp))
+                if (s.bot || inApp) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (s.bot) Chip(tr("из бота"), Tone.NEUTRAL, icon = Icons.AutoMirrored.Rounded.Send)
+                        if (inApp) Chip(tr("в приложении"), Tone.NEUTRAL)
+                    }
                 }
+            }
+            Spacer(Modifier.width(12.dp))
+            RingProgress(
+                if (s.unlimitedTime) 1f else ((s.expiry - now).coerceAtLeast(0) / 86_400_000f / planDays).coerceAtMost(1f),
+                when { !s.active -> c.bad; soon -> c.warn; else -> c.accent },
+                Modifier.size(64.dp), stroke = 4.dp,
+            ) {
+                app.ghostly.ui.components.RingLabel(if (s.unlimitedTime) "∞" else leftNum, if (s.unlimitedTime) null else leftUnit, big = false)
             }
         }
-        // Traffic: two pools (regular servers / white lists) or one plain limit.
+        // Traffic: the two pools side by side (regular servers / white lists) or one plain limit.
         val pools = s.pools?.takeIf { !it.unlimited }?.all().orEmpty()
         if (pools.isNotEmpty()) {
-            Spacer(Modifier.height(14.dp))
-            pools.forEach { (id, p) ->
-                val total = p.limitGb.toLong() * 1_073_741_824L
-                val frac = if (total > 0) p.used.toFloat() / total else 0f
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-                    Text(p.title + if (p.blocked) tr(" · закончился") else "", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
-                    Text(tr("{0} из {1} ГБ", Format.bytes(p.used), p.limitGb), style = MaterialTheme.typography.labelMedium, color = c.ink2)
+            Spacer(Modifier.height(16.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                pools.forEach { (id, p) ->
+                    val total = p.limitGb.toLong() * 1_073_741_824L
+                    val frac = if (total > 0) p.used.toFloat() / total else 0f
+                    Column(Modifier.weight(1f)) {
+                        Text(p.title + if (p.blocked) tr(" · закончился") else "", style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(2.dp))
+                        Text(tr("{0} из {1} ГБ", Format.bytes(p.used), p.limitGb), style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, fontFeatureSettings = "tnum"), color = c.ink, maxLines = 1)
+                        Spacer(Modifier.height(7.dp))
+                        GlowBar(frac, when { p.blocked || frac > 0.95f -> c.bad; frac > 0.8f -> c.warn; id == "wl" -> c.accent; else -> c.ok }, Modifier.height(4.dp))
+                    }
                 }
-                Spacer(Modifier.height(6.dp))
-                GlowBar(frac, when { p.blocked || frac > 0.95f -> c.bad; frac > 0.8f -> c.warn; id == "wl" -> c.accent; else -> c.ok })
             }
             s.pools?.cycleEnd?.takeIf { it > 0 }?.let {
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
                 Text(tr("Трафик обновится {0}", Format.date(it / 1000, controller.platform.utcOffsetMinutes())), style = MaterialTheme.typography.bodySmall)
             }
         } else if (!s.unlimitedTraffic) {
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(16.dp))
             val total = s.trafficGb.toLong() * 1_073_741_824L
             Row {
-                Text(tr("Трафик"), style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
-                Text(tr("{0} из {1} ГБ", Format.bytes(s.used), s.trafficGb), style = MaterialTheme.typography.labelMedium, color = c.ink2)
+                Text(tr("Трафик"), style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp), modifier = Modifier.weight(1f))
+                Text(tr("{0} из {1} ГБ", Format.bytes(s.used), s.trafficGb), style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp, fontFeatureSettings = "tnum"), color = c.ink)
             }
-            Spacer(Modifier.height(6.dp))
-            GlowBar(if (total > 0) s.used.toFloat() / total else 0f, c.accent)
+            Spacer(Modifier.height(7.dp))
+            GlowBar(if (total > 0) s.used.toFloat() / total else 0f, c.accent, Modifier.height(4.dp))
         }
 
         if (!inApp && s.active && s.url.isNotBlank()) {
@@ -497,22 +503,13 @@ private fun SubCard(controller: GhostlyController, st: CabinetState, s: CabinetS
             SoftButton(tr("Открыть бота"), { controller.platform.openUrl("https://t.me/${st.botName}?start=renew") }, Modifier.fillMaxWidth())
             return@Tile
         }
-        val actions = buildList<Triple<androidx.compose.ui.graphics.vector.ImageVector, String, () -> Unit>> {
-            if (!s.unlimitedTime || !s.active) add(Triple(Icons.Rounded.CalendarMonth, tr("Продлить")) { open(CabSheet.Renew(s.id)) })
-            if (s.active && !s.unlimitedTraffic) add(Triple(Icons.Rounded.DataUsage, tr("Трафик")) { open(CabSheet.Gb(s.id)) })
-            if (s.active && s.devices > 0 && s.devices < st.prices.devicesMax) add(Triple(Icons.Rounded.PhoneAndroid, tr("+ Устройство")) { open(CabSheet.MoreDevices(s.id)) })
-            add(Triple(Icons.Rounded.Devices, tr("Устройства")) { open(CabSheet.Devices(s.id)) })
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            actions.chunked(2).forEachIndexed { row, pair ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    pair.forEachIndexed { i, (icon, label, onClick) ->
-                        val primary = row == 0 && i == 0 && label == tr("Продлить") && (!s.active || soon)
-                        app.ghostly.ui.components.ActionWide(icon, label, { controller.haptic(); onClick() }, Modifier.weight(1f), primary = primary)
-                    }
-                    if (pair.size == 1) Spacer(Modifier.weight(1f))
-                }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (!s.unlimitedTime || !s.active) {
+                PillButton(tr("Продлить"), { controller.haptic(); open(CabSheet.Renew(s.id)) }, Modifier.weight(1.3f), primary = true)
             }
+            if (s.active && !s.unlimitedTraffic) PillButton(tr("Трафик"), { controller.haptic(); open(CabSheet.Gb(s.id)) }, Modifier.weight(1f))
+            if (s.active && s.devices > 0 && s.devices < st.prices.devicesMax) PillButton(tr("Места"), { controller.haptic(); open(CabSheet.MoreDevices(s.id)) }, Modifier.weight(1f))
+            SubMenu(controller, st, s, open)
         }
         if (!s.active && !s.bot) {
             Spacer(Modifier.height(10.dp))
@@ -520,6 +517,58 @@ private fun SubCard(controller: GhostlyController, st: CabinetState, s: CabinetS
                 tr("Убрать из кабинета"), style = MaterialTheme.typography.labelMedium, color = c.ink3,
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).hoverSound().clickable { scope.launch { controller.cabinet.hide(s) } }.padding(6.dp),
             )
+        }
+    }
+    if (s.hw.isNotEmpty() || s.devices > 0) DevicesPlate(controller, s, manageable) { open(CabSheet.Devices(s.id)) }
+    }
+}
+
+/** A row of the subscription's actions: the accent pill for the main one, outlined pills for the rest. */
+@Composable
+private fun PillButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, primary: Boolean = false) {
+    val c = Ghost.colors
+    val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    Box(
+        modifier.height(42.dp).pressScale(interaction, 0.96f).clip(CircleShape)
+            .then(if (primary) Modifier.background(c.accent) else Modifier.border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape))
+            .hoverSound().clickable(interaction, null, onClick = onClick)
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text, style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp, fontWeight = if (primary) FontWeight.Bold else FontWeight.SemiBold),
+            color = if (primary) c.accentInk else c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** The subscription's devices: this one marked, the others with when they were last seen. */
+@Composable
+private fun DevicesPlate(controller: GhostlyController, s: CabinetSub, manageable: Boolean, onOpen: () -> Unit) {
+    val c = Ghost.colors
+    val me = controller.cabinet.deviceId
+    val list = s.hw.filter { it.active }.sortedByDescending { it.id == me }
+    Tile(Modifier.fillMaxWidth().padding(top = 12.dp), padding = 6.dp, onClick = if (manageable) onOpen else null) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                if (s.devices > 0) tr("Устройства: {0} из {1}", list.size, s.devices) else tr("Устройства: {0}, без лимита", list.size),
+                style = MaterialTheme.typography.labelMedium, color = c.ink3, modifier = Modifier.weight(1f),
+            )
+            if (manageable) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = c.ink4, modifier = Modifier.size(18.dp))
+        }
+        list.take(3).forEachIndexed { i, d ->
+            if (i > 0) Box(Modifier.padding(horizontal = 12.dp).fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.06f)))
+            val mine = d.id == me
+            Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                val desk = (d.os ?: d.model).let { it.contains("Windows", true) || it.contains("mac", true) || it.contains("Linux", true) }
+                Icon(if (desk) Icons.Rounded.DesktopWindows else Icons.Rounded.PhoneAndroid, null, tint = if (mine) c.accent else c.ink4, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(12.dp))
+                Text(d.model.ifBlank { d.os ?: "—" }, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(
+                    if (mine) tr("это устройство") else d.ago.orEmpty(),
+                    style = MaterialTheme.typography.bodySmall, color = if (mine) c.accent else c.ink3, maxLines = 1,
+                )
+            }
         }
     }
 }
@@ -559,50 +608,31 @@ private fun SubMenu(controller: GhostlyController, st: CabinetState, s: CabinetS
     }
 }
 
-/** Invite friends: the code, the link, what it brought. */
+/** Invite friends: what they brought, the terms, share the link (a tap on the plate copies it). */
 @Composable
 private fun ReferralCard(controller: GhostlyController, st: CabinetState, modifier: Modifier) {
     val r = st.ref ?: return
     val link = r.link ?: return
     val c = Ghost.colors
-    Tile(modifier.fillMaxWidth(), padding = 18.dp) {
-        Row(verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f)) {
-                Text(tr("Приглашайте друзей"), style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(4.dp))
+    Tile(modifier.fillMaxWidth(), padding = 14.dp, onClick = { controller.platform.copyToClipboard(link); controller.toast(tr("Ссылка скопирована")) }) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).padding(start = 4.dp)) {
+                Text(
+                    if (r.earned > 0) tr("Друзья принесли {0}", rub(r.earned)) else tr("Приглашайте друзей"),
+                    style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(3.dp))
                 Text(
                     tr("{0}% от первой оплаты друга придёт вам на баланс, до {1}", r.percent, rub(r.max)),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp), maxLines = 2,
                 )
             }
             Spacer(Modifier.width(12.dp))
             Box(
-                Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(c.accent.copy(alpha = 0.16f)),
+                Modifier.size(46.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.18f)).hoverSound()
+                    .clickable { controller.platform.share(tr("Ghostly VPN: быстрый VPN без блокировок. Моя ссылка: {0}", link)) },
                 contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Rounded.Redeem, null, tint = c.accent, modifier = Modifier.size(22.dp)) }
-        }
-        Spacer(Modifier.height(14.dp))
-        Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.tile)).background(c.surface2).border(1.dp, c.hairline, RoundedCornerShape(Radius.tile))
-                .hoverSound().clickable { controller.platform.copyToClipboard(link); controller.toast(tr("Ссылка скопирована")) }
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(link.substringAfter("://"), style = MaterialTheme.typography.bodyMedium.copy(color = c.ink), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Spacer(Modifier.width(8.dp))
-            Icon(Icons.Rounded.ContentCopy, tr("Скопировать"), tint = c.accent, modifier = Modifier.size(18.dp))
-        }
-        Spacer(Modifier.height(12.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(r.count.toString(), style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"))
-                Text(tr("пришло по ссылке"), style = MaterialTheme.typography.bodySmall)
-            }
-            Column(Modifier.weight(1f)) {
-                Text(rub(r.earned), style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"))
-                Text(tr("заработано"), style = MaterialTheme.typography.bodySmall)
-            }
-            IconBubble(Icons.Rounded.Share, { controller.platform.share(tr("Ghostly VPN: быстрый VPN без блокировок. Моя ссылка: {0}", link)) })
+            ) { Icon(Icons.Rounded.Share, tr("Поделиться"), tint = androidx.compose.ui.graphics.lerp(c.accent, Color.White, 0.3f), modifier = Modifier.size(19.dp)) }
         }
     }
 }

@@ -172,7 +172,7 @@ fun AnnouncementCard(controller: GhostlyController, modifier: Modifier = Modifie
     if (b.id in dismissed) return
     if (b.until > 0 && GhostlyController.now() / 1000 > b.until) return
     GlassCard(
-        modifier.fillMaxWidth().orbitBorder(true, c.accent, 26.dp),
+        modifier.fillMaxWidth(),
         padding = 14.dp, strong = true,
         onClick = b.url?.let { u -> { controller.openLink(u) } },
     ) {

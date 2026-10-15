@@ -321,8 +321,8 @@ fun DrawScope.drawGhost(
     /** 0..1: music started — shades drop onto the eyes, a hand comes out with a microphone. */
     showtime: Float = 0f,
     /** Idle motion loop, 0..2π (flames, hem, sway). */
-    phase: Float = 0f, waveR: Float = 0f, waveL: Float = 0f, motion: Float = 1f,
-) = drawMascot(s, blink, happy, sad, accent, sleepy, look, expr, sing, showtime, phase, waveR, waveL, motion)
+    phase: Float = 0f, waveR: Float = 0f, waveL: Float = 0f, motion: Float = 1f, doze: Float = 0f, mono: Float = 0f,
+) = drawMascot(s, blink, happy, sad, accent, sleepy, look, expr, sing, showtime, phase, waveR, waveL, motion, doze, mono)
 
 /** Idle loop phase from the wall clock, for ghosts drawn without their own animation clock. */
 internal fun ghostPhase(): Float =
