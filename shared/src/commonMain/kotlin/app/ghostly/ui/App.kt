@@ -188,6 +188,9 @@ fun GhostlyApp(controller: GhostlyController) {
         var cabinetForced by remember { mutableStateOf(false) }
         val tabs = remember(profilesForTabs, cabinetUi, cabinetForced) { visibleTabs(controller, cabinetForced) }
         LaunchedEffect(tabs) { if (tab !in tabs) tab = Tab.HOME }
+        // Every page change gets Kasane's whoosh under its transition (not the first screen).
+        var shownTab by remember { mutableStateOf(tab) }
+        LaunchedEffect(tab) { if (tab != shownTab) { shownTab = tab; controller.whoosh() } }
         // Over the first screen (nothing added yet) the cabinet opens as a page of its own.
         var cabinetOverlay by remember { mutableStateOf(false) }
         LaunchedEffect(Unit) {
@@ -545,7 +548,7 @@ internal fun <T : Enum<T>> rememberHeading(to: T): Int {
 internal fun travelSpec(): androidx.compose.animation.ContentTransform =
     androidx.compose.animation.ContentTransform(
         targetContentEnter = androidx.compose.animation.EnterTransition.None,
-        initialContentExit = scaleOut(androidx.compose.animation.core.tween(app.ghostly.ui.components.TRAVEL_MS / 2), targetScale = 1f),
+        initialContentExit = scaleOut(androidx.compose.animation.core.tween(PAGE_MS), targetScale = 1f),
         sizeTransform = androidx.compose.animation.SizeTransform(clip = false),
     )
 
@@ -555,11 +558,17 @@ internal fun travelSpec(): androidx.compose.animation.ContentTransform =
  * two never part — and the night behind them travels the same way with depth. Same curve and time as the
  * camera (TRAVEL / TRAVEL_MS). With reduced motion: a plain cross-fade.
  */
+/**
+ * Page change, ported one to one from Kasane's menu transition (MenuScreenTransition, 460 ms): the leaving
+ * page drifts in depth towards the viewer (back: away), goes out of focus and dims; the arriving one comes
+ * out of depth from the other side and out of a blur into focus. [heading] < 0 mirrors the depths (back).
+ * The night behind keeps living and moves its camera at the same moment (NightScene).
+ */
 @Composable
 internal fun Modifier.travel(scope: androidx.compose.animation.AnimatedVisibilityScope, heading: Int): Modifier {
     val reduce = app.ghostly.ui.theme.LocalReduceMotion.current
     val t by scope.transition.animateFloat(
-        transitionSpec = { androidx.compose.animation.core.tween(if (reduce) 260 else app.ghostly.ui.components.TRAVEL_MS, easing = if (reduce) androidx.compose.animation.core.LinearEasing else app.ghostly.ui.components.TRAVEL) },
+        transitionSpec = { androidx.compose.animation.core.tween(PAGE_MS, easing = androidx.compose.animation.core.LinearEasing) },
         label = "travel",
     ) {
         when (it) {
@@ -568,30 +577,45 @@ internal fun Modifier.travel(scope: androidx.compose.animation.AnimatedVisibilit
             androidx.compose.animation.EnterExitState.PostExit -> 1f
         }
     }
+    val back = heading < 0
     return graphicsLayer {
-        val a = kotlin.math.abs(t)
+        val leaving = t > 0f
+        // One clock for both pages: 0 when the change starts, 1 when it is over.
+        val p = if (leaving) t else 1f + t
+        val blurMax = 7.5.dp.toPx()
+        val incoming = smootherstep(((p - 0.06f) / 0.72f).coerceIn(0f, 1f))
         if (reduce) {
-            alpha = 1f - a
+            alpha = if (leaving) 1f - incoming else incoming
             return@graphicsLayer
         }
-        // The scene does the travelling; the interface only breathes in depth: the leaving page swells a
-        // touch and dissolves early, the arriving one comes up from slightly smaller and drifts in from the
-        // side the camera heads to.
-        if (t > 0f) {
-            val k = (t / 0.35f).coerceIn(0f, 1f)
-            val s = 1f + 0.06f * k
-            scaleX = s; scaleY = s
-            alpha = 1f - k
-            translationX = -heading * k * 24.dp.toPx()
+        val zoom: Float
+        val blur: Float
+        if (leaving) {
+            val out = easeOutCubic((p / 0.75f).coerceIn(0f, 1f))
+            zoom = 1f + ((if (back) DEPTH_FAR else DEPTH_NEAR) - 1f) * out
+            blur = blurMax * out
+            // Kasane dims the old frame by 22 % under the new one; the pages here are translucent,
+            // so the old one also hands its place over as the new one appears.
+            alpha = ((1f - 0.22f * out) * (1f - incoming)).coerceIn(0f, 1f)
         } else {
-            val k = ((a - 0.0f) / 0.75f).coerceIn(0f, 1f) // 1 → 0 as it arrives
-            val s = 1f - 0.07f * k
-            scaleX = s; scaleY = s
-            alpha = (1f - k * 1.25f).coerceIn(0f, 1f)
-            translationX = heading * k * 40.dp.toPx()
+            val settle = easeOutQuint(p)
+            val from = if (back) DEPTH_NEAR else DEPTH_FAR
+            zoom = from + (1f - from) * settle
+            blur = blurMax * (1f - easeOutCubic(((p - 0.04f) / 0.8f).coerceIn(0f, 1f)))
+            alpha = incoming
         }
+        scaleX = zoom
+        scaleY = zoom
+        renderEffect = if (blur > 0.5f) androidx.compose.ui.graphics.BlurEffect(blur, blur, androidx.compose.ui.graphics.TileMode.Decal) else null
     }
 }
+
+internal const val PAGE_MS = 460
+private const val DEPTH_NEAR = 1.045f
+private const val DEPTH_FAR = 0.965f
+private fun easeOutCubic(v: Float): Float { val i = 1f - v; return 1f - i * i * i }
+private fun easeOutQuint(v: Float): Float { val i = 1f - v; return 1f - i * i * i * i * i }
+private fun smootherstep(v: Float): Float = v * v * v * (v * (v * 6f - 15f) + 10f)
 
 
 /** The logo's ghost as a flat glyph (100×110 box), for the dock. */

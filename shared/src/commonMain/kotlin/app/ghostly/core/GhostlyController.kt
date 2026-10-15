@@ -1321,6 +1321,12 @@ class GhostlyController(
     private var lastHover = 0L
 
     /** Hover note, at most one per 55 ms like on the site (sliding over a list stays a soft ripple). */
+    /** A page changes: the soft whoosh under the transition (respects the sound setting). */
+    fun whoosh() {
+        val s = _settings.value
+        if (s.sounds) platform.playWhoosh(s.soundVolume * 0.35f)
+    }
+
     fun hoverSound() {
         val s = _settings.value
         if (!s.sounds) return

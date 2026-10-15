@@ -326,8 +326,8 @@ private val OFF_GHOST = Color(0xFFB3B8C4)
  * The camera's travel between shots: it eases out of one station, flies, and settles into the next. Pages
  * ride the same curve over the same time (see `travel` in App.kt), so the interface moves with the world.
  */
-val TRAVEL = CubicBezierEasing(0.32f, 0f, 0.12f, 1f)
-const val TRAVEL_MS = 950
+val TRAVEL = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
+const val TRAVEL_MS = 720
 
 // ============================================================================ the world
 
@@ -542,17 +542,14 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
             Modifier.fillMaxSize().graphicsLayer {
                 val p = move.value
                 if (p >= 1f || reduce) return@graphicsLayer
+                // The night takes part in the page change like Kasane's menu background: it drifts a
+                // touch in depth and softens out of focus at the cut, then comes back sharp.
                 val k = TRAVEL.transform(p)
-                val lift = sin(PI.toFloat() * k)
-                // the swing peaks early (the camera turns first, then glides): a skewed bump
-                val turn = sin(PI.toFloat() * k) * (1f - 0.35f * k)
-                rotationY = -cam.heading * turn * 13f
-                rotationZ = cam.heading * lift * 2.4f
-                rotationX = lift * 4f
-                cameraDistance = 9f * density
-                // grown so the turned edges never show past the window
-                val grow = 1f + 0.3f * lift
-                scaleX = grow; scaleY = grow
+                val bump = sin(PI.toFloat() * k)
+                val z = 1f + cam.heading * 0.025f * bump
+                scaleX = z; scaleY = z
+                val blur = 5.dp.toPx() * bump * (1f - k)
+                renderEffect = if (blur > 0.5f) androidx.compose.ui.graphics.BlurEffect(blur, blur, androidx.compose.ui.graphics.TileMode.Clamp) else null
             },
         ) {
             val now = time.value

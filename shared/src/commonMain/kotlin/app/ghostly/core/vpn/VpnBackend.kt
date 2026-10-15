@@ -132,6 +132,9 @@ interface PlatformInfo {
     /** The quiet hover note (desktop only: touch screens have no hover). */
     fun playHover(volume: Float) {}
 
+    /** The page-change whoosh (the transition ported from Kasane's menu). */
+    fun playWhoosh(volume: Float) {}
+
     /** The system's wallpaper accent (Android 12+ Monet), ARGB; null where there is none. */
     fun systemAccent(): Long? = null
 

@@ -218,11 +218,15 @@ class AndroidPlatform(private val context: Context) : PlatformInfo {
             Haptic.HEAVY to load(R.raw.ui_press_0, R.raw.ui_press_1, R.raw.ui_press_2, R.raw.ui_press_3),
             Haptic.SUCCESS to load(R.raw.ui_success_0, R.raw.ui_success_1, R.raw.ui_success_2, R.raw.ui_success_3),
             Haptic.ERROR to load(R.raw.ui_error_0, R.raw.ui_error_1),
+            // not a haptic: the page-change whoosh rides along in the same pool
+            Haptic.TICK to load(R.raw.ui_whoosh_0),
         )
     }
 
     /** SoundPool loads asynchronously: load at start so the first taps aren't silent. */
     fun preloadSounds() { Thread { runCatching { sounds } }.apply { isDaemon = true }.start() }
+
+    override fun playWhoosh(volume: Float) = playSound(Haptic.TICK, volume)
 
     override fun playSound(kind: Haptic, volume: Float) {
         val (pool, ids) = sounds

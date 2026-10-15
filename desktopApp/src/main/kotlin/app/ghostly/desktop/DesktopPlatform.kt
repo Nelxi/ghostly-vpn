@@ -143,7 +143,7 @@ class DesktopPlatform : PlatformInfo {
     private class Pcm(val format: javax.sound.sampled.AudioFormat, val bytes: ByteArray)
 
     private val pcm: Map<String, List<Pcm>> by lazy {
-        mapOf("click" to 3, "press" to 4, "success" to 4, "error" to 2, "hover" to 5).mapValues { (name, n) ->
+        mapOf("click" to 3, "press" to 4, "success" to 4, "error" to 2, "hover" to 5, "whoosh" to 1).mapValues { (name, n) ->
             (0 until n).mapNotNull { i ->
                 runCatching {
                     val res = DesktopPlatform::class.java.getResourceAsStream("/sounds/ui_${name}_$i.wav") ?: return@runCatching null
@@ -172,6 +172,8 @@ class DesktopPlatform : PlatformInfo {
     }
 
     override fun playHover(volume: Float) = play("hover", volume)
+
+    override fun playWhoosh(volume: Float) = play("whoosh", volume)
 
     override fun playSound(kind: app.ghostly.core.vpn.Haptic, volume: Float) = play(
         when (kind) {
