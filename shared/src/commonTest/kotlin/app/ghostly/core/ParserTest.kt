@@ -186,13 +186,19 @@ class GhostlyDomainsTest {
     fun mirrorsCoverEveryOwnDomain() {
         val d = app.ghostly.core.sub.GhostlyDomains
         // A link on the previous domain is tried on the current one too…
-        kotlin.test.assertEquals(listOf("https://ghostlynex.fun/sub/abc"), d.mirrorsOf("https://ghostlinknex.online/sub/abc"))
         kotlin.test.assertEquals(
-            listOf("https://ghostlynex.fun/sub/abc", "https://ghostlinknex.online/sub/abc"),
+            listOf("https://ghostlynex.fun/sub/abc", "https://frameloft.online/sub/abc"),
+            d.mirrorsOf("https://ghostlinknex.online/sub/abc"),
+        )
+        kotlin.test.assertEquals(
+            listOf("https://ghostlynex.fun/sub/abc", "https://frameloft.online/sub/abc", "https://ghostlinknex.online/sub/abc"),
             d.mirrorsOf("https://srv.ghostlinknex.online/sub/abc"),
         )
-        // …and the current one falls back to the previous while that is alive.
-        kotlin.test.assertEquals(listOf("https://ghostlinknex.online/sub/x?y=1"), d.mirrorsOf("https://ghostlynex.fun/sub/x?y=1"))
+        // …and the current one falls back to the white-list CDN name (it passes mobile white lists) and the previous domain.
+        kotlin.test.assertEquals(
+            listOf("https://frameloft.online/sub/x?y=1", "https://ghostlinknex.online/sub/x?y=1"),
+            d.mirrorsOf("https://ghostlynex.fun/sub/x?y=1"),
+        )
         kotlin.test.assertTrue(d.mirrorsOf("https://example.com/sub/abc").isEmpty())
     }
 
@@ -209,6 +215,11 @@ class GhostlyDomainsTest {
         kotlin.test.assertEquals(now, d.current(now))
         kotlin.test.assertEquals("https://ghostlynex.fun/sub/x?fmt=xray", d.current("https://www.ghostlinknex.online/sub/x?fmt=xray"))
         kotlin.test.assertEquals(now, d.linkToSave(now, now, ownAddressFailed = false))
+        // The white-list CDN name answers a refresh but is never the saved link, even when it was the only one that answered.
+        val cdn = "https://frameloft.online/sub/sub_6d0a6b02f44f29b1#Ghostly%20VPN%F0%9F%91%BB"
+        kotlin.test.assertEquals(now, d.linkToSave(now, cdn, ownAddressFailed = true))
+        kotlin.test.assertEquals(now, d.current(cdn))
+        kotlin.test.assertTrue(d.isOurs(cdn))
         // Someone else's subscription is never rewritten.
         kotlin.test.assertEquals("https://example.com/s", d.linkToSave("https://example.com/s", "https://other.net/s", ownAddressFailed = true))
     }

@@ -311,6 +311,7 @@ fun GhostlyApp(controller: GhostlyController) {
                             transitionSpec = { travelSpec() },
                             modifier = Modifier.fillMaxSize().predictiveCard(tabPeek, app.ghostly.ui.screens.peekBrush()),
                         ) { t ->
+                            androidx.compose.runtime.CompositionLocalProvider(app.ghostly.ui.components.LocalAnchorsActive provides (t == tab)) {
                             Box(Modifier.fillMaxSize().travel(this@AnimatedContent, heading, leaving = t != tab), contentAlignment = Alignment.TopCenter) {
                                 Box(Modifier.widthIn(max = 620.dp).fillMaxSize()) {
                                     when (t) {
@@ -320,6 +321,7 @@ fun GhostlyApp(controller: GhostlyController) {
                                         Tab.SETTINGS -> SettingsScreen(controller, pad)
                                     }
                                 }
+                            }
                             }
                         }
                         TabBar(tabs, tab, { controller.haptic(); tab = it }, Modifier.align(Alignment.BottomCenter).padding(bottom = insets.calculateBottomPadding() + 14.dp))

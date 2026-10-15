@@ -9,13 +9,20 @@ package app.ghostly.core.sub
 object GhostlyDomains {
     const val MAIN = "ghostlynex.fun"
 
+    /**
+     * The white-list CDN name. It passes mobile white lists when [MAIN] does not (the main domain is not behind
+     * the white-listed CDN any more), and serves the subscription itself next to the tunnels. A refresh mirror
+     * only: a link is never saved on it ([current] maps it back), so the CDN account can change freely.
+     */
+    const val LTE = "frameloft.online"
+
     /** The one name of the previous domain that may still answer (its direct-to-server name does not). */
     const val LEGACY_ALIVE = "ghostlinknex.online"
 
     /** The previous domain's names: still ours, no longer handed out. */
     private val LEGACY = listOf(LEGACY_ALIVE, "srv.ghostlinknex.online")
 
-    private val ALL = listOf(MAIN) + LEGACY
+    private val ALL = listOf(MAIN, LTE) + LEGACY
 
     /** How long the link's own domain must stay dead before the app moves the subscription to a mirror. */
     const val SWITCH_AFTER_MS = 3 * 60_000L
@@ -36,7 +43,7 @@ object GhostlyDomains {
         val scheme = url.substringBefore("://", "")
         if (scheme.isEmpty() || !isOurs(url)) return emptyList()
         val own = hostOf(url).removePrefix("www.")
-        return listOf(MAIN, LEGACY_ALIVE).filter { it != own }.map { withHost(url, it) }
+        return listOf(MAIN, LTE, LEGACY_ALIVE).filter { it != own }.map { withHost(url, it) }
     }
 
     /**
@@ -45,7 +52,7 @@ object GhostlyDomains {
      */
     fun current(url: String): String {
         val host = hostOf(url).removePrefix("www.")
-        return if (host in LEGACY) withHost(url, MAIN) else url
+        return if (host in LEGACY || host == LTE) withHost(url, MAIN) else url
     }
 
     /**

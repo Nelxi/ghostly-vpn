@@ -81,6 +81,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.exp
@@ -140,6 +141,13 @@ internal class SkyAnchor(val horizon: Float, val yaw: Float, val zoom: Float)
 
 val LocalNight = staticCompositionLocalOf { NightState() }
 
+/**
+ * False inside a page that is leaving: only the page on screen (or on its way in) tells the scene where the
+ * horizon and the ghost are. Two pages of one tab (Settings and its sub-pages) answer under the same key, and a
+ * leaving one used to fight the arriving one for it, frame after frame.
+ */
+val LocalAnchorsActive = androidx.compose.runtime.compositionLocalOf { true }
+
 /** The ghost's moods that pages and taps drive; the scene reads them while drawing. */
 @Stable
 internal class GhostRig {
@@ -187,7 +195,8 @@ private fun LayoutCoordinates.rootRect(): Rect = findRootCoordinates().localBoun
  */
 fun Modifier.nightSky(key: Any, yaw: Float = 0f, zoom: Float = 1f): Modifier = composed {
     val night = LocalNight.current
-    onGloballyPositioned {
+    if (!LocalAnchorsActive.current) this
+    else onGloballyPositioned {
         val bottom = it.rootRect().bottom
         val old = night.skies[key]
         if (old == null || old.horizon != bottom || old.yaw != yaw || old.zoom != zoom) night.skies[key] = SkyAnchor(bottom, yaw, zoom)
@@ -206,17 +215,17 @@ fun Modifier.nightGhost(key: Any, label: String? = null, onTap: (() -> Unit)? = 
     val hovered by interaction.collectIsHoveredAsState()
     val pressed by interaction.collectIsPressedAsState()
     val mine = night.page == key
+    val active = LocalAnchorsActive.current
     LaunchedEffect(hovered, pressed, mine) {
         if (mine) {
             night.rig.hover = hovered
             night.rig.pressed = pressed
         }
     }
-    this
-        .onGloballyPositioned {
-            val r = it.rootRect()
-            if (night.ghosts[key] != r) night.ghosts[key] = r
-        }
+    (if (active) this.onGloballyPositioned {
+        val r = it.rootRect()
+        if (night.ghosts[key] != r) night.ghosts[key] = r
+    } else this)
         .semantics {
             if (label != null) {
                 contentDescription = label
@@ -357,7 +366,7 @@ private class Curtain(
 }
 
 // Back to front. Wide enough for every page's yaw (the camera turns up to about half a screen).
-private val CURTAINS = listOf(
+private val CURTAINS: List<Curtain> = listOf(
     Curtain(-0.15f, 0.52f, 0.33f, 0.64f, 0.05f, 0.17f, 0.62f, false) { it.cold },
     Curtain(1.30f, 2.05f, 0.31f, 0.60f, 0.05f, 0.29f, 0.60f, false) { it.cold },
     Curtain(0.36f, 1.12f, 0.34f, 0.62f, 0.06f, 0.61f, 0.80f, false) { it.warm },
@@ -367,7 +376,14 @@ private val CURTAINS = listOf(
     Curtain(1.95f, 2.75f, 0.33f, 0.62f, 0.06f, 0.11f, 0.78f, false) { it.warm },
     Curtain(2.45f, 3.20f, 0.31f, 0.64f, 0.05f, 0.71f, 0.62f, false) { it.cold },
     Curtain(1.85f, 3.05f, 0.23f, 0.72f, 0.07f, 0.53f, 0.92f, true) { it.main },
-)
+).let { base ->
+    // The first screen's trio (cold, warm, main) again further to the left and right: the camera visits up to four
+    // screens along the sea, and a zoomed-out page shows beyond its own.
+    val trio = listOf(base[0], base[2], base[4])
+    base + listOf(-1.9f, 3.45f, 4.5f).flatMapIndexed { i, s ->
+        trio.map { c -> Curtain(c.x0 + s, c.x1 + s, c.lift, c.height, c.amp, c.seed + 0.13f * (i + 1), c.alpha, c.rays, c.pick) }
+    }
+}
 
 /** How far things slide as the camera moves sideways (`yaw`): the farther, the less. */
 private const val DEPTH_STARS = 0.22f
@@ -404,6 +420,14 @@ private val NEAR_ISLES = floatArrayOf(
     2.4f, 0.16f, 0.038f, 2.95f, 0.1f, 0.026f, 3.45f, 0.2f, 0.044f, 4.0f, 0.13f, 0.032f,
 )
 
+/** The Milky Way's fine stars in the band's own frame: along (0..1), across (-1..1, thick in the middle), brightness, phase. */
+private val MILKY: List<FloatArray> = Random(41).let { r ->
+    List(110) {
+        val across = (r.nextFloat() + r.nextFloat() + r.nextFloat() - 1.5f) / 1.5f
+        floatArrayOf(r.nextFloat(), across, r.nextFloat() * (1f - 0.5f * kotlin.math.abs(across)), r.nextFloat())
+    }
+}
+
 /** Fireflies around the ghost, in ghost sizes from its centre. */
 private val FIREFLIES = floatArrayOf(
     -0.35f, -0.16f, 0.46f, -0.26f, 0.57f, 0.22f, -0.47f, 0.33f, 0.24f, -0.46f,
@@ -439,6 +463,9 @@ private class Camera {
     var lastMs = 0L
     /** Which way the current move goes: 1 to a later page, -1 back. */
     var heading = 1f
+    /** An anchor jumped without a page change: the shot glides to it (see the scene). */
+    var chase = false
+    var chaseMs = 0L
     /** The page last drawn, and whether its move has been captured but not started yet. */
     var drawnPage: Any? = null
     var pending = false
@@ -598,8 +625,25 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
             val skyT = night.skies[page]
             val ghostT = night.ghosts[page]?.translate(-origin)
             val defGhost = Rect(Offset(w / 2f, h * 0.3f), min(w * 0.5f, 220.dp.toPx()) / 2f)
-            val tGhost = ghostT ?: cam.ghost ?: defGhost
-            val tHorizon = skyT?.let { it.horizon - origin.y } ?: if (cam.ghost == null) h * 0.53f else cam.horizon
+            var tGhost = ghostT ?: cam.ghost ?: defGhost
+            var tHorizon = skyT?.let { it.horizon - origin.y } ?: if (cam.ghost == null) h * 0.53f else cam.horizon
+            // An anchor that jumps without a page change (a sub-page with another header, a page that reports a frame
+            // late) is chased, not snapped to: the ghost and the horizon glide over instead of blinking. A scroll moves
+            // the anchors a little every frame and stays rigid.
+            val chaseDt = (now - cam.chaseMs).coerceIn(0L, 100L)
+            cam.chaseMs = now
+            val seen = cam.ghost
+            if (!moving && seen != null) {
+                val dh = abs(tHorizon - cam.horizon)
+                val dg = hypot(tGhost.center.x - seen.center.x, tGhost.center.y - seen.center.y) + abs(tGhost.width - seen.width)
+                if (!cam.chase && (dh > 36.dp.toPx() || dg > 36.dp.toPx())) cam.chase = true
+                if (cam.chase) {
+                    val f = 1f - exp(-chaseDt / 120f)
+                    tGhost = androidx.compose.ui.geometry.lerp(seen, tGhost, f)
+                    tHorizon = cam.horizon + (tHorizon - cam.horizon) * f
+                    if (dh < 0.6f && dg < 0.6f) cam.chase = false
+                }
+            }
             val tYaw = skyT?.yaw ?: cam.yaw
             val tZoom = skyT?.zoom ?: cam.zoom
             val ghostR = if (moving && cam.fromGhost != null) androidx.compose.ui.geometry.lerp(cam.fromGhost!!, tGhost, k) else tGhost
@@ -682,6 +726,46 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
                 }
             }
 
+            // ---- the sky's depth: a slanted Milky Way of haze and fine stars, and two nebulae
+            if (hz > 0f) clipRect(0f, 0f, w, hz) {
+                val haze = lerp(Color(0xFFC9D2E8), palette.halo, e)
+                val bandX = cx - yaw * w * 0.10f - par.x * 6.dp.toPx()
+                val bandY = sy(0.56f)
+                withTransform({
+                    translate(bandX, bandY)
+                    rotate(-26f, Offset.Zero)
+                }) {
+                    val len = w * 2.6f
+                    val thick = 150.dp.toPx() * (0.8f + 0.2f * zoom)
+                    drawRect(
+                        Brush.verticalGradient(0f to Color.Transparent, 0.5f to haze.copy(alpha = 0.07f + 0.05f * e), 1f to Color.Transparent, startY = -thick, endY = thick),
+                        topLeft = Offset(-len / 2f, -thick), size = Size(len, thick * 2f),
+                    )
+                    val core = thick * 0.34f
+                    drawRect(
+                        Brush.verticalGradient(0f to Color.Transparent, 0.5f to haze.copy(alpha = 0.06f + 0.05f * e), 1f to Color.Transparent, startY = -core, endY = core),
+                        topLeft = Offset(-len / 2f, -core), size = Size(len, core * 2f),
+                    )
+                    MILKY.forEach { m ->
+                        val x = (m[0] - 0.5f) * len
+                        if (x * 0.9f < -w * 1.5f || x > w * 1.5f) return@forEach
+                        val tw = 0.55f + 0.45f * wave(2_300L + (m[3] * 1_900f).toLong(), m[3])
+                        drawCircle(Color.White.copy(alpha = ((0.10f + 0.30f * m[2]) * tw * (0.7f + 0.3f * e)).coerceIn(0f, 0.9f)), (0.35f + 0.55f * m[2]).dp.toPx(), Offset(x, m[1] * thick * 0.9f))
+                    }
+                }
+                fun nebula(xw: Float, f: Float, rDp: Float, c: Color, a: Float) {
+                    val x = sx(xw, DEPTH_MOON)
+                    val y = sy(f)
+                    val r = rDp.dp.toPx() * zoom
+                    if (x < -r || x > w + r) return
+                    drawCircle(Brush.radialGradient(listOf(c.copy(alpha = a), Color.Transparent), Offset(x, y), r), r, Offset(x, y))
+                }
+                nebula(0.20f, 0.70f, 200f, lerp(Color(0xFFAEB8D6), palette.halo, e), 0.035f + 0.075f * e)
+                nebula(0.92f, 0.42f, 170f, lerp(Color(0xFFB9B2D6), hsv(palette.hue - 55f, 0.5f, 1f), e), 0.03f + 0.065f * e)
+                nebula(1.85f, 0.62f, 210f, lerp(Color(0xFFAEB8D6), hsv(palette.hue + 40f, 0.5f, 1f), e), 0.03f + 0.07f * e)
+                nebula(2.9f, 0.5f, 190f, lerp(Color(0xFFB4BCD8), palette.halo, e), 0.03f + 0.07f * e)
+            }
+
             // ---- the moon: it shoots rays now and then, its path lies on the water
             val mx = sx(0.79f, DEPTH_MOON) - par.x * 5.dp.toPx()
             val my = sy(0.75f) - par.y * 4.dp.toPx()
@@ -742,7 +826,9 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
             val ph4 = loop(11_000)
             val ph5 = loop(5_300)
             val sc = max(2f, floor(3.dp.toPx()))
-            val bw = ceil(w / sc).toInt().coerceAtLeast(1)
+            // Aurora beyond each side of the screen: a camera that stands back (zoom < 1) sees more than one screen
+            val pad = 0.4f
+            val bw = ceil(w * (1f + 2f * pad) / sc).toInt().coerceAtLeast(1)
             val bh = ceil(skyH * 1.05f / sc).toInt().coerceAtLeast(1)
             val showAurora = e > 0.003f && hz > 0f
             if (showAurora) {
@@ -756,7 +842,7 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
                     buffer.yaw = yawA
                     buffer.palette = palette
                     // ghost position in the picture's own (unzoomed) coordinates, for the spreading colour
-                    val gxu = (cx + (gx - cx) / zoom) / sc
+                    val gxu = (cx + (gx - cx) / zoom + pad * w) / sc
                     val gyu = (skyH * 1.05f - (hz - gy) / zoom) / sc
                     val dMaxB = dMax / zoom / sc
                     val baseY = skyH * 1.05f / sc
@@ -766,7 +852,7 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
                         CURTAINS.forEach { cu ->
                             val brush = cu.pick(palette)
                             for (bx in 0 until bw) {
-                                val xw = (bx + 0.5f) * sc / w + yawA
+                                val xw = (bx + 0.5f) * sc / w + yawA - pad
                                 if (xw < cu.x0 || xw > cu.x1) continue
                                 val env = cu.envelope(xw)
                                 if (env <= 0.01f) continue
@@ -793,7 +879,7 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
                 clipRect(0f, 0f, w, hz) {
                     withTransform({
                         scale(zoom, zoom, Offset(cx, hz))
-                        translate(shift - parX, hz - skyH * 1.05f - parY)
+                        translate(shift - parX - pad * w, hz - skyH * 1.05f - parY)
                         scale(sc, sc, Offset.Zero)
                     }) {
                         drawImage(img, IntOffset.Zero, IntSize(bw, bh), IntOffset.Zero, IntSize(bw, bh), filterQuality = FilterQuality.Low)
@@ -878,6 +964,23 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
                 drawPath(isles[3], palette.light.copy(alpha = 0.16f * e), style = Stroke(0.9.dp.toPx()))
             }
 
+            // ---- low mist along the horizon: a few soft banks drifting very slowly, lit by the aurora
+            if (hz > 0f) clipRect(0f, 0f, w, hz + 4.dp.toPx()) {
+                val mist = lerp(Color(0xFFB8C0D4), palette.halo, e)
+                val mistBrush = Brush.radialGradient(listOf(mist, Color.Transparent), Offset.Zero, 1f)
+                for (i in 0 until 5) {
+                    val xw = (((i * 0.31f + loop(70_000L + i * 13_000L) * 1.6f - yaw * 0.9f) % 1.6f) + 1.6f) % 1.6f - 0.3f
+                    val x = cx + (xw - 0.5f) * w * zoom
+                    val bwid = (170f + 60f * (i % 3)).dp.toPx() * zoom
+                    val bhei = (22f + 8f * (i % 2)).dp.toPx() * zoom
+                    val a = (0.07f + 0.07f * e) * (0.6f + 0.4f * wave(9_000L + i * 700L, i * 0.2f))
+                    val bankY = hz - 5.dp.toPx() - i * 3.dp.toPx() * zoom
+                    withTransform({ translate(x, bankY); scale(bwid, bhei, Offset.Zero) }) {
+                        drawCircle(mistBrush, 1f, Offset.Zero, alpha = a)
+                    }
+                }
+            }
+
             // ---- halo behind the ghost
             val haloColor = lerp(lerp(OFF_HALO, palette.halo, ghostLit), Color(0xFFFF9AA9), er * 0.7f)
             val haloA = ((0.12f + (0.30f + 0.06f * wave(3_000)) * ghostLit + 0.10f * b * (0.5f + 0.5f * wave(1_200))) * (1f + beat * 0.5f) + 0.05f * hoverA.value) * design.halo
@@ -910,7 +1013,7 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
                             translate(0f, 2f * hz)
                             scale(1f, -1f, Offset.Zero)
                             scale(zoom, zoom, Offset(cx, hz))
-                            translate(shift, hz - skyH * 1.05f)
+                            translate(shift - pad * w, hz - skyH * 1.05f)
                             scale(sc, sc, Offset.Zero)
                         }) {
                             drawImage(img, IntOffset.Zero, IntSize(bw, bh), IntOffset.Zero, IntSize(bw, bh), alpha = 0.30f, filterQuality = FilterQuality.Low)

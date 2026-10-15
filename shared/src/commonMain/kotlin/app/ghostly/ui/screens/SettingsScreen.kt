@@ -153,6 +153,7 @@ fun SettingsScreen(controller: GhostlyController, contentPadding: PaddingValues)
         transitionSpec = { app.ghostly.ui.travelSpec() },
     ) { p ->
         val back = { page = Page.MAIN }
+        androidx.compose.runtime.CompositionLocalProvider(app.ghostly.ui.components.LocalAnchorsActive provides (p == page)) {
         androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().travel(this@AnimatedContent, heading, leaving = p != page)) {
         when (p) {
             Page.MAIN -> MainSettings(controller, contentPadding) { page = it }
@@ -163,6 +164,7 @@ fun SettingsScreen(controller: GhostlyController, contentPadding: PaddingValues)
             Page.ADVANCED -> AdvancedPage(controller, contentPadding, back) { page = it }
             Page.ABOUT -> AboutPage(controller, contentPadding, back)
             Page.LOGS -> LogsPage(controller, contentPadding) { page = Page.ADVANCED }
+        }
         }
         }
     }}

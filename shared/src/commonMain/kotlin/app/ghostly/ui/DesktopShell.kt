@@ -101,6 +101,7 @@ internal fun DesktopShell(controller: GhostlyController, tabs: List<Tab>, tab: T
             transitionSpec = { travelSpec() },
             modifier = Modifier.weight(1f).fillMaxHeight(),
         ) { t ->
+          androidx.compose.runtime.CompositionLocalProvider(app.ghostly.ui.components.LocalAnchorsActive provides (t == tab)) {
           Box(Modifier.fillMaxSize().travel(this@AnimatedContent, heading, leaving = t != tab)) {
             when (t) {
                 Tab.HOME -> HomeDesktop(controller, onAdd, onServers = { onTab(Tab.SERVERS) })
@@ -120,6 +121,7 @@ internal fun DesktopShell(controller: GhostlyController, tabs: List<Tab>, tab: T
                     }
                 }
             }
+          }
           }
         }
     }

@@ -119,15 +119,13 @@ fun Modifier.plate(shape: Shape, strong: Boolean = false, lit: () -> Float = { 0
             drawRect(fill)
             // Sky light on the plate: a faint wash from the top, and the edge that catches it.
             if (e > 0.01f) drawRect(Brush.verticalGradient(listOf(c.accent.copy(alpha = 0.045f * e), Color.Transparent), endY = 90.dp.toPx()))
-            val edge = lerp(PLATE_EDGE_GREY, lerp(PLATE_EDGE_LIT, c.accent.copy(alpha = PLATE_EDGE_LIT.alpha), 0.35f), e)
-            drawRect(edge, topLeft = Offset(0f, 1.dp.toPx()), size = Size(size.width, 1.dp.toPx()))
         }
         .border(
             1.dp,
             Brush.verticalGradient(
                 listOf(
-                    lerp(Color.White.copy(alpha = 0.085f), c.accent.copy(alpha = 0.5f), lit()),
-                    Color.White.copy(alpha = 0.05f + 0.04f * lit()),
+                    lerp(Color.White.copy(alpha = 0.06f), c.accent.copy(alpha = 0.5f), lit()),
+                    Color.White.copy(alpha = 0.06f + 0.03f * lit()),
                 ),
             ),
             shape,

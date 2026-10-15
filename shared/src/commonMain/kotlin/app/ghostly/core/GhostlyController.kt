@@ -505,7 +505,8 @@ class GhostlyController(
      */
     private fun domainFailover(profileId: String, url: String, fetchedFrom: String?): String? {
         val d = app.ghostly.core.sub.GhostlyDomains
-        if (fetchedFrom == null || fetchedFrom == url || !d.isOurs(url)) {
+        // The white-list CDN name answers in a pinch but is never where a subscription lives.
+        if (fetchedFrom == null || fetchedFrom == url || !d.isOurs(url) || d.hostOf(fetchedFrom) == d.LTE) {
             ownDomainDownSince.remove(profileId)
             return null
         }
