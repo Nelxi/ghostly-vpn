@@ -203,6 +203,8 @@ class DesktopPlatform : PlatformInfo {
 
     override fun systemAccent(): Long? = winAccent
 
+    override fun wallpaperAccent(): Long? = WallpaperAccent.read()
+
     override val demo: String? = System.getenv("GHOSTLY_DEMO")?.takeIf { it.isNotBlank() }
 
     /** Direct sockets; the controller skips it while a TUN tunnel would catch them. */

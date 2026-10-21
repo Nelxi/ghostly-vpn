@@ -173,7 +173,11 @@ fun GhostlyApp(controller: GhostlyController) {
     }
     // A seasonal accent from the server applies only while the user keeps the default colour.
     // Monet (the wallpaper's colour) wins over both when the user turned it on.
+    // Then Material You from the wallpaper (desktop), then the user's own colour, then the preset.
+    val wallpaperAccent = remember(settings.wallpaperAccent) { if (settings.wallpaperAccent) controller.platform.wallpaperAccent() else null }
     val accent = settings.monet.takeIf { it }?.let { controller.platform.systemAccent() }
+        ?: wallpaperAccent
+        ?: settings.customAccent.takeIf { it != 0L }
         ?: design.accentArgb()?.takeIf { settings.accent == app.ghostly.core.model.ThemeAccent.GHOST } ?: settings.accent.argb
     // One clock for every looping decoration, paused while the app is off screen (see Ambient.kt).
     val ambientTime = app.ghostly.ui.components.rememberAmbientClock(frameSync = !controller.platform.isDesktop)

@@ -395,7 +395,6 @@
  "Сделано с ": "Made with ",
  "Сделать активной": "Make active",
  "Сейчас выбрано ядро Mihomo — дополнительные прокси работают на ядре Xray и поднимутся, когда вернёшься на него.": "The Mihomo engine is selected now — extra proxies run on the Xray engine and will start when you switch back to it.",
- "Сейчас из обоев — выбор ниже вернёт свой": "Currently from the wallpaper — the choice below will bring back your own",
  "Сейчас прокси открыт без пароля": "The proxy is currently open without a password",
  "Селекторы": "Selectors",
  "Сербия": "Serbia",
@@ -841,5 +840,10 @@
  "Отключена автонастройка TCP: каждое соединение ограничено примерно 8 Мбит/с, с VPN и без него": "TCP auto-tuning is off: every connection is capped at about 8 Mbit/s, with or without VPN",
  "Исправляю…": "Fixing…",
  "Ускорить": "Speed up",
- "Только если сервер умеет IPv6 — у серверов Ghostly его нет, сайты тогда не откроются": "Only if the server supports IPv6 — Ghostly's servers don't, sites won't open then"
+ "Только если сервер умеет IPv6 — у серверов Ghostly его нет, сайты тогда не откроются": "Only if the server supports IPv6 — Ghostly's servers don't, sites won't open then",
+ "Акцент Windows": "Windows accent",
+ "Material You из обоев": "Material You from wallpaper",
+ "Палитра строится из цвета ваших обоев, как на Android": "The palette is built from your wallpaper's colour, like on Android",
+ "Сейчас цвет системы — выбор ниже вернёт свой": "Using the system colour now — picking below brings your own back",
+ "Свой цвет": "Own colour"
 }

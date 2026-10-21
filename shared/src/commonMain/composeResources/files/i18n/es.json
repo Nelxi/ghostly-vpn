@@ -395,7 +395,6 @@
  "Сделано с ": "Hecho con ",
  "Сделать активной": "Activar",
  "Сейчас выбрано ядро Mihomo — дополнительные прокси работают на ядре Xray и поднимутся, когда вернёшься на него.": "Ahora está seleccionado el núcleo Mihomo — los proxies adicionales funcionan con el núcleo Xray y se iniciarán cuando vuelvas a él.",
- "Сейчас из обоев — выбор ниже вернёт свой": "Ahora usa el color del fondo — la opción de abajo devolverá el tuyo",
  "Сейчас прокси открыт без пароля": "Ahora el proxy está abierto sin contraseña",
  "Селекторы": "Selectores",
  "Сербия": "Serbia",
@@ -841,5 +840,10 @@
  "Отключена автонастройка TCP: каждое соединение ограничено примерно 8 Мбит/с, с VPN и без него": "El autoajuste de TCP está desactivado: cada conexión queda limitada a unos 8 Mbit/s, con o sin VPN",
  "Исправляю…": "Corrigiendo…",
  "Ускорить": "Acelerar",
- "Только если сервер умеет IPv6 — у серверов Ghostly его нет, сайты тогда не откроются": "Solo si el servidor admite IPv6: los servidores de Ghostly no, y los sitios no abrirán"
+ "Только если сервер умеет IPv6 — у серверов Ghostly его нет, сайты тогда не откроются": "Solo si el servidor admite IPv6: los servidores de Ghostly no, y los sitios no abrirán",
+ "Акцент Windows": "Acento de Windows",
+ "Material You из обоев": "Material You del fondo de pantalla",
+ "Палитра строится из цвета ваших обоев, как на Android": "La paleta se crea a partir del color de tu fondo, como en Android",
+ "Сейчас цвет системы — выбор ниже вернёт свой": "Ahora se usa el color del sistema; elegir abajo vuelve al tuyo",
+ "Свой цвет": "Color propio"
 }

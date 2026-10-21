@@ -395,7 +395,6 @@
  "Сделано с ": "Dibuat dengan ",
  "Сделать активной": "Jadikan aktif",
  "Сейчас выбрано ядро Mihomo — дополнительные прокси работают на ядре Xray и поднимутся, когда вернёшься на него.": "Saat ini inti Mihomo dipilih — proksi tambahan berjalan di inti Xray dan akan aktif saat kamu kembali ke sana.",
- "Сейчас из обоев — выбор ниже вернёт свой": "Saat ini dari wallpaper — pilihan di bawah akan mengembalikan warnamu sendiri",
  "Сейчас прокси открыт без пароля": "Saat ini proksi terbuka tanpa sandi",
  "Селекторы": "Selektor",
  "Сербия": "Serbia",
@@ -841,5 +840,10 @@
  "Отключена автонастройка TCP: каждое соединение ограничено примерно 8 Мбит/с, с VPN и без него": "Penyetelan otomatis TCP mati: setiap koneksi dibatasi sekitar 8 Mbit/s, dengan atau tanpa VPN",
  "Исправляю…": "Memperbaiki…",
  "Ускорить": "Percepat",
- "Только если сервер умеет IPv6 — у серверов Ghostly его нет, сайты тогда не откроются": "Hanya jika server mendukung IPv6 — server Ghostly tidak, situs tidak akan terbuka"
+ "Только если сервер умеет IPv6 — у серверов Ghostly его нет, сайты тогда не откроются": "Hanya jika server mendukung IPv6 — server Ghostly tidak, situs tidak akan terbuka",
+ "Акцент Windows": "Aksen Windows",
+ "Material You из обоев": "Material You dari wallpaper",
+ "Палитра строится из цвета ваших обоев, как на Android": "Palet dibuat dari warna wallpaper Anda, seperti di Android",
+ "Сейчас цвет системы — выбор ниже вернёт свой": "Sekarang warna sistem — memilih di bawah mengembalikan warna Anda",
+ "Свой цвет": "Warna sendiri"
 }

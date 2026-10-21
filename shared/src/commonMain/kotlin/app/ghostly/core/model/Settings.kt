@@ -111,10 +111,19 @@ enum class DnsStrategy(private val titleRu: String, val xray: String?) {
 @Serializable
 enum class ThemeAccent(val argb: Long) {
     GHOST(0xFFA88DFF),
-    MINT(0xFF8FE3C0),
-    SAKURA(0xFFFF9AC8),
+    LILAC(0xFFD3A6FF),
+    INDIGO(0xFF9A9CFF),
+    OCEAN(0xFF7FA8FF),
     SKY(0xFF8CC8FF),
+    ICE(0xFFBFE8FF),
+    TEAL(0xFF6EE0D6),
+    MINT(0xFF8FE3C0),
+    LIME(0xFFC6EE7A),
+    GOLD(0xFFFFD27A),
     SUNSET(0xFFFFB38A),
+    CORAL(0xFFFF9A8A),
+    ROSE(0xFFFF8FA3),
+    SAKURA(0xFFFF9AC8),
 }
 
 @Serializable
@@ -223,6 +232,10 @@ data class AppSettings(
     val soundVolume: Float = 0.5f,
     /** Android 12+: take the accent from the wallpaper (Material You / Monet) instead of [accent]. */
     val monet: Boolean = false,
+    /** Desktop: the accent comes from the wallpaper itself (Material You), not from the Windows accent. */
+    val wallpaperAccent: Boolean = false,
+    /** The user's own accent (ARGB), 0 = one of [ThemeAccent]. */
+    val customAccent: Long = 0,
     val reduceMotion: Boolean = false,
     /** Snowfall over the night scene (winter). */
     val snow: Boolean = true,

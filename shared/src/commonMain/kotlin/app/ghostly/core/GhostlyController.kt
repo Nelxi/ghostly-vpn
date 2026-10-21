@@ -1441,7 +1441,7 @@ class GhostlyController(
         accent = AppSettings().accent, haptics = true, reduceMotion = false, language = "",
         autoUpdateSubs = true, autoConnect = false, startOnBoot = false, pingUrl = "",
         hapticStrength = 0f, monet = false, blockCheck = false, sounds = false, soundVolume = 0f, stageMode = false,
-        snow = true, tcpTipDismissed = false,
+        snow = true, tcpTipDismissed = false, wallpaperAccent = false, customAccent = 0,
         pingMethod = app.ghostly.core.model.PingMethod.PROXY_GET, mihomoPingMethod = app.ghostly.core.model.PingMethod.PROXY_GET,
     )
 

@@ -1,5 +1,12 @@
 package app.ghostly.ui.screens
 
+import androidx.compose.material.icons.rounded.Wallpaper
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.BoxWithConstraints
 import app.ghostly.ui.tabSky
 import app.ghostly.ui.travel
 import app.ghostly.ui.components.nightGhost
@@ -345,22 +352,22 @@ private fun MainSettings(controller: GhostlyController, contentPadding: PaddingV
         SectionTitle(tr("Внешний вид"))
         Group {
             val monetAccent = remember { controller.platform.systemAccent() }
+            val wallAccent = remember { if (controller.platform.isDesktop) controller.platform.wallpaperAccent() else null }
             if (monetAccent != null) {
-                ToggleRow(tr("Цвета системы"), if (controller.platform.isDesktop) tr("Акцент как в Windows (Параметры → Персонализация → Цвета)") else tr("Акцент берётся из обоев (Material You)"), s.monet, Icons.Rounded.Palette) { v -> set { it.copy(monet = v) } }
+                ToggleRow(
+                    if (controller.platform.isDesktop) tr("Акцент Windows") else tr("Цвета системы"),
+                    if (controller.platform.isDesktop) tr("Акцент как в Windows (Параметры → Персонализация → Цвета)") else tr("Акцент берётся из обоев (Material You)"),
+                    s.monet, Icons.Rounded.Palette,
+                ) { v -> set { it.copy(monet = v, wallpaperAccent = if (v) false else it.wallpaperAccent) } }
             }
-            SettingRow(tr("Акцент"), if (s.monet && monetAccent != null) tr("Сейчас из обоев — выбор ниже вернёт свой") else null, Icons.Rounded.Palette) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ThemeAccent.entries.forEach { a ->
-                        val col = Color(a.argb.toInt())
-                        Box(
-                            Modifier.size(26.dp).clip(CircleShape).background(col)
-                                .border(2.dp, if (s.accent == a && !s.monet) c.ink else Color.Transparent, CircleShape)
-                                .hoverSound().clickable { set { it.copy(accent = a, monet = false) } },
-                            contentAlignment = Alignment.Center,
-                        ) { if (s.accent == a && !s.monet) Icon(Icons.Rounded.Check, null, tint = Color.Black.copy(alpha = 0.7f), modifier = Modifier.size(15.dp)) }
-                    }
+            if (wallAccent != null) {
+                ToggleRow(tr("Material You из обоев"), tr("Палитра строится из цвета ваших обоев, как на Android"), s.wallpaperAccent, Icons.Rounded.Wallpaper) { v ->
+                    set { it.copy(wallpaperAccent = v, monet = if (v) false else it.monet) }
                 }
             }
+            val systemColour = (s.monet && monetAccent != null) || (s.wallpaperAccent && wallAccent != null)
+            SettingRow(tr("Акцент"), if (systemColour) tr("Сейчас цвет системы — выбор ниже вернёт свой") else null, Icons.Rounded.Palette) {}
+            AccentPicker(s, systemColour) { pick -> set(pick) }
             Box {
                 var langOpen by remember { mutableStateOf(false) }
                 val current = if (s.language == "system" || s.language.isBlank()) null else s.language
@@ -1069,4 +1076,83 @@ internal fun peekBrush(): androidx.compose.ui.graphics.Brush {
             androidx.compose.ui.graphics.lerp(c.bgRaised, c.accent2, 0.18f),
         ),
     )
+}
+
+/** Swatches (presets + the user's own colour) and, for the own colour, a hue strip. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun AccentPicker(s: app.ghostly.core.model.AppSettings, systemColour: Boolean, set: ((app.ghostly.core.model.AppSettings) -> app.ghostly.core.model.AppSettings) -> Unit) {
+    val c = Ghost.colors
+    val own = s.customAccent != 0L
+    androidx.compose.foundation.layout.FlowRow(
+        Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        ThemeAccent.entries.forEach { a ->
+            val on = s.accent == a && !own && !systemColour
+            Box(
+                Modifier.size(28.dp).clip(CircleShape).background(Color(a.argb.toInt()))
+                    .border(2.dp, if (on) c.ink else Color.Transparent, CircleShape)
+                    .hoverSound().clickable { set { it.copy(accent = a, customAccent = 0, monet = false, wallpaperAccent = false) } },
+                contentAlignment = Alignment.Center,
+            ) { if (on) Icon(Icons.Rounded.Check, null, tint = Color.Black.copy(alpha = 0.7f), modifier = Modifier.size(15.dp)) }
+        }
+        // the user's own colour: a rainbow swatch
+        val onOwn = own && !systemColour
+        Box(
+            Modifier.size(28.dp).clip(CircleShape)
+                .background(if (own) Color(s.customAccent.toInt()) else Color.Transparent)
+                .background(androidx.compose.ui.graphics.Brush.sweepGradient(HUES.map { Color(pastel(it).toInt()).copy(alpha = if (own) 0f else 1f) }))
+                .border(2.dp, if (onOwn) c.ink else c.line, CircleShape)
+                .hoverSound().clickable { set { it.copy(customAccent = if (own) it.customAccent else pastel(0.78f), monet = false, wallpaperAccent = false) } },
+            contentAlignment = Alignment.Center,
+        ) { Icon(if (onOwn) Icons.Rounded.Check else Icons.Rounded.Add, tr("Свой цвет"), tint = Color.Black.copy(alpha = 0.7f), modifier = Modifier.size(15.dp)) }
+    }
+    if (own && !systemColour) {
+        var hue by remember(s.customAccent) { mutableStateOf(hueOf(s.customAccent)) }
+        Box(
+            Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp).fillMaxWidth().height(28.dp).clip(RoundedCornerShape(14.dp))
+                .background(androidx.compose.ui.graphics.Brush.horizontalGradient(HUES.map { Color(pastel(it).toInt()) }))
+                .pointerInput(Unit) {
+                    detectTapGestures { o -> hue = (o.x / size.width).coerceIn(0f, 1f); set { it.copy(customAccent = pastel(hue)) } }
+                }
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(onDragEnd = { set { it.copy(customAccent = pastel(hue)) } }) { ch, _ ->
+                        hue = (ch.position.x / size.width).coerceIn(0f, 1f)
+                    }
+                },
+        ) {
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val x = maxWidth * hue
+                Box(
+                    Modifier.offset(x = (x - 12.dp).coerceIn(0.dp, maxWidth - 24.dp), y = 2.dp).size(24.dp).clip(CircleShape)
+                        .background(Color(pastel(hue).toInt())).border(2.dp, Color.White, CircleShape),
+                )
+            }
+        }
+    }
+}
+
+private val HUES = (0..12).map { it / 12f }
+
+/** A light pastel of [hue] (0..1): the accent tone that reads on the dark interface. */
+private fun pastel(hue: Float): Long {
+    val h = (hue - kotlin.math.floor(hue)) * 6f
+    val s = 0.42f
+    val f = h - kotlin.math.floor(h)
+    val p = 1f - s; val q = 1f - s * f; val t = 1f - s * (1f - f)
+    val (r, g, b) = when (h.toInt() % 6) {
+        0 -> Triple(1f, t, p); 1 -> Triple(q, 1f, p); 2 -> Triple(p, 1f, t)
+        3 -> Triple(p, q, 1f); 4 -> Triple(t, p, 1f); else -> Triple(1f, p, q)
+    }
+    return 0xFF000000L or ((r * 255).toLong() shl 16) or ((g * 255).toLong() shl 8) or (b * 255).toLong()
+}
+
+private fun hueOf(argb: Long): Float {
+    val r = ((argb shr 16) and 0xFF) / 255f; val g = ((argb shr 8) and 0xFF) / 255f; val b = (argb and 0xFF) / 255f
+    val max = maxOf(r, g, b); val min = minOf(r, g, b); val d = max - min
+    if (d <= 0f) return 0f
+    val h = when (max) { r -> ((g - b) / d) % 6f; g -> (b - r) / d + 2f; else -> (r - g) / d + 4f } / 6f
+    return if (h < 0) h + 1f else h
 }

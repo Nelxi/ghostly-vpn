@@ -395,7 +395,6 @@
  "Сделано с ": "Yaratilgan: ",
  "Сделать активной": "Faollashtirish",
  "Сейчас выбрано ядро Mihomo — дополнительные прокси работают на ядре Xray и поднимутся, когда вернёшься на него.": "Hozir Mihomo yadrosi tanlangan — qo'shimcha proksilar Xray yadrosida ishlaydi va siz unga qaytganingizda ishga tushadi.",
- "Сейчас из обоев — выбор ниже вернёт свой": "Hozir oboydan — quyidagi tanlov o'z rangingizni qaytaradi",
  "Сейчас прокси открыт без пароля": "Hozir proksi parolsiz ochiq",
  "Селекторы": "Selektorlar",
  "Сербия": "Serbiya",
@@ -841,5 +840,10 @@
  "Отключена автонастройка TCP: каждое соединение ограничено примерно 8 Мбит/с, с VPN и без него": "TCP avtosozlash o'chirilgan: har bir ulanish taxminan 8 Mbit/s bilan cheklangan, VPN bilan ham, usiz ham",
  "Исправляю…": "Tuzatyapman…",
  "Ускорить": "Tezlashtirish",
- "Только если сервер умеет IPv6 — у серверов Ghostly его нет, сайты тогда не откроются": "Faqat server IPv6 ni qo'llasa — Ghostly serverlarida u yo'q, unda saytlar ochilmaydi"
+ "Только если сервер умеет IPv6 — у серверов Ghostly его нет, сайты тогда не откроются": "Faqat server IPv6 ni qo'llasa — Ghostly serverlarida u yo'q, unda saytlar ochilmaydi",
+ "Акцент Windows": "Windows urg'usi",
+ "Material You из обоев": "Fon rasmidan Material You",
+ "Палитра строится из цвета ваших обоев, как на Android": "Palitra Android'dagi kabi fon rasmingiz rangidan quriladi",
+ "Сейчас цвет системы — выбор ниже вернёт свой": "Hozir tizim rangi — pastdagi tanlov o'zingiznikini qaytaradi",
+ "Свой цвет": "O'z rangim"
 }

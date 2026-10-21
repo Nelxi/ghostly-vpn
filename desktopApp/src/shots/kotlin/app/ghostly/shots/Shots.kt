@@ -60,6 +60,7 @@ private val SHOTS = listOf(
     Shot("servers-on", "SERVERS", vpn = "connected"),
     Shot("settings", "SETTINGS"),
     Shot("settings-on", "SETTINGS", vpn = "connected"),
+    Shot("settings-long", "SETTINGS", heightDp = 3600, scale = 1f),
     Shot("cabinet", "ACCOUNT", cabinet = CabinetUi.Ready(Samples.state)),
     Shot("cabinet-on", "ACCOUNT", vpn = "connected", cabinet = CabinetUi.Ready(Samples.state)),
     Shot("cabinet-long", "ACCOUNT", cabinet = CabinetUi.Ready(Samples.state), heightDp = 1500),

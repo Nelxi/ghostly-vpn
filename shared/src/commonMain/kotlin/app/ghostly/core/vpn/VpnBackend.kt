@@ -138,6 +138,9 @@ interface PlatformInfo {
     /** The system's wallpaper accent (Android 12+ Monet), ARGB; null where there is none. */
     fun systemAccent(): Long? = null
 
+    /** Material You on the desktop: a seed colour read from the wallpaper image, null where not available. */
+    fun wallpaperAccent(): Long? = null
+
     /** Direct check of why a server doesn't answer (IP / SNI / 16 KB block); null where unsupported. */
     suspend fun blockCheck(target: BlockTarget): BlockVerdict? = null
 
