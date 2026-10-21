@@ -40,6 +40,8 @@ data class DesignTokens(
     /** "#RRGGBB": replaces the default violet accent (users who picked their own colour keep it). */
     val accent: String? = null,
     val banner: Banner? = null,
+    /** Snow on the night scene: 0 = none, 1 = the winter default, up to 2.5 = a blizzard. */
+    val snow: Float = 1f,
 ) {
     /** Shadows/dim from a design.json without these keys (or a saved pre-0.3.19 one) use the defaults above. */
     fun accentArgb(): Long? = accent?.removePrefix("#")?.takeIf { it.length == 6 }?.toLongOrNull(16)?.let { 0xFF000000L or it }
@@ -81,6 +83,7 @@ class RemoteDesign(private val store: FileStore, private val userAgent: String) 
                 shadow = t.shadow.coerceIn(0f, 1.5f),
                 shadowSoft = t.shadowSoft.coerceIn(0.5f, 3f),
                 outfitReplayMs = t.outfitReplayMs.coerceIn(0, 2000),
+                snow = t.snow.coerceIn(0f, 2.5f),
             )
             store.save(FILE, DesignTokens.serializer(), _tokens.value)
             return

@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +31,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -96,6 +99,76 @@ fun UpdateBanner(controller: GhostlyController, modifier: Modifier = Modifier, c
                     if (step is UpdateStep.Failed) tr("Попробовать ещё раз") else tr("Обновить"),
                     { controller.haptic(); controller.updater.reset(); controller.installUpdate() },
                     Modifier.fillMaxWidth(), icon = Icons.Rounded.SystemUpdate,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Windows with TCP auto-tuning turned off caps every connection at ~8 Mbit/s (64 KB per round trip), VPN or not.
+ * Checked once per launch; one tap fixes it (a UAC prompt). Hidden for good once dismissed.
+ */
+@Composable
+fun SpeedFixBanner(controller: GhostlyController, modifier: Modifier = Modifier) {
+    val c = Ghost.colors
+    val tuning = controller.platform.tcpTuning ?: return
+    val settings by controller.settings.collectAsState()
+    var capped by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var state by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(0) } // 0 idle, 1 busy, 2 done, 3 failed
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    androidx.compose.runtime.LaunchedEffect(Unit) { capped = runCatching { tuning.capped() }.getOrDefault(false) }
+    AnimatedVisibility(capped && !settings.tcpTipDismissed, modifier, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(app.ghostly.ui.components.Radius.card))
+                .background(c.surface2)
+                .background(Brush.verticalGradient(listOf(c.warn.copy(alpha = 0.10f), Color.Transparent)))
+                .border(1.dp, c.warn.copy(alpha = 0.35f), RoundedCornerShape(app.ghostly.ui.components.Radius.card))
+                .padding(14.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(34.dp).clip(CircleShape).background(c.warn.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Speed, null, tint = c.warn, modifier = Modifier.size(19.dp))
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        when (state) {
+                            2 -> tr("Готово — скорость больше не ограничена")
+                            else -> tr("Windows режет скорость")
+                        },
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                    )
+                    Text(
+                        when (state) {
+                            2 -> tr("Переподключитесь, чтобы новые соединения шли на полной скорости")
+                            3 -> tr("Не получилось — нужно разрешить изменение в окне Windows")
+                            else -> tr("Отключена автонастройка TCP: каждое соединение ограничено примерно 8 Мбит/с, с VPN и без него")
+                        },
+                        style = MaterialTheme.typography.bodySmall, color = if (state == 3) c.bad else c.ink3,
+                    )
+                }
+                Icon(
+                    Icons.Rounded.Close, tr("Скрыть"), tint = c.ink3,
+                    modifier = Modifier.size(30.dp).clip(CircleShape).hoverSound().clickable {
+                        controller.updateSettings { it.copy(tcpTipDismissed = true) }
+                    }.padding(6.dp),
+                )
+            }
+            if (state != 2) {
+                Spacer(Modifier.height(10.dp))
+                AccentButton(
+                    if (state == 1) tr("Исправляю…") else tr("Ускорить"),
+                    {
+                        if (state != 1) {
+                            controller.haptic()
+                            state = 1
+                            scope.launch {
+                                state = if (runCatching { tuning.fix() }.getOrDefault(false)) 2 else 3
+                            }
+                        }
+                    },
+                    Modifier.fillMaxWidth(), icon = Icons.Rounded.Speed,
                 )
             }
         }

@@ -39,6 +39,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.WifiOff
+import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material.icons.rounded.AccountTree
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
@@ -197,6 +199,7 @@ fun HomeScreen(controller: GhostlyController, onPickServer: () -> Unit, contentP
             Column(Modifier.fillMaxWidth().height(skyH).tabSky(Tab.HOME)) {
                 HomeHeader(m, controller)
                 app.ghostly.ui.components.UpdateBanner(controller, Modifier.padding(top = 12.dp))
+                app.ghostly.ui.components.SpeedFixBanner(controller, Modifier.padding(top = 12.dp))
                 AnnouncementCard(controller, Modifier.padding(top = 12.dp))
                 BoxWithConstraints(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                     val ghost = minOf(maxHeight * 0.8f, maxWidth * 0.58f, 236.dp).coerceAtLeast(96.dp)
@@ -443,6 +446,43 @@ private fun StatusBlock(m: HomeModel, controller: GhostlyController, modifier: M
                     style = line, maxLines = 2,
                 )
             }
+        }
+        if (lineKind != StatusLine.SINGING) NetworkLine(controller)
+    }
+}
+
+/**
+ * What the network itself lets through, measured past the tunnel (Yandex / VK against Google / Cloudflare):
+ * «Мобильная сеть · белые списки включены», «Wi-Fi · без ограничений» or «нет интернета даже без VPN».
+ * Asked once a minute while the home screen is shown.
+ */
+@Composable
+private fun NetworkLine(controller: GhostlyController) {
+    val c = Ghost.colors
+    LaunchedEffect(Unit) {
+        while (true) {
+            runCatching { controller.refreshNetwork() }
+            kotlinx.coroutines.delay(60_000)
+        }
+    }
+    val net by controller.network.collectAsState()
+    androidx.compose.animation.AnimatedVisibility(net != null, enter = fadeIn(tween(300)), exit = fadeOut(tween(200))) {
+        val n = net ?: return@AnimatedVisibility
+        val type = when (n.type) {
+            app.ghostly.core.vpn.NetType.WIFI -> "Wi-Fi"
+            app.ghostly.core.vpn.NetType.CELLULAR -> tr("Мобильная сеть")
+            app.ghostly.core.vpn.NetType.ETHERNET -> tr("Кабель")
+            app.ghostly.core.vpn.NetType.UNKNOWN -> tr("Сеть")
+        }
+        val (text, tint, icon) = when (n.mode) {
+            app.ghostly.core.vpn.NetMode.OPEN -> Triple(tr("{0} · без ограничений", type), c.ink3, Icons.Rounded.Wifi)
+            app.ghostly.core.vpn.NetMode.WHITELIST -> Triple(tr("{0} · белые списки включены", type), c.accent, Icons.Rounded.Shield)
+            app.ghostly.core.vpn.NetMode.OFFLINE -> Triple(tr("Нет интернета даже без VPN"), c.bad, Icons.Rounded.WifiOff)
+        }
+        Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, tint = tint, modifier = Modifier.size(13.dp))
+            Spacer(Modifier.width(5.dp))
+            Text(text, style = MaterialTheme.typography.bodySmall, color = tint, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

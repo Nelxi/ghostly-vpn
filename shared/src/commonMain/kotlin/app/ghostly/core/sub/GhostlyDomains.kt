@@ -10,11 +10,16 @@ object GhostlyDomains {
     const val MAIN = "ghostlynex.fun"
 
     /**
-     * The white-list CDN name. It passes mobile white lists when [MAIN] does not (the main domain is not behind
-     * the white-listed CDN any more), and serves the subscription itself next to the tunnels. A refresh mirror
-     * only: a link is never saved on it ([current] maps it back), so the CDN account can change freely.
+     * The white-list CDN name (Yandex Cloud CDN). It passes mobile white lists when [MAIN] does not, and serves
+     * the subscription next to the tunnels under a media-looking path ([LTE_PATH] instead of `/sub/`; the origin
+     * answers it only to this app). A refresh mirror only: a link is never saved on it ([current] maps it back),
+     * so the CDN can change freely.
      */
-    const val LTE = "frameloft.online"
+    const val LTE = "v.frameloft.online"
+    const val LTE_PATH = "/media/stream/manifest/"
+
+    /** The previous white-list CDN name (TurboFlare, given up): recognised as ours, never tried again. */
+    private const val LTE_OLD = "frameloft.online"
 
     /** The one name of the previous domain that may still answer (its direct-to-server name does not). */
     const val LEGACY_ALIVE = "ghostlinknex.online"
@@ -22,7 +27,7 @@ object GhostlyDomains {
     /** The previous domain's names: still ours, no longer handed out. */
     private val LEGACY = listOf(LEGACY_ALIVE, "srv.ghostlinknex.online")
 
-    private val ALL = listOf(MAIN, LTE) + LEGACY
+    private val ALL = listOf(MAIN, LTE, LTE_OLD) + LEGACY
 
     /** How long the link's own domain must stay dead before the app moves the subscription to a mirror. */
     const val SWITCH_AFTER_MS = 3 * 60_000L
@@ -31,11 +36,18 @@ object GhostlyDomains {
 
     fun isOurs(url: String): Boolean = hostOf(url).let { h -> ALL.any { h == it || h == "www.$it" } }
 
+    /** The link on [newHost]; the white-list CDN name also swaps `/sub/` for its media path (and back). */
     private fun withHost(url: String, newHost: String): String {
         val scheme = url.substringBefore("://", "")
         val rest = url.substringAfter("://")
         val host = rest.substringBefore('/').substringBefore(':')
-        return "$scheme://$newHost" + rest.removePrefix(host)
+        var tail = rest.removePrefix(host)
+        if (newHost == LTE) {
+            if (tail.startsWith("/sub/")) tail = LTE_PATH + tail.removePrefix("/sub/")
+        } else if (tail.startsWith(LTE_PATH)) {
+            tail = "/sub/" + tail.removePrefix(LTE_PATH)
+        }
+        return "$scheme://$newHost$tail"
     }
 
     /** The same link on Ghostly's other addresses, in the order they are tried; empty for anyone else's. */
@@ -47,12 +59,12 @@ object GhostlyDomains {
     }
 
     /**
-     * A subscription link on the current domain: links saved with a previous domain are rewritten,
-     * everything else (the current domain, other providers) comes back untouched.
+     * A subscription link on the current domain: links saved with a previous domain (or a white-list CDN name)
+     * are rewritten, everything else (the current domain, other providers) comes back untouched.
      */
     fun current(url: String): String {
         val host = hostOf(url).removePrefix("www.")
-        return if (host in LEGACY || host == LTE) withHost(url, MAIN) else url
+        return if (host in LEGACY || host == LTE || host == LTE_OLD) withHost(url, MAIN) else url
     }
 
     /**

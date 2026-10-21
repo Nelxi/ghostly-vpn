@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -434,6 +435,60 @@ private val FIREFLIES = floatArrayOf(
     -0.16f, 0.59f, 0.71f, -0.04f, -0.59f, 0.03f, 0.37f, 0.67f, -0.08f, -0.62f,
 )
 
+/**
+ * Snowflakes in three depths: 0 = far (falls into the sea at the horizon), 1 = middle, 2 = near (in front of
+ * the ghost, few and soft). Each: x on a tile (it repeats as the camera turns), fall phase, fall time (ms per
+ * screen), size (dp), sway time (ms), sway width (dp), sway phase. 2.5× the default count, for design.json `snow`.
+ */
+private class Flake(val x: Float, val ph: Float, val fallMs: Long, val r: Float, val swayMs: Long, val sway: Float, val swayPh: Float, val spin: Float)
+
+/** A six-armed snow crystal (white, branched), drawn once into a picture; flakes are stamps of it, rotated. */
+private fun snowCrystal(px: Int): ImageBitmap {
+    val img = ImageBitmap(px, px)
+    androidx.compose.ui.graphics.drawscope.CanvasDrawScope().draw(
+        androidx.compose.ui.unit.Density(1f), androidx.compose.ui.unit.LayoutDirection.Ltr,
+        androidx.compose.ui.graphics.Canvas(img), Size(px.toFloat(), px.toFloat()),
+    ) {
+        val c = Offset(px / 2f, px / 2f)
+        val r = px * 0.36f
+        val stroke = (px * 0.045f).coerceAtLeast(1f)
+        val ink = Color.White.copy(alpha = 0.96f)
+        // a faint glow under the arms
+        drawCircle(Brush.radialGradient(listOf(Color(0x55C8BEFF), Color.Transparent), c, px * 0.5f), px * 0.5f, c)
+        for (k in 0 until 6) {
+            rotate(k * 60f, c) {
+                drawLine(ink, c, Offset(c.x, c.y - r), stroke, StrokeCap.Round)
+                for ((b, len) in listOf(0.42f to 0.3f, 0.68f to 0.22f)) {
+                    val y = c.y - r * b
+                    val l = r * len
+                    drawLine(ink, Offset(c.x, y), Offset(c.x - l * 0.8f, y - l * 0.75f), stroke * 0.85f, StrokeCap.Round)
+                    drawLine(ink, Offset(c.x, y), Offset(c.x + l * 0.8f, y - l * 0.75f), stroke * 0.85f, StrokeCap.Round)
+                }
+            }
+        }
+        drawCircle(ink, r * 0.12f, c)
+    }
+    return img
+}
+
+private const val SNOW_TILE = 1.6f
+private val SNOW_COUNT = intArrayOf(58, 30, 10)
+private val SNOW_DEPTH = floatArrayOf(0.35f, 0.7f, 1.25f)
+private val SNOW: List<List<Flake>> = Random(97).let { rnd ->
+    List(3) { layer ->
+        List((SNOW_COUNT[layer] * 2.5f).toInt()) {
+            // Real snow pace: far flakes reach the horizon in ~10 s, near ones cross the screen in ~5 s.
+            val (fall, size) = when (layer) {
+                0 -> (9_000L + rnd.nextLong(3_500)) to (1.4f + rnd.nextFloat() * 0.8f)
+                1 -> (7_000L + rnd.nextLong(2_200)) to (5.5f + rnd.nextFloat() * 2f)
+                else -> (4_600L + rnd.nextLong(1_600)) to (9.5f + rnd.nextFloat() * 3.5f)
+            }
+            Flake(rnd.nextFloat() * SNOW_TILE, rnd.nextFloat(), fall, size, 3_500L + rnd.nextLong(4_000),
+                (4f + rnd.nextFloat() * 10f) * (1f + layer * 0.6f), rnd.nextFloat(), (rnd.nextFloat() - 0.5f) * 70f)
+        }
+    }
+}
+
 /** The moon's rays: angle (deg), length and width factors. */
 private val MOON_RAYS: List<FloatArray> = Random(23).let { r ->
     List(11) { i -> floatArrayOf(i * 360f / 11f + r.nextFloat() * 14f, 0.55f + r.nextFloat() * 0.6f, 0.6f + r.nextFloat() * 0.8f, r.nextFloat()) }
@@ -492,6 +547,8 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
     val c = Ghost.colors
     val reduce = LocalReduceMotion.current
     val design = LocalDesign.current
+    val snowAmount = app.ghostly.ui.theme.LocalSnow.current
+    val crystal = remember { snowCrystal(96) }
     val stage = app.ghostly.ui.stage.LocalStage.current
     val time = LocalAmbientTime.current
     val palette = remember(c.accent) { NightPalette(c.accent) }
@@ -668,6 +725,52 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
             // World → screen: x in screen widths at yaw 0, y as a height above the horizon (in sky heights).
             fun sx(xw: Float, depth: Float): Float = cx + ((xw - yaw * depth) - 0.5f) * w * zoom
             fun sy(f: Float): Float = hz - f * skyH * zoom
+
+            // ---- snow: one depth at a time (far before the water, middle before the ghost, near on top)
+            val snowTint = lerp(Color.White, palette.light, 0.28f * e)
+            val wind = (0.6f * wave(41_000) + 0.4f * wave(17_000, 0.3f)) * motion
+            fun snow(layer: Int) {
+                val n = (SNOW_COUNT[layer] * snowAmount).toInt().coerceIn(0, SNOW[layer].size)
+                if (n == 0) return
+                val depth = SNOW_DEPTH[layer]
+                val bottom = if (layer == 0) hz else h
+                if (bottom <= 0f) return
+                val top = -12.dp.toPx()
+                for (i in 0 until n) {
+                    val f = SNOW[layer][i]
+                    val q = (loop(f.fallMs) + f.ph) % 1f
+                    val y = top + q * (bottom - top + 12.dp.toPx())
+                    var u = ((f.x - yaw * depth + wind * 0.05f * q * depth) % SNOW_TILE + SNOW_TILE) % SNOW_TILE
+                    if (u > 1.3f) u -= SNOW_TILE
+                    val x = cx + (u - 0.5f) * w * zoom + wave(f.swayMs, f.swayPh) * f.sway.dp.toPx() * motion
+                    if (x < -8f || x > w + 8f || y > bottom) continue
+                    // far flakes melt into the sea just above the horizon; all of them fade in at the top
+                    val melt = if (layer == 0) smooth((hz - y) / 26.dp.toPx()) else 1f
+                    val fadeIn = smooth((y - top) / 40.dp.toPx())
+                    val base = when (layer) { 0 -> 0.42f; 1 -> 0.62f; else -> 0.42f }
+                    val a = (base * melt * fadeIn * (0.75f + 0.25f * wave(2_600, f.swayPh))).coerceIn(0f, 1f)
+                    if (a <= 0.01f) continue
+                    val r = f.r.dp.toPx() * (0.8f + 0.2f * zoom)
+                    if (layer == 0) {
+                        // far: soft round flakes
+                        withTransform({ translate(x, y); scale(r * 2.4f, r * 2.4f, Offset.Zero) }) {
+                            drawCircle(DOT_GLOW, 1f, Offset.Zero, alpha = a * 0.6f)
+                        }
+                        drawCircle(snowTint.copy(alpha = a), r * 0.6f, Offset(x, y))
+                    } else {
+                        // middle and near: crystals, slowly turning
+                        val d = r * 2f / 0.72f
+                        withTransform({ rotate(f.spin * (now % 360_000L) / 1000f, Offset(x, y)) }) {
+                            drawImage(
+                                crystal, IntOffset.Zero, IntSize(crystal.width, crystal.height),
+                                IntOffset((x - d / 2f).toInt(), (y - d / 2f).toInt()), IntSize(d.toInt().coerceAtLeast(1), d.toInt().coerceAtLeast(1)),
+                                alpha = a, colorFilter = if (e > 0.05f) androidx.compose.ui.graphics.ColorFilter.tint(snowTint, BlendMode.Modulate) else null,
+                                filterQuality = FilterQuality.Low,
+                            )
+                        }
+                    }
+                }
+            }
 
             // ---- the pointer: eyes follow it, far things lean away a touch (mouse only)
             val ptr = night.pointer?.minus(origin)
@@ -981,6 +1084,8 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
                 }
             }
 
+            snow(0)
+
             // ---- halo behind the ghost
             val haloColor = lerp(lerp(OFF_HALO, palette.halo, ghostLit), Color(0xFFFF9AA9), er * 0.7f)
             val haloA = ((0.12f + (0.30f + 0.06f * wave(3_000)) * ghostLit + 0.10f * b * (0.5f + 0.5f * wave(1_200))) * (1f + beat * 0.5f) + 0.05f * hoverA.value) * design.halo
@@ -1144,6 +1249,8 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
                 }
             }
 
+            snow(1)
+
             // ---- the ghost
             run {
                 val phase = loop(GHOST_LOOP_MS) * TAU
@@ -1216,6 +1323,8 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
                     drawCircle(col.copy(alpha = a), core, Offset(fx, fy))
                 }
             }
+
+            snow(2)
         }
         content()
     }

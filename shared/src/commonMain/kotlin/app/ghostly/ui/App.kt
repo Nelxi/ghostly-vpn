@@ -271,7 +271,7 @@ fun GhostlyApp(controller: GhostlyController) {
             !onboarded -> ONBOARDING
             else -> tab
         }
-        androidx.compose.runtime.CompositionLocalProvider(app.ghostly.ui.stage.LocalStage provides stage, app.ghostly.ui.screens.LocalSubscriptionNav provides subNav, LocalNight provides night) {
+        androidx.compose.runtime.CompositionLocalProvider(app.ghostly.ui.stage.LocalStage provides stage, app.ghostly.ui.screens.LocalSubscriptionNav provides subNav, LocalNight provides night, app.ghostly.ui.theme.LocalSnow provides if (settings.snow) design.snow else 0f) {
         NightScene(night, orb, page) {
             val insets = WindowInsets.safeDrawing.asPaddingValues()
             BoxWithConstraints(Modifier.fillMaxSize()) {

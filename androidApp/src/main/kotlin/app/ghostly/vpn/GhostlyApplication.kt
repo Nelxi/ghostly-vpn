@@ -287,6 +287,11 @@ class AndroidPlatform(private val context: Context) : PlatformInfo {
         }.getOrDefault(-1L)
     }
 
+    // The app is excluded from its own tunnel, so these sockets go straight to the network.
+    override val canProbeNet: Boolean get() = true
+
+    override suspend fun tlsProbe(host: String, timeoutMs: Int): Long = app.ghostly.core.vpn.JvmNetProbe.tls(host, timeoutMs)
+
     /** Underlying network (not our VPN): Wi-Fi vs mobile decides white-list behaviour. */
     override fun networkType(): app.ghostly.core.vpn.NetType = runCatching {
         val cm = context.getSystemService(android.net.ConnectivityManager::class.java)

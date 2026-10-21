@@ -178,6 +178,12 @@ interface PlatformInfo {
     /** TCP handshake time to host:port in ms, negative on failure (the "quick ping"). */
     suspend fun tcpPing(host: String, port: Int, timeoutMs: Int): Long = -1
 
+    /** Can [tlsProbe] run here (direct sockets that bypass the tunnel)? Drives [NetProbe]. */
+    val canProbeNet: Boolean get() = false
+
+    /** TLS handshake time to host:443 in ms on a direct socket, negative on failure. */
+    suspend fun tlsProbe(host: String, timeoutMs: Int): Long = -1
+
     /** Launch at login / on boot (desktop autostart entry; Android uses a boot receiver). */
     fun setStartOnBoot(enabled: Boolean) {}
 
@@ -190,11 +196,26 @@ interface PlatformInfo {
     /** Music on the computer: audio analysis + now playing (desktop "stage mode"). */
     val stage: app.ghostly.core.stage.StageSource? get() = null
 
+    /** Windows TCP receive-window auto-tuning (null elsewhere): when it is off, every connection is capped. */
+    val tcpTuning: TcpTuning? get() = null
+
     /** App-level kill switch (desktop); Android uses the system one via [systemVpnSettings]. */
     val killSwitch: KillSwitch? get() = null
 
     /** Opens the OS page with always-on VPN / "block connections without VPN" (kill switch). */
     val systemVpnSettings: (() -> Unit)? get() = null
+}
+
+/**
+ * Windows with "Receive Window Auto-Tuning" disabled (a common "tweak") sends SYNs without window scaling, so
+ * each TCP connection is stuck at 64 KB per round trip — ~8 Mbit/s at 65 ms, however fast the line and the VPN.
+ */
+interface TcpTuning {
+    /** True when auto-tuning is off or restricted. */
+    suspend fun capped(): Boolean
+
+    /** Turns it back to normal (asks for admin rights); true when it worked. */
+    suspend fun fix(): Boolean
 }
 
 /** Blocks traffic outside the tunnel while it is down (desktop firewall based). */

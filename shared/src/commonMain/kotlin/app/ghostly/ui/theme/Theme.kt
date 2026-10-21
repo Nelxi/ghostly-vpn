@@ -97,6 +97,9 @@ object Motion {
 val LocalGhostColors = staticCompositionLocalOf { GhostColors() }
 val LocalReduceMotion = staticCompositionLocalOf { false }
 
+/** How much snow falls on the night scene: 0 = off (settings × design.json `snow`). */
+val LocalSnow = staticCompositionLocalOf { 0f }
+
 /** Server-tunable look (see RemoteDesign). */
 val LocalDesign = androidx.compose.runtime.compositionLocalOf { app.ghostly.core.design.DesignTokens() }
 

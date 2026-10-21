@@ -44,6 +44,7 @@ import androidx.compose.material.icons.rounded.Devices
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Payments
 import androidx.compose.material.icons.rounded.SupportAgent
+import androidx.compose.material.icons.rounded.AcUnit
 import androidx.compose.material.icons.rounded.Animation
 import androidx.compose.material.icons.rounded.AutoMode
 import androidx.compose.material.icons.rounded.Block
@@ -387,6 +388,7 @@ private fun MainSettings(controller: GhostlyController, contentPadding: PaddingV
                 }
             }
             ToggleRow(tr("Меньше анимаций"), tr("Спокойнее и экономнее для батареи"), s.reduceMotion, Icons.Rounded.Animation) { v -> set { it.copy(reduceMotion = v) } }
+            ToggleRow(tr("Снег"), tr("Зимой над ночным морем идёт снег"), s.snow, Icons.Rounded.AcUnit) { v -> set { it.copy(snow = v) } }
             controller.platform.stage?.let { stage ->
                 ToggleRow(
                     tr("Сцена"), tr("Призрак подпевает музыке, которая играет {0}, а интерфейс светится и движется в её ритме и настроении", stage.whereLabel),

@@ -36,6 +36,8 @@ class DesktopPlatform : PlatformInfo {
     override val appVersion: String = System.getProperty("jpackage.app-version") ?: "0.1.5-dev"
     override val isDesktop = true
 
+    override val tcpTuning: app.ghostly.core.vpn.TcpTuning? = if (hostOs == HostOs.WINDOWS) WindowsTcpTuning else null
+
     /** A PC sits on a fixed line (or Wi-Fi): treat it as Wi-Fi for white-list decisions. */
     override fun networkType(): app.ghostly.core.vpn.NetType = app.ghostly.core.vpn.NetType.WIFI
 
@@ -217,6 +219,11 @@ class DesktopPlatform : PlatformInfo {
             }
         }.getOrDefault(-1L)
     }
+
+    // Direct sockets; the controller asks only when no TUN tunnel would catch them.
+    override val canProbeNet: Boolean get() = true
+
+    override suspend fun tlsProbe(host: String, timeoutMs: Int): Long = app.ghostly.core.vpn.JvmNetProbe.tls(host, timeoutMs)
 
     /** One system ping (ICMP): works without admin rights, unlike Java's isReachable on Windows. */
     override suspend fun icmpPing(host: String, timeoutMs: Int): Long = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {

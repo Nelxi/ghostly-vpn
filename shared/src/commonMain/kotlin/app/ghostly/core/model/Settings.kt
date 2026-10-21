@@ -217,6 +217,10 @@ data class AppSettings(
     /** Android 12+: take the accent from the wallpaper (Material You / Monet) instead of [accent]. */
     val monet: Boolean = false,
     val reduceMotion: Boolean = false,
+    /** Snowfall over the night scene (winter). */
+    val snow: Boolean = true,
+    /** The Windows TCP auto-tuning tip was closed: don't offer it again. */
+    val tcpTipDismissed: Boolean = false,
     val language: String = "system",
 ) {
 

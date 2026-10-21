@@ -10,6 +10,8 @@ import app.ghostly.core.model.Server
 import app.ghostly.core.store.FileStore
 import app.ghostly.core.sub.SubscriptionClient
 import app.ghostly.core.sub.SubscriptionParser
+import app.ghostly.core.vpn.NetMode
+import app.ghostly.core.vpn.NetProbe
 import app.ghostly.core.vpn.NetType
 import app.ghostly.core.vpn.PlatformInfo
 import app.ghostly.core.vpn.VpnBackend
@@ -1117,21 +1119,23 @@ class GhostlyController(
 
     /**
      * While connected: check that traffic really passes through the tunnel (not just "connected").
-     * Two failures in a row → switch to the best working server, picking white-list servers when the
-     * mobile network is in white-list mode. On a white-list server, go back to a regular one as soon
-     * as it's reachable again — white-list traffic is the scarce pool.
-     *
-     * Mobile data takes a shorter path: when the operator turns the white lists on, a regular server
-     * stops passing traffic from one check to the next, so the *first* failed check is already an
-     * unambiguous signal. Waiting for the second one, and then a full poll interval, cost about a
-     * minute before the app switched — that delay is what users notice. Wi-Fi keeps the two-failure
-     * rule, where a single hiccup is noise.
+     * When it stops, the network itself is asked first ([probeNet]: Yandex / VK against Google /
+     * Cloudflare, straight past the tunnel) instead of guessing from pings to our own servers:
+     * - only Russian sites answer → the white lists came on → a white-list (LTE) server at once;
+     * - foreign sites answer → the internet is fine, the server is the problem → another regular one
+     *   after two failures (a single hiccup is noise);
+     * - nothing answers → no internet at all: say so once and switch nothing.
+     * On a white-list server the guard goes back to a regular one only after the network has been
+     * open several checks in a row (three on mobile data, where white lists live) and our regular
+     * servers answer — a single good probe used to bounce people off LTE onto a dead route.
+     * Where the network can't be probed (TUN on the desktop, iOS) the old ping rules stay.
      */
     private fun startGuard() {
         if (guardJob?.isActive == true) return
         guardJob = scope.launch(Dispatchers.IO) {
             var fails = 0
             var regularBack = 0
+            var offlineSaid = false
             // First check almost immediately: the tunnel needs a moment, but 12 s of silence made the
             // guard notice a blocked network much later than it had to.
             kotlinx.coroutines.delay(FIRST_GUARD_DELAY_MS)
@@ -1146,9 +1150,82 @@ class GhostlyController(
                     val ms = runCatching { backend.healthCheck(s.pingUrlOf(s.core)) }.getOrDefault(-1L)
                     if (ms > 0) {
                         fails = 0
+                        offlineSaid = false
                         _pings.update { it + (cur.id to Ping(app.ghostly.core.vpn.Latency.shown(it[cur.id], ms, now()), now())) }
                     } else if (!cur.isAuto) {
                         fails++
+                    }
+                    if (canProbeNet() && !cur.isAuto) {
+                        val wl = s.saveWhitelist && hasWhitelistServers()
+                        if (fails > 0) {
+                            when (probeNet()) {
+                                NetMode.OFFLINE -> {
+                                    // Switching servers can't help when even Yandex is silent.
+                                    if (!offlineSaid) _events.emit(tr("Нет соединения даже без VPN — проверьте, что интернет оплачен и мобильные данные включены"))
+                                    offlineSaid = true
+                                    fails = 0
+                                    delayMs = FAST_GUARD_DELAY_MS
+                                }
+                                NetMode.WHITELIST -> {
+                                    if (wl && !cur.isWhitelist) {
+                                        fails = 0
+                                        regularBack = 0
+                                        preferredWhitelist(whitelistServers())?.let { next ->
+                                            _events.emit(tr("Похоже, включились белые списки — перешла на «{0}»", next.name))
+                                            select(next.id)
+                                        }
+                                        kotlinx.coroutines.delay(FAST_GUARD_DELAY_MS)
+                                        continue
+                                    }
+                                    if (fails >= 2) {
+                                        fails = 0
+                                        guardFailover(cur, NetMode.WHITELIST)
+                                        kotlinx.coroutines.delay(15_000)
+                                        continue
+                                    }
+                                    delayMs = FAST_GUARD_DELAY_MS
+                                }
+                                NetMode.OPEN -> {
+                                    if (fails >= 2) {
+                                        fails = 0
+                                        guardFailover(cur, NetMode.OPEN)
+                                        kotlinx.coroutines.delay(15_000)
+                                        continue
+                                    }
+                                    delayMs = FAST_GUARD_DELAY_MS
+                                }
+                            }
+                        } else if (wl) {
+                            when {
+                                // On a regular server over mobile data (white lists may come on any moment)
+                                // or right after a network change: look before the tunnel dies.
+                                !cur.isWhitelist && (netChanged || net == NetType.CELLULAR) -> {
+                                    if (probeNet() == NetMode.WHITELIST) {
+                                        preferredWhitelist(whitelistServers())?.let { next ->
+                                            _events.emit(tr("Похоже, включились белые списки — перешла на «{0}»", next.name))
+                                            select(next.id)
+                                        }
+                                    }
+                                    regularBack = 0
+                                    if (net == NetType.CELLULAR) delayMs = FAST_GUARD_DELAY_MS
+                                }
+                                cur.isWhitelist -> {
+                                    val open = probeNet() == NetMode.OPEN && regularReachable()
+                                    regularBack = if (open) regularBack + 1 else 0
+                                    if (regularBack >= if (net == NetType.CELLULAR) 3 else 2) {
+                                        regularBack = 0
+                                        preferredRegular(regularServers())?.let { next ->
+                                            _events.emit(tr("Белые списки выключились — вернулась на «{0}»", next.name))
+                                            select(next.id)
+                                        }
+                                    }
+                                    if (regularBack > 0) delayMs = FAST_GUARD_DELAY_MS
+                                }
+                                else -> regularBack = 0
+                            }
+                        }
+                        kotlinx.coroutines.delay(delayMs)
+                        continue
                     }
                     // Mobile + a regular server: a dead tunnel means the white lists came on, most
                     // likely. Switched on the first failure instead of the second.
@@ -1198,6 +1275,30 @@ class GhostlyController(
     }
 
     private var lastNet: NetType? = null
+    private var lastNetMode: Pair<NetMode, Long>? = null
+
+    /** Is the network probe possible here: direct sockets that don't end up in our own tunnel. */
+    private fun canProbeNet() = platform.canProbeNet && backend.directProbesBypassTunnel
+
+    /** [NetProbe] verdict, reused for a few seconds (one guard round may ask more than once). */
+    private suspend fun probeNet(): NetMode {
+        lastNetMode?.let { (m, at) -> if (now() - at < 8_000) return m }
+        val m = NetProbe.run { host, timeout -> platform.tlsProbe(host, timeout) }
+        lastNetMode = m to now()
+        _network.value = NetStatus(platform.networkType(), m)
+        return m
+    }
+
+    /** The network under the tunnel and what it lets through, for the home screen; null = not known here. */
+    data class NetStatus(val type: NetType, val mode: NetMode)
+
+    private val _network = MutableStateFlow<NetStatus?>(null)
+    val network: StateFlow<NetStatus?> = _network.asStateFlow()
+
+    /** Fresh [network] (the home screen asks while it is shown). */
+    suspend fun refreshNetwork() {
+        if (canProbeNet()) probeNet() else _network.value = null
+    }
 
     private fun whitelistServers() = allServers().filter { !it.isAuto && it.isWhitelist }
     private fun regularServers() = allServers().filter { !it.isAuto && !it.isWhitelist }
@@ -1216,6 +1317,24 @@ class GhostlyController(
      */
     private suspend fun chooseForNetwork(server: Server): Server {
         if (!hasWhitelistServers() || !backend.directProbesBypassTunnel) return server
+        if (canProbeNet()) {
+            val net = platform.networkType()
+            return when (probeNet()) {
+                NetMode.WHITELIST -> if (server.isWhitelist) server else preferredWhitelist(whitelistServers())?.also {
+                    _events.emit(tr("Включены белые списки — подключаюсь через «{0}»", it.name))
+                } ?: server
+                // Open network: Wi-Fi/cable goes regular at once; mobile data keeps a chosen LTE server
+                // (the guard moves it once the network has stayed open for a while).
+                NetMode.OPEN -> if (server.isWhitelist && net != NetType.CELLULAR && regularReachable()) {
+                    preferredRegular(regularServers())?.also {
+                        _events.emit(tr("Белых списков нет — подключаюсь через «{0}»", it.name))
+                    } ?: server
+                } else server
+                NetMode.OFFLINE -> server.also {
+                    _events.emit(tr("Нет соединения даже без VPN — проверьте, что интернет оплачен и мобильные данные включены"))
+                }
+            }
+        }
         return when (platform.networkType()) {
             NetType.CELLULAR -> when {
                 server.isWhitelist -> server
@@ -1270,17 +1389,23 @@ class GhostlyController(
         return list.filter { p[it.id]?.ok == true }.minByOrNull { p[it.id]!!.ms } ?: list.firstOrNull()
     }
 
-    private suspend fun guardFailover(cur: Server) {
+    /** [mode] — what [probeNet] saw; null where the network can't be probed (old ping rules). */
+    private suspend fun guardFailover(cur: Server, mode: NetMode? = null) {
         val others = allServers().filter { !it.isAuto && it.id != cur.id }
         if (others.isEmpty()) return
         // White-list mode: regular servers can't be reached directly, only white-listed routes work.
-        val whitelistMode = others.any { it.isWhitelist } && backend.directProbesBypassTunnel &&
-            (platform.networkType() == NetType.CELLULAR || !regularReachable())
+        // An open network whose ISP blocks our regular addresses also needs the CDN route.
+        val whitelistMode = others.any { it.isWhitelist } && backend.directProbesBypassTunnel && when (mode) {
+            NetMode.WHITELIST -> true
+            NetMode.OPEN -> !regularReachable()
+            else -> platform.networkType() == NetType.CELLULAR || !regularReachable()
+        }
         val pool = if (whitelistMode) others.filter { it.isWhitelist } else others.filter { !it.isWhitelist }.ifEmpty { others }
         val candidates = pool.filter { it.name != cur.name }
         val next = (if (whitelistMode) preferredWhitelist(candidates) else preferredRegular(candidates)) ?: return
         _events.emit(
-            if (whitelistMode) tr("Похоже, включились белые списки — перешла на «{0}»", next.name)
+            if (whitelistMode && mode == NetMode.OPEN) tr("Обычные серверы не отвечают в этой сети — перешла на «{0}»", next.name)
+            else if (whitelistMode) tr("Похоже, включились белые списки — перешла на «{0}»", next.name)
             else tr("«{0}» перестал пропускать трафик — перешла на «{1}»", cur.name, next.name),
         )
         select(next.id)
