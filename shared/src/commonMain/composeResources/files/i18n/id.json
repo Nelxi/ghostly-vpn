@@ -358,7 +358,6 @@
  "Продлить или сменить тариф": "Perpanjang atau ganti paket",
  "Профиль Mihomo": "Profil Mihomo",
  "Профиль Mihomo добавлен · {0}": "Profil Mihomo ditambahkan · {0}",
- "Пускать IPv6 через туннель": "Alirkan IPv6 lewat tunnel",
  "Пусто. Подключись на ядре {0}, и здесь появятся его сообщения.": "Kosong. Hubungkan dengan inti {0}, dan pesannya akan muncul di sini.",
  "Работает в режиме TUN — ему нужны права администратора": "Berjalan dalam mode TUN — membutuhkan hak administrator",
  "Работает только в умной маршрутизации": "Hanya berfungsi pada perutean pintar",
@@ -841,5 +840,6 @@
  "Не получилось — нужно разрешить изменение в окне Windows": "Gagal — izinkan perubahan di jendela Windows",
  "Отключена автонастройка TCP: каждое соединение ограничено примерно 8 Мбит/с, с VPN и без него": "Penyetelan otomatis TCP mati: setiap koneksi dibatasi sekitar 8 Mbit/s, dengan atau tanpa VPN",
  "Исправляю…": "Memperbaiki…",
- "Ускорить": "Percepat"
+ "Ускорить": "Percepat",
+ "Только если сервер умеет IPv6 — у серверов Ghostly его нет, сайты тогда не откроются": "Hanya jika server mendukung IPv6 — server Ghostly tidak, situs tidak akan terbuka"
 }

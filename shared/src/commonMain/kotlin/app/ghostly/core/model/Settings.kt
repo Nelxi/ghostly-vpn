@@ -141,6 +141,13 @@ data class AppSettings(
     val dnsFakeIp: Boolean = true,
     /** "domain ip" lines: static answers, applied before any DNS server. */
     val dnsHosts: List<String> = emptyList(),
+    /**
+     * IPv6 through the tunnel. Stored under a new name since 0.3.45, so it starts off for everyone once: Ghostly's
+     * servers have no IPv6 egress, and with an IPv6 route the tunnel took IPv6 connections (Google, Yandex and speed
+     * tests prefer it) that the server could never make — they broke as "connection closed" instead of Android
+     * falling back to IPv4 at once.
+     */
+    @kotlinx.serialization.SerialName("tunnelIpv6")
     val ipv6: Boolean = false,
     // --- tunnel
     /** Xray by default: one "Авто" button is what most people want; mihomo (selectors) is opt-in. */

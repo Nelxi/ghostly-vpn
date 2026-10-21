@@ -793,7 +793,7 @@ private fun AdvancedPage(controller: GhostlyController, contentPadding: PaddingV
             ToggleRow(tr("Мультиплекс (mux)"), tr("Несколько соединений в одном — меньше рукопожатий. Не для Vision/XHTTP"), s.mux, Icons.Rounded.Layers) { v -> set { it.copy(mux = v) } }
             ToggleRow(tr("Фрагментация TLS"), tr("Режет ClientHello на части — помогает против DPI для TLS-серверов"), s.fragment, Icons.Rounded.Code) { v -> set { it.copy(fragment = v) } }
             ToggleRow(tr("Сниффинг"), tr("Определять домен по трафику для точной маршрутизации"), s.sniffing, Icons.Rounded.Speed) { v -> set { it.copy(sniffing = v) } }
-            ToggleRow("IPv6", tr("Пускать IPv6 через туннель"), s.ipv6, Icons.Rounded.Language) { v -> set { it.copy(ipv6 = v) } }
+            ToggleRow("IPv6", tr("Только если сервер умеет IPv6 — у серверов Ghostly его нет, сайты тогда не откроются"), s.ipv6, Icons.Rounded.Language) { v -> set { it.copy(ipv6 = v) } }
             ToggleRow(tr("Блокировать QUIC"), tr("YouTube и браузеры переходят с UDP на TCP — стабильнее на мобильном интернете и в сетях, режущих UDP"), s.blockQuic, Icons.Rounded.Block) { v -> set { it.copy(blockQuic = v) } }
             ToggleRow("TCP Fast Open", tr("На одно рукопожатие меньше при каждом новом соединении"), s.tcpFastOpen, Icons.Rounded.RocketLaunch) { v -> set { it.copy(tcpFastOpen = v) } }
             SettingRow("MTU", "${s.mtu}", Icons.Rounded.Tune)
