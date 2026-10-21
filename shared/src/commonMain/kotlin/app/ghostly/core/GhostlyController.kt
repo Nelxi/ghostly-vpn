@@ -72,6 +72,9 @@ class GhostlyController(
     private val _settings = MutableStateFlow(store.load(SETTINGS, AppSettings.serializer()) ?: AppSettings())
     val settings: StateFlow<AppSettings> = _settings.asStateFlow()
 
+    /** The accent being dragged on the hue strip: shown live, saved once on release (null = none). */
+    val accentPreview = MutableStateFlow<Long?>(null)
+
     private val _ui = MutableStateFlow(store.load(STATE, UiState.serializer()) ?: UiState())
 
     private val _selected = MutableStateFlow(_ui.value.selectedServerId)

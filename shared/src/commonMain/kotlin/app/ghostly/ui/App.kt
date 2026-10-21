@@ -175,7 +175,9 @@ fun GhostlyApp(controller: GhostlyController) {
     // Monet (the wallpaper's colour) wins over both when the user turned it on.
     // Then Material You from the wallpaper (desktop), then the user's own colour, then the preset.
     val wallpaperAccent = remember(settings.wallpaperAccent) { if (settings.wallpaperAccent) controller.platform.wallpaperAccent() else null }
-    val accent = settings.monet.takeIf { it }?.let { controller.platform.systemAccent() }
+    val accentPreview by controller.accentPreview.collectAsState()
+    val accent = accentPreview
+        ?: settings.monet.takeIf { it }?.let { controller.platform.systemAccent() }
         ?: wallpaperAccent
         ?: settings.customAccent.takeIf { it != 0L }
         ?: design.accentArgb()?.takeIf { settings.accent == app.ghostly.core.model.ThemeAccent.GHOST } ?: settings.accent.argb

@@ -367,7 +367,7 @@ private fun MainSettings(controller: GhostlyController, contentPadding: PaddingV
             }
             val systemColour = (s.monet && monetAccent != null) || (s.wallpaperAccent && wallAccent != null)
             SettingRow(tr("Акцент"), if (systemColour) tr("Сейчас цвет системы — выбор ниже вернёт свой") else null, Icons.Rounded.Palette) {}
-            AccentPicker(s, systemColour) { pick -> set(pick) }
+            AccentPicker(s, systemColour, onPreview = { controller.accentPreview.value = it }) { pick -> set(pick) }
             Box {
                 var langOpen by remember { mutableStateOf(false) }
                 val current = if (s.language == "system" || s.language.isBlank()) null else s.language
@@ -1081,7 +1081,7 @@ internal fun peekBrush(): androidx.compose.ui.graphics.Brush {
 /** Swatches (presets + the user's own colour) and, for the own colour, a hue strip. */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun AccentPicker(s: app.ghostly.core.model.AppSettings, systemColour: Boolean, set: ((app.ghostly.core.model.AppSettings) -> app.ghostly.core.model.AppSettings) -> Unit) {
+private fun AccentPicker(s: app.ghostly.core.model.AppSettings, systemColour: Boolean, onPreview: (Long?) -> Unit, set: ((app.ghostly.core.model.AppSettings) -> app.ghostly.core.model.AppSettings) -> Unit) {
     val c = Ghost.colors
     val own = s.customAccent != 0L
     androidx.compose.foundation.layout.FlowRow(
@@ -1118,8 +1118,11 @@ private fun AccentPicker(s: app.ghostly.core.model.AppSettings, systemColour: Bo
                     detectTapGestures { o -> hue = (o.x / size.width).coerceIn(0f, 1f); set { it.copy(customAccent = pastel(hue)) } }
                 }
                 .pointerInput(Unit) {
-                    detectHorizontalDragGestures(onDragEnd = { set { it.copy(customAccent = pastel(hue)) } }) { ch, _ ->
+                    // While dragging the colour is only previewed (live, no disk write per move); saved on release.
+                    val commit = { set { it.copy(customAccent = pastel(hue)) }; onPreview(null) }
+                    detectHorizontalDragGestures(onDragEnd = commit, onDragCancel = commit) { ch, _ ->
                         hue = (ch.position.x / size.width).coerceIn(0f, 1f)
+                        onPreview(pastel(hue))
                     }
                 },
         ) {
