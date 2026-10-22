@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import app.ghostly.core.GhostlyController
 import app.ghostly.core.account.Cabinet
 import app.ghostly.core.account.CabinetUi
+import app.ghostly.core.account.GHOSTLY_BOT
 import app.ghostly.i18n.tr
 import app.ghostly.ui.components.AccentButton
 import app.ghostly.ui.components.Field
@@ -223,6 +224,26 @@ private fun PasswordForm(controller: GhostlyController, register: Boolean, onReg
             modifier = Modifier.align(Alignment.CenterHorizontally).clip(RoundedCornerShape(8.dp)).hoverSound()
                 .clickable { onRegister(!register); error = null }.padding(8.dp),
         )
+        if (!register) {
+            // No e-mail on accounts: the bot sends a new password to the linked Telegram.
+            var forgot by remember { mutableStateOf(false) }
+            Text(
+                tr("Забыли пароль?"), style = MaterialTheme.typography.labelMedium, color = Ghost.colors.accent,
+                modifier = Modifier.align(Alignment.CenterHorizontally).clip(RoundedCornerShape(8.dp)).hoverSound()
+                    .clickable { forgot = !forgot }.padding(6.dp),
+            )
+            AnimatedVisibility(forgot, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                Column(Modifier.padding(top = 6.dp)) {
+                    Note(tr("Если к аккаунту привязан Telegram, войдите через Telegram — пароль не нужен. Или бот пришлёт новый пароль. Telegram не привязан — напишите в поддержку"), Tone.ACCENT, icon = Icons.Rounded.Info)
+                    Spacer(Modifier.height(10.dp))
+                    SoftButton(
+                        tr("Новый пароль в Telegram"),
+                        { controller.platform.openUrl("https://t.me/$GHOSTLY_BOT?start=password") },
+                        Modifier.fillMaxWidth(), Icons.AutoMirrored.Rounded.Send,
+                    )
+                }
+            }
+        }
         if (register) {
             Text(
                 tr("Создавая аккаунт, вы принимаете оферту и условия сервиса и соглашаетесь на обработку персональных данных"),

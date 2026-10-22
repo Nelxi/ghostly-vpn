@@ -3,6 +3,9 @@ package app.ghostly.core.account
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+/** Ghostly's Telegram bot, when the server didn't name one (signed out, older server). */
+const val GHOSTLY_BOT = "GhostlyVPNruBot"
+
 /**
  * The Ghostly cabinet as the site's API returns it (`/api/web/app/state`, and the same body after most
  * actions). Field names follow the server; everything has a default, so an older or newer server never
@@ -35,7 +38,7 @@ data class CabinetState(
     @SerialName("bot_state") val botState: BotState? = null,
 ) {
     val fullAccess: Boolean get() = scope != "app"
-    val botName: String get() = bot?.takeIf { it.isNotBlank() } ?: "GhostlyVPNruBot"
+    val botName: String get() = bot?.takeIf { it.isNotBlank() } ?: GHOSTLY_BOT
     fun plan(id: String?): Plan? = plans.firstOrNull { it.id == id }
 }
 
