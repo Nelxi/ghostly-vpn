@@ -429,7 +429,9 @@ object XrayConfigBuilder {
                 })
                 addAll(providerSplit)
                 add(JsonPrimitive(remote))
-                add(JsonPrimitive("8.8.8.8"))
+                // DoH, not plain :53 — a plain lookup by the core itself matches the port-53 hijack
+                // rule and goes out through dns-out past the tunnel.
+                add(JsonPrimitive("https://8.8.8.8/dns-query"))
             }
             src["servers"] = JsonArray(servers)
         }
