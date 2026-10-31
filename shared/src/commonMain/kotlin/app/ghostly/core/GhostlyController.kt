@@ -893,12 +893,26 @@ class GhostlyController(
         if (targets.isEmpty()) return null
         _pinging.update { it + targets.map { s -> s.id } }
         val method = _settings.value.let { it.pingMethodOf(it.core) }
-        if (method == app.ghostly.core.model.PingMethod.TCP || method == app.ghostly.core.model.PingMethod.ICMP) {
-            return scope.launch(Dispatchers.IO) { pingDirect(targets, method) }
-        }
+        // White-list entries live behind the Yandex CDN. Pinging them through the proxy is slow and
+        // sometimes fails on Wi-Fi (the CDN answers the probe differently from the tunnel paths), which
+        // then made the whole LTE group look dead. A direct TCP handshake to the CDN edge is the honest
+        // reachability check for them: stable on Wi-Fi and mobile, and it never runs BlockCheck (see
+        // BlockCheck.target — a white list must not be labelled DPI).
         return scope.launch(Dispatchers.IO) {
-            runCatching {
-                backend.pingMany(targets, _settings.value.let { it.pingUrlOf(it.core) }) { id, ms -> pinged(id, ms) }
+            kotlinx.coroutines.coroutineScope {
+                val (whiteLists, regular) = targets.partition { it.isWhitelist }
+                if (whiteLists.isNotEmpty()) {
+                    launch { pingDirect(whiteLists, app.ghostly.core.model.PingMethod.TCP) }
+                }
+                if (regular.isNotEmpty()) {
+                    if (method == app.ghostly.core.model.PingMethod.TCP || method == app.ghostly.core.model.PingMethod.ICMP) {
+                        launch { pingDirect(regular, method) }
+                    } else {
+                        runCatching {
+                            backend.pingMany(regular, _settings.value.let { it.pingUrlOf(it.core) }) { id, ms -> pinged(id, ms) }
+                        }
+                    }
+                }
             }
             _pinging.update { it - targets.map { s -> s.id }.toSet() }
             saveUi()

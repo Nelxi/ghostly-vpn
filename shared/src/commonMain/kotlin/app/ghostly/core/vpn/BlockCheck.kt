@@ -38,7 +38,10 @@ object BlockCheck {
     /** Direct check target of a server; null when it can't be checked (UDP, balancer, no host). */
     fun target(server: Server): BlockTarget? {
         val host = server.host ?: return null
-        if (server.isAuto || server.port <= 0 || server.protocol in UDP) return null
+        // A white-list entry is not a direct server: its host is the Yandex CDN edge, and the edge
+        // answers the plain `GET /` probe differently from the tunnel paths (bot protection / site
+        // routing). That produced a false "DPI" verdict on Wi-Fi while the LTE tunnel itself worked.
+        if (server.isAuto || server.isWhitelist || server.port <= 0 || server.protocol in UDP) return null
         val outbound = server.outbound ?: (server.config?.get("outbounds") as? JsonArray)
             ?.mapNotNull { it as? JsonObject }
             ?.firstOrNull { (it["tag"] as? JsonPrimitive)?.content == "proxy" }
