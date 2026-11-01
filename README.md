@@ -3,7 +3,8 @@
 <h1 align="center">Ghostly VPN</h1>
 
 <p align="center">
-Открытый VPN-клиент на ядрах Xray и mihomo для Android, Windows, macOS и Linux.<br>
+<b>VPN-сервис <a href="https://ghostlynex.fun">ghostlynex.fun</a> и его официальное приложение с открытым кодом</b><br>
+для Android, Windows, macOS и Linux на ядрах Xray и mihomo.<br>
 Подписки VLESS · VMess · Trojan · Shadowsocks · Hysteria2 · XHTTP · Reality · Clash.
 </p>
 
@@ -12,6 +13,7 @@
   <img alt="Лицензия" src="https://img.shields.io/badge/license-GPL--3.0-7c5cf0?style=for-the-badge">
   <img alt="Ядра" src="https://img.shields.io/badge/core-Xray%20%C2%B7%20mihomo-8fe3c0?style=for-the-badge">
   <a href="https://ghostlynex.fun"><img alt="Сайт" src="https://img.shields.io/badge/ghostlynex.fun-0c0b13?style=for-the-badge&logo=ghost&logoColor=c9b8ff"></a>
+  <a href="https://t.me/GhostlyVpnRu"><img alt="Telegram-канал" src="https://img.shields.io/badge/@GhostlyVpnRu-0c0b13?style=for-the-badge&logo=telegram&logoColor=c9b8ff"></a>
 </p>
 
 <p align="center"><img src="docs/screenshots/desktop.png" width="860" alt="Ghostly на Windows"></p>
@@ -22,6 +24,31 @@
   <img src="docs/screenshots/phone-account.png" width="200" alt="Аккаунт: баланс, подписка, устройства">
   <img src="docs/screenshots/phone-servers.png" width="200" alt="Серверы">
 </p>
+
+## Ghostly VPN — сервис и приложение
+
+Ghostly VPN — это VPN-сервис со своими серверами в Нидерландах, Германии и Финляндии, и это его приложение:
+мы делаем его сами и держим код открытым. Аккаунт Ghostly VPN встроен прямо в приложение: подписка, баланс,
+устройства, продление картой или по СБП. Первые 24 часа бесплатно на [ghostlynex.fun](https://ghostlynex.fun).
+
+### Официальные ресурсы
+
+| | |
+|---|---|
+| Сайт | [ghostlynex.fun](https://ghostlynex.fun) |
+| Telegram-канал | [@GhostlyVpnRu](https://t.me/GhostlyVpnRu) |
+| Telegram-бот (подписка и оплата) | [@GhostlyVPNruBot](https://t.me/GhostlyVPNruBot) |
+| Поддержка | [@GhostlySupportBot](https://t.me/GhostlySupportBot) |
+| Приложение и исходный код | [github.com/Nelxi/ghostly-vpn](https://github.com/Nelxi/ghostly-vpn) |
+
+Других официальных аккаунтов у нас нет. Проекты с похожим названием (Telegram @ghostlyvpn, @ghostly_robot,
+сайты ghostly.su, ghostly.my, ghostlysecure.pro) к Ghostly VPN не относятся. Подробнее:
+[ghostlynex.fun/about](https://ghostlynex.fun/about).
+
+> **English.** Ghostly VPN is a VPN service ([ghostlynex.fun](https://ghostlynex.fun)) and this repository is its
+> official open-source app. Official channels: Telegram [@GhostlyVpnRu](https://t.me/GhostlyVpnRu), bot
+> [@GhostlyVPNruBot](https://t.me/GhostlyVPNruBot), support [@GhostlySupportBot](https://t.me/GhostlySupportBot).
+> We are not affiliated with @ghostlyvpn, @ghostly_robot, ghostly.su, ghostly.my or ghostlysecure.pro.
 
 ## «Ночь и свет»
 
@@ -42,7 +69,7 @@
 | Linux | [.deb](https://github.com/Nelxi/ghostly-vpn/releases/latest/download/Ghostly-Linux.deb) · [.rpm](https://github.com/Nelxi/ghostly-vpn/releases/latest/download/Ghostly-Linux.rpm) · [.tar.gz](https://github.com/Nelxi/ghostly-vpn/releases/latest/download/Ghostly-Linux.tar.gz) |
 | iPhone | скоро |
 
-Подписку можно купить на [ghostlynex.fun](https://ghostlynex.fun), но приложение работает с любой подпиской VLESS / VMess / Trojan / Shadowsocks / Hysteria2.
+Подписка Ghostly VPN оформляется на [ghostlynex.fun](https://ghostlynex.fun) или в боте [@GhostlyVPNruBot](https://t.me/GhostlyVPNruBot), первые 24 часа бесплатно. Приложение подключает и любые другие подписки VLESS / VMess / Trojan / Shadowsocks / Hysteria2.
 
 ---
 
