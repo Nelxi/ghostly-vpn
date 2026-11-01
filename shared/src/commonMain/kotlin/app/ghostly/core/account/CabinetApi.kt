@@ -200,10 +200,10 @@ class CabinetApi(private val platform: PlatformInfo, private val store: FileStor
         val EMPTY = JsonObject(emptyMap())
 
         fun baseOrder(last: String?, subscription: String?): List<String> = buildList {
-            last?.let(::add)
+            // A base remembered from the previous domain is not asked again (it goes away in November 2026).
+            last?.takeUnless { GhostlyDomains.isLegacy(it) }?.let(::add)
             subscription?.takeIf { GhostlyDomains.isOurs(it) }?.let { add("https://" + GhostlyDomains.hostOf(GhostlyDomains.current(it))) }
             add("https://" + GhostlyDomains.MAIN)
-            add("https://" + GhostlyDomains.LEGACY_ALIVE)
         }.map { it.trimEnd('/') }.distinct()
 
         fun cookieHeader(token: String?, device: String?): String? =

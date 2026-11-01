@@ -63,7 +63,8 @@ class GhostlyAccount(private val platform: PlatformInfo, private val userAgent: 
      */
     suspend fun cabinet(subscriptionUrl: String, go: String, tunnelPort: Int?): Link? {
         if (!GhostlyDomains.isOurs(subscriptionUrl)) return null
-        val endpoints = (listOf(subscriptionUrl) + GhostlyDomains.mirrorsOf(subscriptionUrl)).mapNotNull { endpoint(it) }.distinct()
+        val own = if (GhostlyDomains.isLegacy(subscriptionUrl)) GhostlyDomains.current(subscriptionUrl) else subscriptionUrl
+        val endpoints = (listOf(own) + GhostlyDomains.mirrorsOf(own)).mapNotNull { endpoint(it) }.distinct()
         val ports = listOfNotNull(null, tunnelPort).distinct()
         for (port in ports) {
             val http = client(port)

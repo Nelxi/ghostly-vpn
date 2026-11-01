@@ -3,8 +3,8 @@ package app.ghostly.core.sub
 /**
  * Ghostly's own addresses. The service lives on ghostlynex.fun (through a CDN). The domain it used
  * before, ghostlinknex.online, runs out in November 2026: subscriptions saved with it are still
- * recognised as ours and are moved to the current one (see [current]), and while it is alive it
- * serves as a second address for the same requests.
+ * recognised as ours and are moved to the current one (see [current]), but the app never asks it for
+ * anything any more.
  */
 object GhostlyDomains {
     const val MAIN = "ghostlynex.fun"
@@ -21,11 +21,8 @@ object GhostlyDomains {
     /** The previous white-list CDN name (TurboFlare, given up): recognised as ours, never tried again. */
     private const val LTE_OLD = "frameloft.online"
 
-    /** The one name of the previous domain that may still answer (its direct-to-server name does not). */
-    const val LEGACY_ALIVE = "ghostlinknex.online"
-
-    /** The previous domain's names: still ours, no longer handed out. */
-    private val LEGACY = listOf(LEGACY_ALIVE, "srv.ghostlinknex.online")
+    /** The previous domain's names: still ours (saved links are moved off them), never contacted. */
+    private val LEGACY = listOf("ghostlinknex.online", "srv.ghostlinknex.online")
 
     private val ALL = listOf(MAIN, LTE, LTE_OLD) + LEGACY
 
@@ -35,6 +32,9 @@ object GhostlyDomains {
     fun hostOf(url: String): String = url.substringAfter("://").substringBefore('/').substringBefore(':').lowercase()
 
     fun isOurs(url: String): Boolean = hostOf(url).let { h -> ALL.any { h == it || h == "www.$it" } }
+
+    /** On the previous domain: to be rewritten, never requested. */
+    fun isLegacy(url: String): Boolean = hostOf(url).removePrefix("www.") in LEGACY
 
     /** The link on [newHost]; the white-list CDN name also swaps `/sub/` for its media path (and back). */
     private fun withHost(url: String, newHost: String): String {
@@ -55,7 +55,7 @@ object GhostlyDomains {
         val scheme = url.substringBefore("://", "")
         if (scheme.isEmpty() || !isOurs(url)) return emptyList()
         val own = hostOf(url).removePrefix("www.")
-        return listOf(MAIN, LTE, LEGACY_ALIVE).filter { it != own }.map { withHost(url, it) }
+        return listOf(MAIN, LTE).filter { it != own }.map { withHost(url, it) }
     }
 
     /**

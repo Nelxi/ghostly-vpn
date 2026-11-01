@@ -191,15 +191,17 @@ class GhostlyDomainsTest {
             d.mirrorsOf("https://ghostlinknex.online/sub/abc"),
         )
         kotlin.test.assertEquals(
-            listOf("https://ghostlynex.fun/sub/abc", "https://v.frameloft.online/media/stream/manifest/abc", "https://ghostlinknex.online/sub/abc"),
+            listOf("https://ghostlynex.fun/sub/abc", "https://v.frameloft.online/media/stream/manifest/abc"),
             d.mirrorsOf("https://srv.ghostlinknex.online/sub/abc"),
         )
-        // …and the current one falls back to the white-list CDN name (its media path; it passes mobile white lists)
-        // and the previous domain. Suffixes like /notices ride along.
+        // …and the current one falls back to the white-list CDN name (its media path; it passes mobile white lists),
+        // never to the previous domain. Suffixes like /notices ride along.
         kotlin.test.assertEquals(
-            listOf("https://v.frameloft.online/media/stream/manifest/x?y=1", "https://ghostlinknex.online/sub/x?y=1"),
+            listOf("https://v.frameloft.online/media/stream/manifest/x?y=1"),
             d.mirrorsOf("https://ghostlynex.fun/sub/x?y=1"),
         )
+        kotlin.test.assertTrue(d.isLegacy("https://www.ghostlinknex.online/sub/x"))
+        kotlin.test.assertTrue(!d.isLegacy("https://ghostlynex.fun/sub/x"))
         kotlin.test.assertEquals(
             "https://v.frameloft.online/media/stream/manifest/sub_1/notices",
             d.mirrorsOf("https://ghostlynex.fun/sub/sub_1/notices").first(),

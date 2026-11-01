@@ -68,12 +68,12 @@ object XrayConfigBuilder {
     const val BLOCK = "block"
     const val DNS_OUT = "dns-out"
 
-    /** Ghostly's server domains with their addresses (see [dns]). */
-    val OWN_HOSTS = mapOf(
-        "de.ghostlynex.fun" to "179.254.127.78",
-        // the German node's name on the previous domain: profiles fetched before the move still use it
-        "de.ghostlinknex.online" to "179.254.127.78",
-    )
+    /**
+     * Ghostly's server domains with fixed addresses (see [dns]). Empty on purpose: the subscription pins
+     * them itself (Xray `dns.hosts`, mihomo `hosts`) and those win over these, while an address baked into
+     * the app goes stale with the next IP change (de.* kept pointing at a retired German server).
+     */
+    val OWN_HOSTS: Map<String, String> = emptyMap()
     private const val FRAGMENT = "fragment"
 
     /** [errorLog]: a file for the core's log (Android, where the core has no stdout to read). */

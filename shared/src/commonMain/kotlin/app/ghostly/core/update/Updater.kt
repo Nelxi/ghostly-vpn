@@ -151,18 +151,14 @@ class Updater(private val platform: PlatformInfo, private val isDismissed: (Stri
     }
 
     companion object {
-        // ghostlinknex.online is the previous domain: asked too while it is alive (it ends in November 2026).
         private val MANIFESTS = listOf(
             "https://ghostlynex.fun/dl/latest.json",
-            "https://ghostlinknex.online/dl/latest.json",
         )
         private val SERVERS = listOf(
             "https://ghostlynex.fun/dl/",
-            "https://ghostlinknex.online/dl/",
         )
         private val MIRRORS = listOf(
             "https://ghostlynex.fun/dl/",
-            "https://ghostlinknex.online/dl/",
             "https://github.com/Nelxi/ghostly-vpn/releases/latest/download/",
         )
 

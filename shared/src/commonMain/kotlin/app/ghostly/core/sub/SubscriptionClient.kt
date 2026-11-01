@@ -60,8 +60,10 @@ class SubscriptionClient(private val platform: PlatformInfo) {
         // No "GhostlyVPN" here: Ghostly's own server would answer that with its Xray JSON.
         get() = "clash.meta/v1.19.31 mihomo/v1.19.31"
 
-    suspend fun fetch(url: String, idPrefix: String, tunnelPort: Int? = null, mihomo: Boolean = false): ParsedSubscription = coroutineScope {
+    suspend fun fetch(link: String, idPrefix: String, tunnelPort: Int? = null, mihomo: Boolean = false): ParsedSubscription = coroutineScope {
         data class Attempt(val url: String, val client: HttpClient, val delayMs: Long)
+        // A pasted link on the previous domain is asked on the current one: the old name is never contacted.
+        val url = if (GhostlyDomains.isLegacy(link)) GhostlyDomains.current(link) else link
         val mirrors = mirrorsOf(url)
         val attempts = buildList {
             add(Attempt(url, direct, 0))

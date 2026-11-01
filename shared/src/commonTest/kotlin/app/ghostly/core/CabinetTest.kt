@@ -60,15 +60,17 @@ class CabinetTest {
     @Test
     fun basesStartWithWhatWorkedThenTheSubscriptionsHost() {
         assertEquals(
-            listOf("https://ghostlynex.fun", "https://ghostlinknex.online"),
+            listOf("https://ghostlynex.fun"),
             CabinetApi.baseOrder(null, "https://ghostlinknex.online/sub/sub_ec3df87ca5d81fc8"),
         )
         assertEquals(
-            listOf("https://ghostlinknex.online", "https://ghostlynex.fun"),
-            CabinetApi.baseOrder("https://ghostlinknex.online", null),
+            listOf("https://v.frameloft.online", "https://ghostlynex.fun"),
+            CabinetApi.baseOrder("https://v.frameloft.online", null),
         )
+        // A base remembered on the previous domain is never asked again.
+        assertEquals(listOf("https://ghostlynex.fun"), CabinetApi.baseOrder("https://ghostlinknex.online", null))
         // Another provider's link is never asked.
-        assertEquals(listOf("https://ghostlynex.fun", "https://ghostlinknex.online"), CabinetApi.baseOrder(null, "https://example.com/sub/abc"))
+        assertEquals(listOf("https://ghostlynex.fun"), CabinetApi.baseOrder(null, "https://example.com/sub/abc"))
     }
 
     @Test
