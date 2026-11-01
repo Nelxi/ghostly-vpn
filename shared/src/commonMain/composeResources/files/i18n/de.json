@@ -63,6 +63,7 @@
  "{0}: сервер обновлений недоступен": "{0}: Update-Server nicht erreichbar",
  "«{0}» не отвечает — пробую «{1}»": "«{0}» antwortet nicht — versuche «{1}»",
  "«{0}» перестал пропускать трафик — перешла на «{1}»": "«{0}» lässt keinen Verkehr mehr durch — zu «{1}» gewechselt",
+ "Сейчас не отвечает ни один сервер — остаюсь на «{0}» и проверю снова": "Gerade antwortet kein Server — ich bleibe bei «{0}» und prüfe gleich erneut",
  "«{0}»: провайдер отдаёт только формат Xray — на ядре Mihomo эта подписка не показывается": "«{0}»: Der Anbieter liefert nur das Xray-Format — dieses Abo wird mit dem Kern Mihomo nicht angezeigt",
  "Австралия": "Australien",
  "Австрия": "Österreich",

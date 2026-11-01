@@ -231,6 +231,15 @@ class GhostlyController(
     private var failoverAttempts = 0
     private var userWantsConnection = false
 
+    /** Servers that stopped working lately: id → when (see [app.ghostly.core.vpn.Failover]). */
+    private val failedAt = MutableStateFlow<Map<String, Long>>(emptyMap())
+
+    /** When «nothing answers, staying» was last said, so a long outage doesn't repeat it every round. */
+    private var noneAnsweredSaidAt = 0L
+
+    /** When a failover last found no server that answers (0 = it found one). */
+    private var noneAnsweredAt = 0L
+
     /** Tries on the same server after a failure (see [app.ghostly.core.vpn.ConnectRetry]). */
     private var retryAttempts = 0
     private var retryJob: kotlinx.coroutines.Job? = null
@@ -672,6 +681,8 @@ class GhostlyController(
     fun select(serverId: String?) {
         val previous = _selected.value
         previous?.let { id -> profileOf(id)?.let { lastInProfile[it.id] = id } }
+        // A server picked on purpose is trusted again, even if it failed a minute ago.
+        if (serverId != null) failedAt.update { it - serverId }
         _selected.value = serverId
         if (serverId != null && _settings.value.core == app.ghostly.core.model.CoreType.MIHOMO) {
             // Picking a server is also a selector choice — remember it, so reconnects keep it.
@@ -826,11 +837,13 @@ class GhostlyController(
     /**
      * The server to recommend (the «Лучший сейчас» card, failover): among those that answer, regular
      * servers before white lists (the scarce pool), the lowest ping inside the pool. No protocol or
-     * country is favoured: the measured ping is the only thing that ranks servers.
+     * country is favoured: the measured ping is the only thing that ranks servers. One that failed a
+     * moment ago is not recommended, whatever its last ping said.
      */
     fun bestServer(exclude: Set<String> = emptySet()): Server? {
         val p = _pings.value
-        val alive = allServers().filter { !it.isAuto && it.id !in exclude && p[it.id]?.ok == true }
+        val boxed = penalised()
+        val alive = allServers().filter { !it.isAuto && it.id !in exclude && it.id !in boxed && p[it.id]?.ok == true }
         val regular = alive.filter { !it.isWhitelist }
         return regular.ifEmpty { alive }.minByOrNull { p[it.id]!!.ms }
     }
@@ -1112,17 +1125,28 @@ class GhostlyController(
             return
         }
         failoverAttempts++
-        val next = bestServer(exclude = setOfNotNull(current)) ?: allServers().firstOrNull { it.id != current && !it.isAuto }
-        if (next == null) {
-            _events.emit(failure.message)
-            return
+        current?.let { markFailed(it) }
+        // Not inline: this runs inside the state collector, which must stay free to see the result
+        // (and measuring the candidates takes a few seconds).
+        scope.launch {
+            val cur = server(current)
+            val others = allServers().filter { !it.isAuto && it.id != current }
+            val pick = cur?.let { pickReplacement(it, others) }
+            // Measured and nobody answers: hopping onto a dead server only hides the real error.
+            val next = pick?.server ?: if (pick?.measured == true) null
+                else bestServer(exclude = setOfNotNull(current)) ?: others.firstOrNull { it.id !in penalised() }
+            if (next == null) {
+                _events.emit(failure.message)
+                return@launch
+            }
+            // The user may have pressed the button while the candidates were measured.
+            if (!userWantsConnection || backend.state.value !is VpnState.Failed) return@launch
+            _events.emit(tr("«{0}» не отвечает — пробую «{1}»", cur?.name, next.name))
+            _selected.value = next.id
+            saveUi()
+            retryAttempts = 0
+            runCatching { connectTo(next) }
         }
-        _events.emit(tr("«{0}» не отвечает — пробую «{1}»", server(current)?.name, next.name))
-        _selected.value = next.id
-        saveUi()
-        retryAttempts = 0
-        // Not inline: this runs inside the state collector, which must stay free to see the result.
-        scope.launch { runCatching { connectTo(next) } }
     }
 
     // ------------------------------------------------------------------ connection guard
@@ -1401,15 +1425,84 @@ class GhostlyController(
         return regular.any { platform.tcpPing(it.host!!, it.port, 2500) > 0 }
     }
 
+    /** The lowest ping among those that answer; servers that failed a moment ago only when nothing else is left. */
     private fun bestOf(list: List<Server>): Server? {
         val p = _pings.value
-        return list.filter { p[it.id]?.ok == true }.minByOrNull { p[it.id]!!.ms } ?: list.firstOrNull()
+        val boxed = penalised()
+        val usable = list.filter { it.id !in boxed }.ifEmpty { list }
+        return usable.filter { p[it.id]?.ok == true }.minByOrNull { p[it.id]!!.ms } ?: usable.firstOrNull()
     }
 
-    /** [mode] — what [probeNet] saw; null where the network can't be probed (old ping rules). */
+    private fun markFailed(id: String) {
+        val at = now()
+        failedAt.update { app.ghostly.core.vpn.Failover.active(it, at) + (id to at) }
+    }
+
+    private fun penalised(): Set<String> = app.ghostly.core.vpn.Failover.active(failedAt.value, now()).keys
+
+    /** A failover pick: [server] passes traffic right now; [measured] = false when no candidate could be measured at all. */
+    private data class Pick(val server: Server?, val measured: Boolean)
+
+    /**
+     * The server to move to from [cur] inside [pool]: candidates in [app.ghostly.core.vpn.Failover.rank] order,
+     * measured now through the core a few at a time (other countries and addresses first, so a blocked
+     * address isn't walked entry by entry); the fastest that answers in the first batch where anything
+     * does. The results land in the ping list too, so the screen shows what the choice was made on.
+     */
+    private suspend fun pickReplacement(cur: Server, pool: List<Server>): Pick {
+        val candidates = pool.filter { it.canPing && it.name != cur.name }
+        // Everyone failed lately (a long outage): measure them all again rather than guess.
+        val ranked = app.ghostly.core.vpn.Failover.rank(candidates, cur, _pings.value, failedAt.value, now())
+            .ifEmpty { app.ghostly.core.vpn.Failover.rank(candidates, cur, _pings.value, emptyMap(), now()) }
+        if (ranked.isEmpty()) return Pick(null, measured = false)
+        val url = _settings.value.let { it.pingUrlOf(it.core) }
+        val deadline = now() + FAILOVER_BUDGET_MS
+        var measured = false
+        for (batch in ranked.chunked(app.ghostly.core.vpn.Failover.BATCH)) {
+            if (now() > deadline) break
+            val got = MutableStateFlow<Map<String, Long>>(emptyMap())
+            val ids = batch.map { it.id }
+            _pinging.update { it + ids }
+            // Not a child: a probe blocked in a socket can't be cut short, and waiting for it is what the
+            // grace below avoids. Late results still land in the ping list.
+            val job = scope.launch(Dispatchers.IO) {
+                runCatching {
+                    backend.pingMany(batch, url) { id, ms ->
+                        got.update { m -> m + (id to ms) }
+                        pinged(id, ms)
+                    }
+                }
+            }
+            // Dead candidates take the whole timeout to fail: once one works, the rest get a short grace.
+            val until = now() + FAILOVER_BATCH_MS
+            var graceUntil = Long.MAX_VALUE
+            while (job.isActive && now() < minOf(until, graceUntil)) {
+                if (graceUntil == Long.MAX_VALUE && got.value.values.any { it > 0 }) graceUntil = now() + FAILOVER_GRACE_MS
+                kotlinx.coroutines.delay(100)
+            }
+            job.cancel()
+            _pinging.update { it - ids.toSet() }
+            val results = got.value
+            if (results.isNotEmpty()) measured = true
+            val ok = results.filterValues { it > 0 }
+            batch.filter { it.id in ok }.minByOrNull { ok.getValue(it.id) }?.let { return Pick(it, measured = true) }
+        }
+        saveUi()
+        return Pick(null, measured)
+    }
+
+    /**
+     * The current server stopped passing traffic: move to one that works now. [mode] — what [probeNet] saw;
+     * null where the network can't be probed (old ping rules). When the candidates are measured and none of
+     * them answers, the tunnel stays where it is (the guard keeps checking) instead of hopping onto a dead
+     * route; only when they can't be measured at all the old choice by the last pings is used.
+     */
     private suspend fun guardFailover(cur: Server, mode: NetMode? = null) {
         val others = allServers().filter { !it.isAuto && it.id != cur.id }
         if (others.isEmpty()) return
+        markFailed(cur.id)
+        // Nothing answered a moment ago: give the outage a minute before measuring everyone again.
+        if (now() - noneAnsweredAt < NONE_ANSWERED_BACKOFF_MS) return
         // White-list mode: regular servers can't be reached directly, only white-listed routes work.
         // An open network whose ISP blocks our regular addresses also needs the CDN route.
         val whitelistMode = others.any { it.isWhitelist } && backend.directProbesBypassTunnel && when (mode) {
@@ -1418,12 +1511,40 @@ class GhostlyController(
             else -> platform.networkType() == NetType.CELLULAR || !regularReachable()
         }
         val pool = if (whitelistMode) others.filter { it.isWhitelist } else others.filter { !it.isWhitelist }.ifEmpty { others }
-        val candidates = pool.filter { it.name != cur.name }
-        val next = (if (whitelistMode) preferredWhitelist(candidates) else preferredRegular(candidates)) ?: return
+        val pick = pickReplacement(cur, pool)
+        var next = pick.server
+        var toWhitelist = whitelistMode
+        if (next == null && whitelistMode) {
+            // Probes through the CDN can fail where the tunnel itself works: on white lists another LTE
+            // entry is the only way out anyway, so take the best-ranked one.
+            next = app.ghostly.core.vpn.Failover.rank(pool.filter { it.name != cur.name }, cur, _pings.value, failedAt.value, now()).firstOrNull()
+        }
+        if (next == null && !whitelistMode && pick.measured && backend.directProbesBypassTunnel) {
+            // Every regular server is dead from here: the ISP cuts our addresses, the CDN route may still pass.
+            val lte = others.filter { it.isWhitelist }
+            if (lte.isNotEmpty()) {
+                next = pickReplacement(cur, lte).server
+                toWhitelist = next != null
+            }
+        }
+        if (next == null && !pick.measured) {
+            next = (if (whitelistMode) preferredWhitelist(pool.filter { it.name != cur.name }) else preferredRegular(pool.filter { it.name != cur.name }))
+        }
+        if (next == null) {
+            noneAnsweredAt = now()
+            if (now() - noneAnsweredSaidAt > NONE_ANSWERED_REPEAT_MS) {
+                noneAnsweredSaidAt = now()
+                _events.emit(tr("Сейчас не отвечает ни один сервер — остаюсь на «{0}» и проверю снова", cur.name))
+            }
+            return
+        }
+        noneAnsweredAt = 0L
         _events.emit(
-            if (whitelistMode && mode == NetMode.OPEN) tr("Обычные серверы не отвечают в этой сети — перешла на «{0}»", next.name)
-            else if (whitelistMode) tr("Похоже, включились белые списки — перешла на «{0}»", next.name)
-            else tr("«{0}» перестал пропускать трафик — перешла на «{1}»", cur.name, next.name),
+            when {
+                toWhitelist && whitelistMode && mode != NetMode.OPEN -> tr("Похоже, включились белые списки — перешла на «{0}»", next.name)
+                toWhitelist -> tr("Обычные серверы не отвечают в этой сети — перешла на «{0}»", next.name)
+                else -> tr("«{0}» перестал пропускать трафик — перешла на «{1}»", cur.name, next.name)
+            },
         )
         select(next.id)
     }
@@ -1597,6 +1718,21 @@ class GhostlyController(
         private const val FIRST_GUARD_DELAY_MS = 1_500L
         /** Quiet time after the last mode/server tap before the tunnel is rebuilt. */
         private const val APPLY_DEBOUNCE_MS = 350L
+
+        /** Failover: one batch of candidates is measured for at most this long (a dead one times out). */
+        private const val FAILOVER_BATCH_MS = 15_000L
+
+        /** Failover: after the first candidate that works, the others of the batch get this long to beat it. */
+        private const val FAILOVER_GRACE_MS = 1_500L
+
+        /** Failover: the whole search for a working server stops after this. */
+        private const val FAILOVER_BUDGET_MS = 40_000L
+
+        /** «Nothing answers, staying» is said at most this often during one outage. */
+        private const val NONE_ANSWERED_REPEAT_MS = 3 * 60_000L
+
+        /** After a failover that found nothing alive, the next search waits this long. */
+        private const val NONE_ANSWERED_BACKOFF_MS = 60_000L
 
         fun now(): Long = Clock.System.now().toEpochMilliseconds()
     }

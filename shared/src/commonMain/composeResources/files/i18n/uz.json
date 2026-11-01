@@ -63,6 +63,7 @@
  "{0}: сервер обновлений недоступен": "{0}: yangilanish serveri mavjud emas",
  "«{0}» не отвечает — пробую «{1}»": "«{0}» javob bermayapti — «{1}» ni sinayapman",
  "«{0}» перестал пропускать трафик — перешла на «{1}»": "«{0}» trafikni o'tkazishni to'xtatdi — «{1}» ga o'tdim",
+ "Сейчас не отвечает ни один сервер — остаюсь на «{0}» и проверю снова": "Hozir birorta ham server javob bermayapti — «{0}» da qolaman va yana tekshiraman",
  "«{0}»: провайдер отдаёт только формат Xray — на ядре Mihomo эта подписка не показывается": "«{0}»: provayder faqat Xray formatini beradi — Mihomo yadrosida bu obuna ko'rsatilmaydi",
  "Австралия": "Avstraliya",
  "Австрия": "Avstriya",
