@@ -151,8 +151,11 @@ class Updater(private val platform: PlatformInfo, private val isDismissed: (Stri
     }
 
     companion object {
+        // GitHub carries the same manifest with every release: updates are still seen where the site itself
+        // doesn't open (a blocked address, a resolver stuck on an old one).
         private val MANIFESTS = listOf(
             "https://ghostlynex.fun/dl/latest.json",
+            "https://github.com/Nelxi/ghostly-vpn/releases/latest/download/latest.json",
         )
         private val SERVERS = listOf(
             "https://ghostlynex.fun/dl/",
