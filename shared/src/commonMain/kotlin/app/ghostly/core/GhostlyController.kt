@@ -409,6 +409,7 @@ class GhostlyController(
                     announce = parsed.announce,
                     renewUrl = parsed.renewUrl,
                     notice = parsed.notice,
+                    block = parsed.block,
                     updateIntervalHours = parsed.updateIntervalHours ?: 12,
                     updatedAt = now(),
                     servers = parsed.servers,
@@ -556,6 +557,7 @@ class GhostlyController(
                             announce = parsed.announce,
                             renewUrl = parsed.renewUrl,
                             notice = parsed.notice,
+                            block = parsed.block,
                             updateIntervalHours = parsed.updateIntervalHours ?: it.updateIntervalHours,
                             updatedAt = now(),
                         )

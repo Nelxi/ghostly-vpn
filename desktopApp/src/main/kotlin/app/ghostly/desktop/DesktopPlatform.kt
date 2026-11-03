@@ -175,6 +175,29 @@ class DesktopPlatform : PlatformInfo {
 
     override fun playHover(volume: Float) = play("hover", volume)
 
+    @Volatile private var ambient: javax.sound.sampled.Clip? = null
+
+    override fun playAmbient(wav: ByteArray, volume: Float) {
+        stopAmbient()
+        Thread {
+            runCatching {
+                val stream = javax.sound.sampled.AudioSystem.getAudioInputStream(java.io.ByteArrayInputStream(wav))
+                val clip = javax.sound.sampled.AudioSystem.getClip()
+                clip.open(stream)
+                (clip.getControl(javax.sound.sampled.FloatControl.Type.MASTER_GAIN) as? javax.sound.sampled.FloatControl)?.let { g ->
+                    g.value = (20f * kotlin.math.log10(volume.coerceIn(0.001f, 1f))).coerceIn(g.minimum, g.maximum)
+                }
+                ambient = clip
+                clip.loop(javax.sound.sampled.Clip.LOOP_CONTINUOUSLY)
+            }
+        }.apply { isDaemon = true }.start()
+    }
+
+    override fun stopAmbient() {
+        ambient?.let { c -> runCatching { c.stop() }; runCatching { c.close() } }
+        ambient = null
+    }
+
     override fun playWhoosh(volume: Float) = play("whoosh", volume)
 
     override fun playSound(kind: app.ghostly.core.vpn.Haptic, volume: Float) = play(

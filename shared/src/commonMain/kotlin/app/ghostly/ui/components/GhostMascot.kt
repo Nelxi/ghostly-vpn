@@ -57,9 +57,11 @@ fun DrawScope.drawMascot(
     doze: Float = 0f,
     /** 0..1: drained of colour (the unprotected night): cloth, shadows and eyes turn to moonlit greys. */
     mono: Float = 0f,
+    /** 0..1: the offended ghost of a banned subscription — blood-red aura and glowing red slanted eyes. */
+    rage: Float = 0f,
 ) {
-    val tone = accent
-    val deep = lerp(lerp(accent, Color(0xFF2A0FB0), 0.5f), Color(0xFF3E424D), mono)
+    val tone = lerp(accent, RAGE_RED, rage)
+    val deep = lerp(lerp(lerp(accent, Color(0xFF2A0FB0), 0.5f), Color(0xFF3E424D), mono), Color(0xFF3A0008), rage)
     val k = s / 200f * 1.12f
     val tilt = 30f + 2.5f * motion * sin(phase) + 7f * sad
     // Pointer direction in the ghost's own (tilted) frame.
@@ -90,13 +92,18 @@ fun DrawScope.drawMascot(
         // Body, painted, fading to smoke towards the tail.
         drawContext.canvas.saveLayer(Rect(-80f, -80f, 280f, 280f), Paint())
         paintCloth(body, tone, deep, accent, mono)
+        if (rage > 0.01f) {
+            // the cloth stays the ghost's own, only lit red from below and a little dimmer
+            drawPath(body, Brush.verticalGradient(0f to Color(0xFF2A0710), 1f to Color(0xFF5A0814), startY = 14f, endY = 190f), alpha = 0.22f * rage)
+            clipPath(body) { soft(104f, 186f, 60f, 26f, RAGE_RED, 0.4f * rage, 14f) }
+        }
         drawRect(
             Brush.horizontalGradient(0f to Color.White, 0.7f to Color.White.copy(alpha = 0.85f), 1f to Color.White.copy(alpha = 0.35f), startX = 70f, endX = 16f),
             Offset(-80f, -80f), Size(360f, 360f), blendMode = BlendMode.DstIn,
         )
         drawContext.canvas.restore()
 
-        face(blink, happy, sad, sleepy, lk, expr, sing, showtime, deep, doze, mono)
+        if (rage > 0.01f) rageFace(blink, lk, rage) else face(blink, happy, sad, sleepy, lk, expr, sing, showtime, deep, doze, mono)
         if (showtime > 0.01f) stage(showtime, sing, lk, tone)
     }
 
@@ -259,6 +266,48 @@ private fun eye(cx: Float, cy: Float, rx: Float, ry: Float, q: Float): Path {
         cubicTo(cx + rx * (1f - 0.5f * q), bottom, cx - rx * (1f - 0.5f * q), bottom, cx - rx, endY)
         close()
     }
+}
+
+private val RAGE_RED = Color(0xFFE0182A)
+
+/**
+ * The offended face: slanted eyes (inner corners pulled down, no brows) that glow red from inside, a halo
+ * bleeding into the cloth, and a jagged dark slit of a mouth. [rage] 0..1 also drives the glow, so the caller can
+ * make it pulse.
+ */
+private fun DrawScope.rageFace(blink: Float, lk: Offset, rage: Float) {
+    val ox = lk.x * 3f
+    val oy = lk.y * 2.5f
+    fun angry(cx0: Float, inward: Float) {
+        val cx = cx0 + ox
+        val cy = EY + 2f + oy
+        val rx = 11f
+        val ry = 12.5f * blink.coerceAtLeast(0.12f)
+        soft(cx, cy, rx + 6f, ry + 5f, RAGE_RED, 0.55f * rage, 9f)
+        soft(cx, cy, rx + 14f, ry + 12f, Color(0xFFFF3B1F), 0.18f * rage, 14f)
+        val inner = cx - inward * rx
+        val outer = cx + inward * rx
+        val p = Path().apply {
+            moveTo(inner, cy - ry * 0.05f)
+            lineTo(outer, cy - ry * 0.95f)
+            cubicTo(outer + inward * rx * 0.2f, cy + ry * 0.45f, cx + inward * rx * 0.35f, cy + ry * 1.05f, cx, cy + ry)
+            cubicTo(cx - inward * rx * 0.55f, cy + ry * 0.95f, inner - inward * rx * 0.08f, cy + ry * 0.45f, inner, cy - ry * 0.05f)
+            close()
+        }
+        drawPath(p, Brush.radialGradient(0f to Color(0xFFFFE9DC), 0.28f to Color(0xFFFF4A2E), 0.75f to Color(0xFFC40A1C), 1f to Color(0xFF5E0010), center = Offset(cx, cy + ry * 0.2f), radius = rx * 1.3f), alpha = (0.55f + 0.45f * rage).coerceAtMost(1f))
+    }
+    angry(EX1, -1f)
+    angry(EX2, 1f)
+    // jagged mouth slit with a faint red glow behind it
+    val mx = 103.5f + ox
+    val my = 99f + oy
+    soft(mx, my + 1f, 13f, 4f, RAGE_RED, 0.35f * rage, 5f)
+    val m = Path().apply {
+        moveTo(mx - 12f, my + 2f)
+        lineTo(mx - 7f, my - 1.5f); lineTo(mx - 3f, my + 2.5f); lineTo(mx + 1f, my - 1.5f)
+        lineTo(mx + 5f, my + 2.5f); lineTo(mx + 9f, my - 1f); lineTo(mx + 12f, my + 2f)
+    }
+    drawPath(m, Color(0xFF0A0105), style = Stroke(3f, cap = StrokeCap.Round))
 }
 
 /** Matte dark eyes with a soft socket shadow — calm, a little mysterious (no highlights, no blush). */

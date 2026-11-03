@@ -228,6 +228,35 @@ class AndroidPlatform(private val context: Context) : PlatformInfo {
 
     override fun playWhoosh(volume: Float) = playSound(Haptic.TICK, volume)
 
+    private var ambient: android.media.MediaPlayer? = null
+
+    override fun playAmbient(wav: ByteArray, volume: Float) {
+        stopAmbient()
+        runCatching {
+            // MediaPlayer wants a file or a URI, not bytes: the track goes to the cache once
+            val file = java.io.File(context.cacheDir, "ambient_${wav.size}.wav")
+            if (!file.isFile || file.length() != wav.size.toLong()) file.writeBytes(wav)
+            ambient = android.media.MediaPlayer().apply {
+                setAudioAttributes(
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_GAME)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC).build(),
+                )
+                setDataSource(file.absolutePath)
+                isLooping = true
+                val v = volume.coerceIn(0f, 1f)
+                setVolume(v, v)
+                setOnPreparedListener { it.start() }
+                prepareAsync()
+            }
+        }
+    }
+
+    override fun stopAmbient() {
+        ambient?.let { p -> runCatching { p.stop() }; runCatching { p.release() } }
+        ambient = null
+    }
+
     override fun playSound(kind: Haptic, volume: Float) {
         val (pool, ids) = sounds
         val id = ids[kind]?.randomOrNull() ?: return

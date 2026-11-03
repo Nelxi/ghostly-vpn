@@ -135,6 +135,11 @@ interface PlatformInfo {
     /** The page-change whoosh (the transition ported from Kasane's menu). */
     fun playWhoosh(volume: Float) {}
 
+    /** Loops [wav] (16-bit PCM WAV bytes) as background music at [volume] 0..1 until [stopAmbient]; no-op where unsupported. */
+    fun playAmbient(wav: ByteArray, volume: Float) {}
+
+    fun stopAmbient() {}
+
     /** The system's wallpaper accent (Android 12+ Monet), ARGB; null where there is none. */
     fun systemAccent(): Long? = null
 

@@ -543,7 +543,12 @@ private class AuroraBuffer {
  * shot with [nightSky] / [nightGhost] under that key.
  */
 @Composable
-fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
+fun NightScene(
+    night: NightState, orb: OrbState, page: Any, modifier: Modifier = Modifier,
+    /** 0..1: a banned subscription — the whole night turns blood-red and the ghost glares with red eyes. */
+    blood: Float = 0f,
+    content: @Composable BoxScope.() -> Unit,
+) {
     val c = Ghost.colors
     val reduce = LocalReduceMotion.current
     val design = LocalDesign.current
@@ -1251,6 +1256,13 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
 
             snow(1)
 
+            // ---- the ban: everything drawn so far (sky, moon, its path, islands, water) takes a blood-red hue
+            // and darkens a little; the ghost is drawn after this, so it keeps its own cloth and glares red.
+            if (blood > 0.005f) {
+                drawRect(Color(0xFFC0121F), blendMode = BlendMode.Color, alpha = blood)
+                drawRect(Color(0xFF5E0410), blendMode = BlendMode.Multiply, alpha = 0.4f * blood)
+            }
+
             // ---- the ghost
             run {
                 val phase = loop(GHOST_LOOP_MS) * TAU
@@ -1292,6 +1304,7 @@ fun NightScene(night: NightState, orb: OrbState, page: Any, modifier: Modifier =
                             drawMascot(
                                 gs, blink, ghostLit, er, tone, sleepy, look, expr, sing, show,
                                 phase, waveR, waveL, motion, doze = doze, mono = 1f - sat,
+                                rage = blood * (0.78f + 0.22f * wave(2_600)),
                             )
                         }
                     }

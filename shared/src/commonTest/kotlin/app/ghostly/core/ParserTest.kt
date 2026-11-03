@@ -100,6 +100,15 @@ class ParserTest {
     }
 
     @Test
+    fun ghostlyBlockHeader() {
+        assertEquals("revoked", SubscriptionParser.parse(reality, mapOf("ghostly-block" to " Revoked "), "p").block)
+        assertEquals("trial_app_modified", SubscriptionParser.parse(reality, mapOf("ghostly-block" to "trial_app_modified"), "p").block)
+        // anything that isn't a plain reason word is ignored, and no header means no ban scene
+        assertEquals(null, SubscriptionParser.parse(reality, mapOf("ghostly-block" to "<script>"), "p").block)
+        assertEquals(null, SubscriptionParser.parse(reality, emptyMap(), "p").block)
+    }
+
+    @Test
     fun happRenewAndInfoHeaders() {
         val parsed = SubscriptionParser.parse(reality, mapOf(
             "sub-expire-button-link" to "https://t.me/wisp_bot",

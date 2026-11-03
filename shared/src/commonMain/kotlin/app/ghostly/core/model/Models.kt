@@ -20,6 +20,8 @@ data class Profile(
     val renewUrl: String? = null,
     /** Happ's info block (`sub-info-text`, `-color`, `-button-text`, `-button-link`). */
     val notice: ProviderNotice? = null,
+    /** Ghostly's `ghostly-block` header: why this subscription is closed for abuse (the ban scene shows). */
+    val block: String? = null,
     /** Update interval the provider asked for (`profile-update-interval`), hours. */
     val updateIntervalHours: Int = 12,
     val updatedAt: Long = 0,

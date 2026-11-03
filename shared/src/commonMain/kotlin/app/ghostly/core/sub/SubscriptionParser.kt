@@ -25,6 +25,8 @@ data class ParsedSubscription(
     val renewUrl: String? = null,
     /** `sub-info-*`: the provider's info block. */
     val notice: app.ghostly.core.model.ProviderNotice? = null,
+    /** `ghostly-block`: the reason Ghostly closed this subscription (revoked, a repeated trial, a modified app). */
+    val block: String? = null,
     val updateIntervalHours: Int?,
     val servers: List<Server>,
     /** Clash/mihomo config when the body was YAML (see [app.ghostly.core.model.Profile.mihomo]). */
@@ -36,6 +38,8 @@ data class ParsedSubscription(
 )
 
 object SubscriptionParser {
+
+    private val BLOCK_REASON = Regex("[a-z_]{2,40}")
 
     private val PROXY_PROTOCOLS = setOf("vless", "vmess", "trojan", "shadowsocks", "hysteria", "socks", "http", "wireguard")
 
@@ -94,6 +98,7 @@ object SubscriptionParser {
                     buttonUrl = h["sub-info-button-link"]?.trim()?.takeIf { it.isNotEmpty() },
                 )
             },
+            block = h["ghostly-block"]?.trim()?.lowercase()?.takeIf { BLOCK_REASON.matches(it) },
             updateIntervalHours = h["profile-update-interval"]?.trim()?.toIntOrNull(),
             servers = dedupeIds(servers),
             mihomo = mihomo,

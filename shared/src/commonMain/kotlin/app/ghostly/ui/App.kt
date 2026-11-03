@@ -278,7 +278,19 @@ fun GhostlyApp(controller: GhostlyController) {
             else -> tab
         }
         androidx.compose.runtime.CompositionLocalProvider(app.ghostly.ui.stage.LocalStage provides stage, app.ghostly.ui.screens.LocalSubscriptionNav provides subNav, LocalNight provides night, app.ghostly.ui.theme.LocalSnow provides if (settings.snow) design.snow else 0f) {
-        NightScene(night, orb, page) {
+        // A banned subscription (`ghostly-block`; GHOSTLY_DEMO=ban previews it): the night turns blood-red,
+        // the ghost glares and a dark ambient loops under the UI sounds' volume.
+        val banned = controller.platform.demo?.takeIf { it == "ban" || it.startsWith("ban:") }?.let { it.substringAfter("ban:", "revoked") }
+            ?: profilesForTabs.firstOrNull { p -> p.block != null && p.url?.let { app.ghostly.core.sub.GhostlyDomains.isOurs(it) } == true }?.block
+        val blood by androidx.compose.animation.core.animateFloatAsState(if (banned != null) 1f else 0f, androidx.compose.animation.core.tween(2_500), label = "blood")
+        LaunchedEffect(banned != null, settings.sounds, settings.soundVolume) {
+            if (banned != null && settings.sounds) {
+                runCatching { app.ghostly.resources.Res.readBytes("files/ban_ambient.wav") }.getOrNull()
+                    ?.let { controller.platform.playAmbient(it, (0.84f * settings.soundVolume).coerceIn(0.08f, 0.6f)) }
+            } else controller.platform.stopAmbient()
+        }
+        androidx.compose.runtime.DisposableEffect(Unit) { onDispose { controller.platform.stopAmbient() } }
+        NightScene(night, orb, page, blood = blood) {
             val insets = WindowInsets.safeDrawing.asPaddingValues()
             BoxWithConstraints(Modifier.fillMaxSize()) {
                 val wide = maxWidth >= 900.dp
@@ -371,6 +383,7 @@ fun GhostlyApp(controller: GhostlyController) {
                         .padding(top = insets.calculateTopPadding() + 10.dp, start = 12.dp, end = if (wideLayout) 20.dp else 12.dp),
                 )
             }
+
         }
 
         }
