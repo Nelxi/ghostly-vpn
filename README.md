@@ -3,7 +3,7 @@
 <h1 align="center">Ghostly VPN</h1>
 
 <p align="center">
-<b>VPN-сервис <a href="https://ghostlynex.fun">ghostlynex.fun</a> и его официальное приложение с открытым кодом</b><br>
+<b>VPN-сервис <a href="https://ghostlyvpn.com">ghostlyvpn.com</a> и его официальное приложение с открытым кодом</b><br>
 для Android, Windows, macOS и Linux на ядрах Xray и mihomo.<br>
 Подписки VLESS · VMess · Trojan · Shadowsocks · Hysteria2 · XHTTP · Reality · Clash.
 </p>
@@ -12,7 +12,7 @@
   <a href="https://github.com/Nelxi/ghostly-vpn/releases/latest"><img alt="Скачать" src="https://img.shields.io/github/v/release/Nelxi/ghostly-vpn?label=%D0%A1%D0%BA%D0%B0%D1%87%D0%B0%D1%82%D1%8C&color=a88dff&style=for-the-badge"></a>
   <img alt="Лицензия" src="https://img.shields.io/badge/license-GPL--3.0-7c5cf0?style=for-the-badge">
   <img alt="Ядра" src="https://img.shields.io/badge/core-Xray%20%C2%B7%20mihomo-8fe3c0?style=for-the-badge">
-  <a href="https://ghostlynex.fun"><img alt="Сайт" src="https://img.shields.io/badge/ghostlynex.fun-0c0b13?style=for-the-badge&logo=ghost&logoColor=c9b8ff"></a>
+  <a href="https://ghostlyvpn.com"><img alt="Сайт" src="https://img.shields.io/badge/ghostlyvpn.com-0c0b13?style=for-the-badge&logo=ghost&logoColor=c9b8ff"></a>
   <a href="https://t.me/GhostlyVpnRu"><img alt="Telegram-канал" src="https://img.shields.io/badge/@GhostlyVpnRu-0c0b13?style=for-the-badge&logo=telegram&logoColor=c9b8ff"></a>
 </p>
 
@@ -29,13 +29,13 @@
 
 Ghostly VPN — это VPN-сервис со своими серверами в Нидерландах, Германии и Финляндии, и это его приложение:
 мы делаем его сами и держим код открытым. Аккаунт Ghostly VPN встроен прямо в приложение: подписка, баланс,
-устройства, продление картой или по СБП. Первые 24 часа бесплатно на [ghostlynex.fun](https://ghostlynex.fun).
+устройства, продление картой или по СБП. Первые 24 часа бесплатно на [ghostlyvpn.com](https://ghostlyvpn.com).
 
 ### Официальные ресурсы
 
 | | |
 |---|---|
-| Сайт | [ghostlynex.fun](https://ghostlynex.fun) |
+| Сайт | [ghostlyvpn.com](https://ghostlyvpn.com) |
 | Telegram-канал | [@GhostlyVpnRu](https://t.me/GhostlyVpnRu) |
 | Telegram-бот (подписка и оплата) | [@GhostlyVPNruBot](https://t.me/GhostlyVPNruBot) |
 | Поддержка | [@GhostlySupportBot](https://t.me/GhostlySupportBot) |
@@ -43,9 +43,9 @@ Ghostly VPN — это VPN-сервис со своими серверами в 
 
 Других официальных аккаунтов у нас нет. Проекты с похожим названием (Telegram @ghostlyvpn, @ghostly_robot,
 сайты ghostly.su, ghostly.my, ghostlysecure.pro) к Ghostly VPN не относятся. Подробнее:
-[ghostlynex.fun/about](https://ghostlynex.fun/about).
+[ghostlyvpn.com/about](https://ghostlyvpn.com/about).
 
-> **English.** Ghostly VPN is a VPN service ([ghostlynex.fun](https://ghostlynex.fun)) and this repository is its
+> **English.** Ghostly VPN is a VPN service ([ghostlyvpn.com](https://ghostlyvpn.com)) and this repository is its
 > official open-source app. Official channels: Telegram [@GhostlyVpnRu](https://t.me/GhostlyVpnRu), bot
 > [@GhostlyVPNruBot](https://t.me/GhostlyVPNruBot), support [@GhostlySupportBot](https://t.me/GhostlySupportBot).
 > We are not affiliated with @ghostlyvpn, @ghostly_robot, ghostly.su, ghostly.my or ghostlysecure.pro.
@@ -69,7 +69,7 @@ Ghostly VPN — это VPN-сервис со своими серверами в 
 | Linux | [.deb](https://github.com/Nelxi/ghostly-vpn/releases/latest/download/Ghostly-Linux.deb) · [.rpm](https://github.com/Nelxi/ghostly-vpn/releases/latest/download/Ghostly-Linux.rpm) · [.tar.gz](https://github.com/Nelxi/ghostly-vpn/releases/latest/download/Ghostly-Linux.tar.gz) |
 | iPhone | скоро |
 
-Подписка Ghostly VPN оформляется на [ghostlynex.fun](https://ghostlynex.fun) или в боте [@GhostlyVPNruBot](https://t.me/GhostlyVPNruBot), первые 24 часа бесплатно. Приложение подключает и любые другие подписки VLESS / VMess / Trojan / Shadowsocks / Hysteria2.
+Подписка Ghostly VPN оформляется на [ghostlyvpn.com](https://ghostlyvpn.com) или в боте [@GhostlyVPNruBot](https://t.me/GhostlyVPNruBot), первые 24 часа бесплатно. Приложение подключает и любые другие подписки VLESS / VMess / Trojan / Shadowsocks / Hysteria2.
 
 ---
 
