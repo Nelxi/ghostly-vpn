@@ -1,4 +1,4 @@
-Ghostly VPN is the official open-source app of the Ghostly VPN service (ghostlynex.fun), built on the Xray core. One tap and your connection is protected.
+Ghostly VPN is the official open-source app of the Ghostly VPN service (ghostlyvpn.com), built on the Xray core. One tap and your connection is protected.
 
 <b>Highlights</b>
 • Connect with a single tap on the ghost — no manual setup.
@@ -21,6 +21,6 @@ Ghostly VPN is the official open-source app of the Ghostly VPN service (ghostlyn
 <b>Open source</b>
 The source code is published on GitHub under GPL-3.0. No ads, no trackers, no browsing data collected.
 
-Servers in the Netherlands, Germany and Finland come with a Ghostly VPN subscription at ghostlynex.fun or the Telegram bot @GhostlyVPNruBot (first 24 hours free); the Ghostly VPN account is built into the app. Any other VLESS, VMess, Trojan, Shadowsocks or Hysteria2 subscription works too.
+Servers in the Netherlands, Germany and Finland come with a Ghostly VPN subscription at ghostlyvpn.com or the Telegram bot @GhostlyVPNruBot (first 24 hours free); the Ghostly VPN account is built into the app. Any other VLESS, VMess, Trojan, Shadowsocks or Hysteria2 subscription works too.
 
-Official channels: ghostlynex.fun, Telegram @GhostlyVpnRu, bot @GhostlyVPNruBot, support @GhostlySupportBot. Not affiliated with @ghostlyvpn, ghostly.su or ghostly.my.
+Official channels: ghostlyvpn.com, Telegram @GhostlyVpnRu, bot @GhostlyVPNruBot, support @GhostlySupportBot. Not affiliated with @ghostlyvpn, ghostly.su or ghostly.my.

@@ -1,4 +1,4 @@
-Ghostly VPN — официальное приложение VPN-сервиса Ghostly VPN (ghostlynex.fun) с открытым кодом, на ядре Xray. Одна кнопка — и соединение защищено.
+Ghostly VPN — официальное приложение VPN-сервиса Ghostly VPN (ghostlyvpn.com) с открытым кодом, на ядре Xray. Одна кнопка — и соединение защищено.
 
 <b>Главное</b>
 • Подключение одним нажатием на призрака, без ручной настройки.
@@ -22,6 +22,6 @@ Ghostly VPN — официальное приложение VPN-сервиса G
 <b>Открытый код</b>
 Исходный код приложения опубликован на GitHub под лицензией GPL-3.0. Приложение не содержит рекламы и трекеров и не собирает данные о посещённых сайтах.
 
-Серверы в Нидерландах, Германии и Финляндии даёт подписка Ghostly VPN: на сайте ghostlynex.fun или в Telegram-боте @GhostlyVPNruBot, первые 24 часа бесплатно. Аккаунт Ghostly VPN встроен в приложение. Подойдёт и любая другая подписка VLESS, VMess, Trojan, Shadowsocks или Hysteria2.
+Серверы в Нидерландах, Германии и Финляндии даёт подписка Ghostly VPN: на сайте ghostlyvpn.com или в Telegram-боте @GhostlyVPNruBot, первые 24 часа бесплатно. Аккаунт Ghostly VPN встроен в приложение. Подойдёт и любая другая подписка VLESS, VMess, Trojan, Shadowsocks или Hysteria2.
 
-Официальные ресурсы: сайт ghostlynex.fun, Telegram-канал @GhostlyVpnRu, бот @GhostlyVPNruBot, поддержка @GhostlySupportBot. Проекты с похожим названием (@ghostlyvpn, ghostly.su, ghostly.my) к нам не относятся.
+Официальные ресурсы: сайт ghostlyvpn.com, Telegram-канал @GhostlyVpnRu, бот @GhostlyVPNruBot, поддержка @GhostlySupportBot. Проекты с похожим названием (@ghostlyvpn, ghostly.su, ghostly.my) к нам не относятся.
