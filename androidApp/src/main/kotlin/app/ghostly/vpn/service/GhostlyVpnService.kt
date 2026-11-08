@@ -160,9 +160,15 @@ class GhostlyVpnService : VpnService() {
     }
 
     /** After a reboot / always-on start there is no in-memory request: rebuild it from saved state. */
+    /**
+     * Started by the system, not by the app (always-on VPN, start on boot, a START_STICKY restart after the
+     * process was killed): bring up the selected server and hand the tunnel to the controller, so the guard's
+     * server changes (white lists on LTE) reach it like a tunnel started from the app.
+     */
     private fun restoreRequest(): TunnelRequest? {
         val controller = GhostlyApplication.instance.controller
         val server = controller.selectedServer() ?: return null
+        controller.adoptTunnel(server.id)
         return TunnelRequest(server, controller.settings.value).also { AndroidVpn.request = it }
     }
 

@@ -47,11 +47,12 @@ class GhostlyWidget : AppWidgetProvider() {
         private const val ACTION_TOGGLE = "app.ghostly.vpn.WIDGET_TOGGLE"
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-        /** Keeps placed widgets in step with the VPN state while the app process lives. */
+        /** Keeps placed widgets in step with the VPN state and the chosen server while the app process lives. */
         fun watch(context: Context) {
             val app = context.applicationContext
+            val controller = GhostlyApplication.instance.controller
             scope.launch {
-                GhostlyApplication.instance.controller.state.collect { render(app) }
+                kotlinx.coroutines.flow.combine(controller.state, controller.selectedServerId) { _, _ -> }.collect { render(app) }
             }
         }
 

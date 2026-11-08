@@ -397,7 +397,7 @@ class GhostlyController(
             val id = newId()
             _refreshing.update { it + id }
             try {
-                val parsed = subs.fetch(url, id, backend.appPort, mihomo = _settings.value.core == app.ghostly.core.model.CoreType.MIHOMO)
+                val parsed = subs.fetch(url, id, backend.appPort, mihomo = _settings.value.core == app.ghostly.core.model.CoreType.MIHOMO, nodeHosts = nodeHosts(_profiles.value))
                 val saved = app.ghostly.core.sub.GhostlyDomains.linkToSave(url, parsed.fetchedFrom, parsed.ownAddressFailed)
                 val profile = Profile(
                     id = id,
@@ -536,6 +536,13 @@ class GhostlyController(
         return fetchedFrom
     }
 
+    /**
+     * The nodes a subscription can be asked from directly when its domains don't answer: the addresses of the
+     * regular servers in [profiles] (white-list ones sit behind someone else's CDN). See [app.ghostly.core.sub.GhostlyDomains.doorsOf].
+     */
+    private fun nodeHosts(profiles: List<Profile>): List<String> =
+        profiles.flatMap { it.servers }.filter { !it.isAuto && !it.isWhitelist }.mapNotNull { it.host }.distinct()
+
     fun refresh(profileId: String, manual: Boolean = false) {
         val profile = _profiles.value.firstOrNull { it.id == profileId } ?: return
         val url = profile.url ?: return
@@ -543,7 +550,7 @@ class GhostlyController(
         scope.launch(Dispatchers.IO) {
             _refreshing.update { it + profileId }
             try {
-                val parsed = subs.fetch(url, profileId, backend.appPort, mihomo = _settings.value.core == app.ghostly.core.model.CoreType.MIHOMO)
+                val parsed = subs.fetch(url, profileId, backend.appPort, mihomo = _settings.value.core == app.ghostly.core.model.CoreType.MIHOMO, nodeHosts = nodeHosts(listOf(profile)))
                 val movedTo = domainFailover(profileId, url, parsed.fetchedFrom)
                 _profiles.update { list ->
                     list.map {
@@ -1044,6 +1051,19 @@ class GhostlyController(
     private fun releaseKillSwitch() {
         val ks = platform.killSwitch ?: return
         if (ks.engaged) scope.launch(Dispatchers.IO) { ks.release() }
+    }
+
+    /**
+     * The platform brought the tunnel up on its own, not through [connect]: Android's always-on VPN, start on
+     * boot, or the system restarting the VPN service after it killed the app. The user still wants it, so it
+     * follows server changes like any other: without this the guard moved the selection (white lists on LTE)
+     * while the tunnel stayed on the old server, and the widget showed one server and the app another.
+     */
+    fun adoptTunnel(serverId: String) {
+        userWantsConnection = true
+        applier.markApplied(serverId to tunnelAffecting(_settings.value))
+        // A selection that moved while the tunnel was starting is applied now.
+        if (_selected.value != serverId) applier.request()
     }
 
     /** «Переподключить» from the notification: the same server again, or a plain connect when it's down. */
