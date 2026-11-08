@@ -17,8 +17,8 @@ class FailoverTest {
     private val fiTorrent = server("fi-torrent", "🇫🇮 Торрент", "78.17.1.122", 10447)
     private val fiXhttp = server("fi-xhttp", "🇫🇮 XHTTP", "78.17.1.122", 2083)
     private val fiVision = server("fi-vision", "🇫🇮 ⚡ Vision", "78.17.1.122", 10443)
-    private val nlVision = server("nl-vision", "🇳🇱 ⚡ Vision", "185.231.204.224")
-    private val deVision = server("de-vision", "🇩🇪 ⚡ Vision", "185.231.204.224", 11443)
+    private val nlVision = server("nl-vision", "🇳🇱 ⚡ Vision", "185.231.204.164")
+    private val deVision = server("de-vision", "🇩🇪 ⚡ Vision", "185.231.204.164", 11443)
 
     @Test
     fun aBlockedAddressIsNotWalkedEntryByEntry() {
@@ -36,8 +36,8 @@ class FailoverTest {
     @Test
     fun anotherCountryBehindTheSameDoorStillComesFirst() {
         // FI, NL and DE all enter through the NL address: the country tells them apart.
-        val fiDoor = server("fi-door", "🇫🇮 ⚡ Vision", "185.231.204.224", 10443)
-        val deTorrent = server("de-torrent", "🇩🇪 Торрент", "185.231.204.224", 18443)
+        val fiDoor = server("fi-door", "🇫🇮 ⚡ Vision", "185.231.204.164", 10443)
+        val deTorrent = server("de-torrent", "🇩🇪 Торрент", "185.231.204.164", 18443)
         val order = Failover.rank(listOf(deTorrent, fiDoor, nlVision), deVision, emptyMap(), emptyMap(), now)
         assertEquals(listOf("fi-door", "nl-vision", "de-torrent"), order.map { it.id })
     }
@@ -48,7 +48,7 @@ class FailoverTest {
         val order = Failover.rank(listOf(nlVision, deVision, fiVision), fiTorrent, emptyMap(), penalties, now)
         assertEquals(listOf("de-vision", "fi-vision"), order.map { it.id })
         // Its address and country count as suspicious too, while the penalty lasts.
-        val nlXhttp = server("nl-xhttp", "🇳🇱 XHTTP", "185.231.204.224", 2083)
+        val nlXhttp = server("nl-xhttp", "🇳🇱 XHTTP", "185.231.204.164", 2083)
         assertEquals("de-vision", Failover.rank(listOf(nlXhttp, deVision, nlVision), fiTorrent, emptyMap(), penalties, now).first().id)
         // Ten minutes later it is a candidate again.
         val later = now + Failover.PENALTY_MS
