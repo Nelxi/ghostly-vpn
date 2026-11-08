@@ -30,13 +30,31 @@ class SubscriptionException(message: String, val definitive: Boolean = false) : 
 class SubscriptionClient(private val platform: PlatformInfo) {
 
     private fun newClient(socksPort: Int? = null) = HttpClient {
+        configure()
+        if (socksPort != null) engine { proxy = ProxyBuilder.socks("127.0.0.1", socksPort) }
+    }
+
+    private fun io.ktor.client.HttpClientConfig<*>.configure() {
         install(HttpTimeout) {
             requestTimeoutMillis = 15_000
             connectTimeoutMillis = 7_000
         }
         followRedirects = true
         expectSuccess = false
-        if (socksPort != null) engine { proxy = ProxyBuilder.socks("127.0.0.1", socksPort) }
+    }
+
+    /** Clients pinned to one node each (see [GhostlyDomains.doorsOf]), kept while the address stays the same. */
+    private val doorClients = HashMap<Pair<String, String>, HttpClient>()
+    private val doorLock = Mutex()
+
+    private suspend fun door(host: String, address: String): HttpClient? = doorLock.withLock {
+        doorClients[host to address]?.let { return@withLock it }
+        // Nodes that left the subscription (an IP change) take their clients with them.
+        if (doorClients.size >= GhostlyDomains.MAX_DOORS * 2) {
+            doorClients.values.forEach { it.close() }
+            doorClients.clear()
+        }
+        platform.pinnedClient(host, address) { configure() }?.also { doorClients[host to address] = it }
     }
 
     private val direct = newClient()
@@ -60,7 +78,18 @@ class SubscriptionClient(private val platform: PlatformInfo) {
         // No "GhostlyVPN" here: Ghostly's own server would answer that with its Xray JSON.
         get() = "clash.meta/v1.19.31 mihomo/v1.19.31"
 
-    suspend fun fetch(link: String, idPrefix: String, tunnelPort: Int? = null, mihomo: Boolean = false): ParsedSubscription = coroutineScope {
+    /**
+     * [nodeHosts]: addresses of the subscription's own servers. For Ghostly's subscriptions each is also asked
+     * directly (after the domains have had their head start), so a node under attack or a dead CDN/DNS name
+     * doesn't leave the app without a subscription while the other node is up.
+     */
+    suspend fun fetch(
+        link: String,
+        idPrefix: String,
+        tunnelPort: Int? = null,
+        mihomo: Boolean = false,
+        nodeHosts: List<String> = emptyList(),
+    ): ParsedSubscription = coroutineScope {
         data class Attempt(val url: String, val client: HttpClient, val delayMs: Long)
         // A pasted link on the previous domain is asked on the current one: the old name is never contacted.
         val url = if (GhostlyDomains.isLegacy(link)) GhostlyDomains.current(link) else link
@@ -71,6 +100,9 @@ class SubscriptionClient(private val platform: PlatformInfo) {
             mirrors.forEachIndexed { i, m ->
                 add(Attempt(m, direct, 900L + i * 600))
                 if (tunnelPort != null) add(Attempt(m, viaTunnel(tunnelPort), 1200L + i * 600))
+            }
+            GhostlyDomains.doorsOf(url, nodeHosts).forEachIndexed { i, (u, address) ->
+                door(GhostlyDomains.hostOf(u), address)?.let { add(Attempt(u, it, DOOR_DELAY_MS + i * 300)) }
             }
         }
         val results = Channel<Pair<Attempt, Result<ParsedSubscription>>>(attempts.size)
@@ -177,5 +209,12 @@ class SubscriptionClient(private val platform: PlatformInfo) {
     fun close() {
         direct.close()
         tunneled?.second?.close()
+        doorClients.values.forEach { it.close() }
+        doorClients.clear()
+    }
+
+    private companion object {
+        /** Nodes are asked after the domains and mirrors had their chance: normally the CDN answers first. */
+        const val DOOR_DELAY_MS = 1_500L
     }
 }

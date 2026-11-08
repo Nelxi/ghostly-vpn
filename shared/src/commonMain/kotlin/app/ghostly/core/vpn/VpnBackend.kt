@@ -192,6 +192,16 @@ interface PlatformInfo {
     /** TLS handshake time to host:443 in ms on a direct socket, negative on failure. */
     suspend fun tlsProbe(host: String, timeoutMs: Int): Long = -1
 
+    /**
+     * An HTTP client that sends requests for [host] to [address] (an IP or another name) and keeps [host] as the
+     * TLS name and Host header: asks one of Ghostly's nodes directly. Null where the platform can't pin.
+     */
+    fun pinnedClient(
+        host: String,
+        address: String,
+        configure: io.ktor.client.HttpClientConfig<*>.() -> Unit,
+    ): io.ktor.client.HttpClient? = null
+
     /** Launch at login / on boot (desktop autostart entry; Android uses a boot receiver). */
     fun setStartOnBoot(enabled: Boolean) {}
 

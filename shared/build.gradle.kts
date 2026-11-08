@@ -50,7 +50,7 @@ kotlin {
             api(libs.kotlinx.coroutines.core)
             api(libs.kotlinx.serialization.json)
             implementation(libs.kotlinx.io)
-            implementation(libs.ktor.client.core)
+            api(libs.ktor.client.core)
             implementation(libs.kaml)
         }
         commonTest.dependencies {
@@ -67,7 +67,10 @@ kotlin {
             implementation(libs.ktor.client.darwin)
         }
         // java.net code shared by Android and desktop (direct network checks).
-        val jvmCommonMain by creating { dependsOn(commonMain.get()) }
+        val jvmCommonMain by creating {
+            dependsOn(commonMain.get())
+            dependencies { implementation(libs.ktor.client.okhttp) }
+        }
         androidMain.get().dependsOn(jvmCommonMain)
         jvmMain.get().dependsOn(jvmCommonMain)
     }

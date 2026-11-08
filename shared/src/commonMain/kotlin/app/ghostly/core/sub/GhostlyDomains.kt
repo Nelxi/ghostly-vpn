@@ -10,6 +10,13 @@ object GhostlyDomains {
     const val MAIN = "ghostlynex.fun"
 
     /**
+     * The brand domain (Cloudflare in front, origins NL and DE). Serves the same `/sub/` as [MAIN] and is the
+     * name every node's own HTTPS door answers to (see [doorsOf]), so a subscription still comes through when
+     * one of the nodes is under attack.
+     */
+    const val COM = "ghostlyvpn.com"
+
+    /**
      * The white-list CDN name (Yandex Cloud CDN). It passes mobile white lists when [MAIN] does not, and serves
      * the subscription next to the tunnels under a media-looking path ([LTE_PATH] instead of `/sub/`; the origin
      * answers it only to this app). A refresh mirror only: a link is never saved on it ([current] maps it back),
@@ -24,7 +31,7 @@ object GhostlyDomains {
     /** The previous domain's names: still ours (saved links are moved off them), never contacted. */
     private val LEGACY = listOf("ghostlinknex.online", "srv.ghostlinknex.online")
 
-    private val ALL = listOf(MAIN, LTE, LTE_OLD) + LEGACY
+    private val ALL = listOf(MAIN, COM, LTE, LTE_OLD) + LEGACY
 
     /** How long the link's own domain must stay dead before the app moves the subscription to a mirror. */
     const val SWITCH_AFTER_MS = 3 * 60_000L
@@ -55,8 +62,23 @@ object GhostlyDomains {
         val scheme = url.substringBefore("://", "")
         if (scheme.isEmpty() || !isOurs(url)) return emptyList()
         val own = hostOf(url).removePrefix("www.")
-        return listOf(MAIN, LTE).filter { it != own }.map { withHost(url, it) }
+        return listOf(MAIN, COM, LTE).filter { it != own }.map { withHost(url, it) }
     }
+
+    /**
+     * The same link asked straight at Ghostly's nodes, bypassing DNS and the CDN: every node answers [COM] on its
+     * :443 with the site's own certificate, so the request goes to the node's address with [COM] as the name.
+     * [nodeHosts] are the addresses of the subscription's own servers (they follow an IP change by themselves);
+     * returns (link on [COM], address) pairs, empty for anyone else's subscription.
+     */
+    fun doorsOf(url: String, nodeHosts: List<String>): List<Pair<String, String>> {
+        if (url.substringBefore("://", "").isEmpty() || !isOurs(url)) return emptyList()
+        val link = withHost(url, COM)
+        return nodeHosts.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct().take(MAX_DOORS).map { link to it }
+    }
+
+    /** At most this many nodes are asked directly per refresh. */
+    const val MAX_DOORS = 4
 
     /**
      * A subscription link on the current domain: links saved with a previous domain (or a white-list CDN name)

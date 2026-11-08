@@ -321,6 +321,9 @@ class AndroidPlatform(private val context: Context) : PlatformInfo {
 
     override suspend fun tlsProbe(host: String, timeoutMs: Int): Long = app.ghostly.core.vpn.JvmNetProbe.tls(host, timeoutMs)
 
+    override fun pinnedClient(host: String, address: String, configure: io.ktor.client.HttpClientConfig<*>.() -> Unit) =
+        app.ghostly.core.vpn.PinnedEngine.client(host, address, configure)
+
     /** Underlying network (not our VPN): Wi-Fi vs mobile decides white-list behaviour. */
     override fun networkType(): app.ghostly.core.vpn.NetType = runCatching {
         val cm = context.getSystemService(android.net.ConnectivityManager::class.java)
