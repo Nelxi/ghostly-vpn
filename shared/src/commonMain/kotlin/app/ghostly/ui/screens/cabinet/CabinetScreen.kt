@@ -396,7 +396,7 @@ private fun SubsBlock(controller: GhostlyController, st: CabinetState, subs: Lis
             if (st.trial) {
                 Spacer(Modifier.height(10.dp))
                 val scope = rememberCoroutineScope()
-                SoftButton(tr("24 часа бесплатно"), { scope.launch { controller.cabinet.trial() } }, Modifier.fillMaxWidth(), Icons.Rounded.Redeem)
+                SoftButton(tr("3 дня бесплатно"), { scope.launch { controller.cabinet.trial() } }, Modifier.fillMaxWidth(), Icons.Rounded.Redeem)
             }
         }
         return

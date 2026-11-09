@@ -170,7 +170,7 @@ internal fun SignInBody(controller: GhostlyController, u: CabinetUi.SignedOut, o
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (anon.trial) {
                 AccentButton(
-                    if (busy == "trial") tr("Включаю…") else tr("24 часа бесплатно"),
+                    if (busy == "trial") tr("Включаю…") else tr("3 дня бесплатно"),
                     { scope.launch { cab.trial() } }, Modifier.fillMaxWidth(), Icons.Rounded.Redeem, enabled = busy == null,
                 )
             }
