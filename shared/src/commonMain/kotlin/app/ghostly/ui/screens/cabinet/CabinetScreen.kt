@@ -38,6 +38,7 @@ import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.DataUsage
+import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Devices
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Key
@@ -311,6 +312,7 @@ private fun ReadyBody(controller: GhostlyController, st: CabinetState, wide: Boo
             }
             Column(Modifier.weight(1f)) {
                 ReferralCard(controller, st, Modifier.padding(top = 0.dp).appear(2))
+                GrowthCards(controller, st, Modifier.padding(top = 12.dp).appear(2))
                 Spacer(Modifier.height(12.dp))
                 ActivityBlock(st, open)
                 AccountBlock(controller, st, open)
@@ -321,6 +323,7 @@ private fun ReadyBody(controller: GhostlyController, st: CabinetState, wide: Boo
         OpenOrders(controller, st)
         SubsBlock(controller, st, subs, now, open)
         ReferralCard(controller, st, Modifier.padding(top = 12.dp).appear(3))
+        GrowthCards(controller, st, Modifier.padding(top = 12.dp).appear(3))
         ActivityBlock(st, open)
         AccountBlock(controller, st, open)
     }
@@ -634,6 +637,36 @@ private fun ReferralCard(controller: GhostlyController, st: CabinetState, modifi
                 contentAlignment = Alignment.Center,
             ) { Icon(Icons.Rounded.Share, tr("Поделиться"), tint = androidx.compose.ui.graphics.lerp(c.accent, Color.White, 0.3f), modifier = Modifier.size(19.dp)) }
         }
+    }
+}
+
+/** Gift a plan to a friend and squads (three pay a month+, everyone gets 7 days): both run in the bot,
+ * which has the postcard, the friends' link and the progress. */
+@Composable
+private fun GrowthCards(controller: GhostlyController, st: CabinetState, modifier: Modifier) {
+    val bot = st.botName
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        GrowthTile(Icons.Rounded.Redeem, tr("Подарить другу"), tr("Тариф с открыткой"), Modifier.weight(1f)) {
+            controller.haptic(); controller.platform.openUrl("https://t.me/$bot?start=gift")
+        }
+        GrowthTile(Icons.Rounded.Groups, tr("Сквад: +7 дней"), tr("Оплатите втроём от месяца"), Modifier.weight(1f)) {
+            controller.haptic(); controller.platform.openUrl("https://t.me/$bot?start=squad")
+        }
+    }
+}
+
+@Composable
+private fun GrowthTile(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, sub: String, modifier: Modifier, onClick: () -> Unit) {
+    val c = Ghost.colors
+    Tile(modifier, padding = 14.dp, onClick = onClick) {
+        Box(
+            Modifier.size(36.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center,
+        ) { Icon(icon, null, tint = androidx.compose.ui.graphics.lerp(c.accent, Color.White, 0.3f), modifier = Modifier.size(19.dp)) }
+        Spacer(Modifier.height(10.dp))
+        Text(title, style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.5.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.height(2.dp))
+        Text(sub, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp), maxLines = 2)
     }
 }
 
