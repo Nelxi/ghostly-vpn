@@ -159,7 +159,11 @@ interface PlatformInfo {
     suspend fun downloadVerified(urls: List<String>, sha256: String, size: Long, onProgress: (Float) -> Unit): String =
         throw UnsupportedOperationException("updates are not supported here")
 
-    /** May an update be installed without a tap first (Android: only once "install unknown apps" is granted). */
+    /**
+     * May an update be handed to the installer right now without a tap first? Android: only once "install
+     * unknown apps" is granted and while the app is on screen (the system does not let a background app
+     * open the installer).
+     */
     fun canAutoInstall(): Boolean = true
 
     /** Hands a verified update to the OS installer (Android package installer / Windows setup). */
