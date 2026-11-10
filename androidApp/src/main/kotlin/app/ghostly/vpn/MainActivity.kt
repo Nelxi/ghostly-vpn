@@ -91,10 +91,14 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         AmbientMotion.visible.value = true
+        // A downloaded update may be handed to the installer only while we are on screen.
+        app.platform.onScreen = true
+        app.controller.appShown()
     }
 
     override fun onStop() {
         AmbientMotion.visible.value = false
+        app.platform.onScreen = false
         super.onStop()
     }
 

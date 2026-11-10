@@ -351,14 +351,21 @@ class AndroidPlatform(private val context: Context) : PlatformInfo {
     }
 
     override suspend fun downloadVerified(urls: List<String>, sha256: String, size: Long, onProgress: (Float) -> Unit): String =
-        downloadVerifiedTo(java.io.File(context.cacheDir, "updates/$updateAsset"), urls, sha256, size, onProgress)
+        app.ghostly.core.update.downloadVerifiedTo(java.io.File(context.cacheDir, "updates/$updateAsset"), urls, sha256, size, onProgress)
 
     override fun clearDownloadedUpdate() {
         java.io.File(context.cacheDir, "updates").deleteRecursively()
     }
 
+    /** The main screen is shown right now (set by MainActivity). */
+    @Volatile
+    var onScreen = false
+
+    // Android 10+ silently refuses to open the installer for an app that is not on screen (a running VPN
+    // service does not count): the hand-over would do nothing, and an installer popping up over another
+    // app on older versions is no better. The download waits for the app to be opened.
     override fun canAutoInstall(): Boolean =
-        Build.VERSION.SDK_INT < 26 || context.packageManager.canRequestPackageInstalls()
+        onScreen && (Build.VERSION.SDK_INT < 26 || context.packageManager.canRequestPackageInstalls())
 
     override fun installUpdate(path: String) {
         if (Build.VERSION.SDK_INT >= 26 && !context.packageManager.canRequestPackageInstalls()) {
