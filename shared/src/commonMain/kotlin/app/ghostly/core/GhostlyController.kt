@@ -160,7 +160,7 @@ class GhostlyController(
         app.ghostly.core.account.Cabinet(
             platform, store, scope,
             toast = { _events.emit(it) },
-            haptic = { haptic(it) },
+            haptic = { haptic(it, fromUser = false) },
             ghostlySub = { ghostlyProfile()?.url },
             appSubIds = ::subIdsInApp,
             importSub = { url -> import(url) },
@@ -281,7 +281,7 @@ class GhostlyController(
             backend.state.collect { s ->
                 when (s) {
                     is VpnState.Connected -> {
-                        if (userWantsConnection) haptic(app.ghostly.core.vpn.Haptic.SUCCESS)
+                        if (userWantsConnection) haptic(app.ghostly.core.vpn.Haptic.SUCCESS, fromUser = false)
                         failoverAttempts = 0
                         retryAttempts = 0
                         releaseKillSwitch()
@@ -1140,7 +1140,7 @@ class GhostlyController(
             }
             return
         }
-        haptic(app.ghostly.core.vpn.Haptic.ERROR)
+        haptic(app.ghostly.core.vpn.Haptic.ERROR, fromUser = false)
         val current = _selected.value
         if (!failure.retryable || !_settings.value.autoFailover || failoverAttempts >= 3) {
             _events.emit(failure.message)
@@ -1611,7 +1611,8 @@ class GhostlyController(
     /** A page changes: the soft whoosh under the transition (respects the sound setting). */
     fun whoosh() {
         val s = _settings.value
-        if (s.sounds) platform.playWhoosh(s.soundVolume * 0.35f)
+        // The tab may also change by itself (a tab disappearing): treated as a background event.
+        if (feedback(fromUser = false).sound) platform.playWhoosh(s.soundVolume * 0.35f)
     }
 
     fun hoverSound() {
@@ -1620,13 +1621,26 @@ class GhostlyController(
         val t = now()
         if (t - lastHover < 55) return
         lastHover = t
-        platform.playHover(s.soundVolume)
+        if (feedback(fromUser = true).sound) platform.playHover(s.soundVolume)
     }
 
-    fun haptic(kind: app.ghostly.core.vpn.Haptic = app.ghostly.core.vpn.Haptic.CLICK) {
+    private fun feedback(fromUser: Boolean): app.ghostly.core.vpn.Feedback {
         val s = _settings.value
-        if (s.haptics) platform.haptic(kind, s.hapticStrength)
-        if (s.sounds) {
+        if (!s.haptics && !s.sounds) return app.ghostly.core.vpn.Feedback.NONE
+        val env = runCatching { platform.feedbackEnv() }.getOrNull()
+        return app.ghostly.core.vpn.FeedbackPolicy.decide(fromUser, s.haptics, s.sounds, env)
+    }
+
+    /**
+     * Vibration + UI sound of [kind]. [fromUser] = false for anything that is not a tap in the open app
+     * (connected after a failover, a failure, a payment confirmed): those stay silent while the phone is
+     * locked, the screen is off or the app is not on screen, and follow the ringer / «Не беспокоить».
+     */
+    fun haptic(kind: app.ghostly.core.vpn.Haptic = app.ghostly.core.vpn.Haptic.CLICK, fromUser: Boolean = true) {
+        val s = _settings.value
+        val f = feedback(fromUser)
+        if (f.vibrate) platform.haptic(kind, s.hapticStrength)
+        if (f.sound) {
             if (kind == app.ghostly.core.vpn.Haptic.TICK) platform.playSound(app.ghostly.core.vpn.Haptic.CLICK, s.soundVolume * 0.6f)
             else platform.playSound(kind, s.soundVolume)
         }

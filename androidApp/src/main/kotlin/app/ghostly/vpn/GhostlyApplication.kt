@@ -122,6 +122,27 @@ class AndroidPlatform(private val context: Context) : PlatformInfo {
     /** The visible activity's window, for system haptics (set by MainActivity). */
     @Volatile var hapticView: java.lang.ref.WeakReference<android.view.View>? = null
 
+    override fun feedbackEnv(): app.ghostly.core.vpn.FeedbackEnv? = runCatching {
+        val power = context.getSystemService(android.os.PowerManager::class.java)
+        val keyguard = context.getSystemService(android.app.KeyguardManager::class.java)
+        val audio = context.getSystemService(android.media.AudioManager::class.java)
+        val notifications = context.getSystemService(android.app.NotificationManager::class.java)
+        val filter = notifications?.currentInterruptionFilter ?: android.app.NotificationManager.INTERRUPTION_FILTER_UNKNOWN
+        app.ghostly.core.vpn.FeedbackEnv(
+            screenOn = power?.isInteractive ?: true,
+            locked = keyguard?.isKeyguardLocked ?: false,
+            appShown = onScreen,
+            ringer = when (audio?.ringerMode) {
+                android.media.AudioManager.RINGER_MODE_SILENT -> app.ghostly.core.vpn.Ringer.SILENT
+                android.media.AudioManager.RINGER_MODE_VIBRATE -> app.ghostly.core.vpn.Ringer.VIBRATE
+                else -> app.ghostly.core.vpn.Ringer.NORMAL
+            },
+            // UNKNOWN (no answer) counts as off; priority-only, alarms-only and total silence as on.
+            dnd = filter != android.app.NotificationManager.INTERRUPTION_FILTER_ALL &&
+                filter != android.app.NotificationManager.INTERRUPTION_FILTER_UNKNOWN,
+        )
+    }.getOrNull()
+
     override fun haptic(kind: Haptic, strength: Float) {
         if (strength <= 0f) return
         if (vibrate(kind, strength.coerceIn(0f, 1f))) return
@@ -230,8 +251,24 @@ class AndroidPlatform(private val context: Context) : PlatformInfo {
 
     private var ambient: android.media.MediaPlayer? = null
 
+    // The ambient asked by the UI, kept so it can pause while the app is hidden and come back when it is shown.
+    private var ambientWanted: Pair<ByteArray, Float>? = null
+
+    /** MainActivity started / stopped: the ambient loop must not keep playing behind other apps or a locked screen. */
+    fun ambientVisible(shown: Boolean) {
+        val want = ambientWanted
+        if (shown && want != null && ambient == null) startAmbient(want.first, want.second)
+        if (!shown) releaseAmbient()
+    }
+
     override fun playAmbient(wav: ByteArray, volume: Float) {
-        stopAmbient()
+        ambientWanted = wav to volume
+        releaseAmbient()
+        startAmbient(wav, volume)
+    }
+
+    private fun startAmbient(wav: ByteArray, volume: Float) {
+        if (!app.ghostly.core.vpn.FeedbackPolicy.ambientAllowed(feedbackEnv())) return
         runCatching {
             // MediaPlayer wants a file or a URI, not bytes: the track goes to the cache once
             val file = java.io.File(context.cacheDir, "ambient_${wav.size}.wav")
@@ -253,6 +290,11 @@ class AndroidPlatform(private val context: Context) : PlatformInfo {
     }
 
     override fun stopAmbient() {
+        ambientWanted = null
+        releaseAmbient()
+    }
+
+    private fun releaseAmbient() {
         ambient?.let { p -> runCatching { p.stop() }; runCatching { p.release() } }
         ambient = null
     }
@@ -356,6 +398,10 @@ class AndroidPlatform(private val context: Context) : PlatformInfo {
     override fun clearDownloadedUpdate() {
         java.io.File(context.cacheDir, "updates").deleteRecursively()
     }
+
+    /** The main screen is shown right now (set by MainActivity). */
+    @Volatile
+    var onScreen = false
 
     override fun canAutoInstall(): Boolean =
         Build.VERSION.SDK_INT < 26 || context.packageManager.canRequestPackageInstalls()

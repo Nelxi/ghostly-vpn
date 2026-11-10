@@ -91,10 +91,21 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         AmbientMotion.visible.value = true
+        // Background events vibrate / sound only while we are on screen (see FeedbackPolicy).
+        app.platform.onScreen = true
+        app.platform.ambientVisible(true)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // onStart may come while the lock screen is still up: the ambient gets another chance once it is gone.
+        app.platform.ambientVisible(true)
     }
 
     override fun onStop() {
         AmbientMotion.visible.value = false
+        app.platform.onScreen = false
+        app.platform.ambientVisible(false)
         super.onStop()
     }
 

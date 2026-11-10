@@ -123,6 +123,9 @@ interface PlatformInfo {
     /** Vibration of the given kind; [strength] 0..1 is the user's slider (no-op where there is no motor). */
     fun haptic(kind: Haptic = Haptic.CLICK, strength: Float = 0.6f) {}
 
+    /** Screen, lock, ringer and «Не беспокоить» right now (see [FeedbackPolicy]); null = not tracked here (desktop). */
+    fun feedbackEnv(): FeedbackEnv? = null
+
     /**
      * A short UI sound for the same moments as [haptic]: CLICK a tick, HEAVY the ghost press,
      * SUCCESS connected, ERROR failed (TICK stays silent: switches would be too chatty). [volume] 0..1.
