@@ -91,14 +91,23 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         AmbientMotion.visible.value = true
-        // A downloaded update may be handed to the installer only while we are on screen.
+        // On screen: a downloaded update may go to the installer, and background events may vibrate / sound
+        // (see FeedbackPolicy).
         app.platform.onScreen = true
+        app.platform.ambientVisible(true)
         app.controller.appShown()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // onStart may come while the lock screen is still up: the ambient gets another chance once it is gone.
+        app.platform.ambientVisible(true)
     }
 
     override fun onStop() {
         AmbientMotion.visible.value = false
         app.platform.onScreen = false
+        app.platform.ambientVisible(false)
         super.onStop()
     }
 

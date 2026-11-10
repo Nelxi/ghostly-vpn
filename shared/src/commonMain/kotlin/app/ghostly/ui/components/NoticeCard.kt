@@ -127,7 +127,7 @@ private fun NoticeCard(n: Notice, more: Int, controller: GhostlyController) {
     val shake = remember { Animatable(0f) }
 
     LaunchedEffect(n.id) {
-        controller.haptic(if (n.kind == "danger") Haptic.ERROR else Haptic.SUCCESS)
+        controller.haptic(if (n.kind == "danger") Haptic.ERROR else Haptic.SUCCESS, fromUser = false)
         if (n.kind == "danger") {
             delay(420)
             for (x in listOf(-14f, 12f, -8f, 5f, -2f, 0f)) shake.animateTo(x, tween(55))
