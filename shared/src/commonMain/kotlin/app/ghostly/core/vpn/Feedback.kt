@@ -33,8 +33,8 @@ object FeedbackPolicy {
      * - The user's switches ([haptics], [sounds]) always come first.
      * - A background event stays silent unless the screen is on, unlocked and showing the app: no buzzing
      *   in a pocket because the tunnel switched servers.
-     * - Silent ringer or «Не беспокоить»: background events make neither sound nor vibration; a tap still
-     *   gets its vibration (like the system keyboard) but no sound.
+     * - Silent ringer: nothing at all, taps included.
+     * - «Не беспокоить»: background events make neither sound nor vibration; a tap keeps its vibration, no sound.
      * - Vibrate ringer: vibration only, no sound.
      */
     fun decide(fromUser: Boolean, haptics: Boolean, sounds: Boolean, env: FeedbackEnv?): Feedback {
@@ -43,7 +43,7 @@ object FeedbackPolicy {
         val quiet = env.dnd || env.ringer == Ringer.SILENT
         if (!fromUser && quiet) return Feedback.NONE
         return Feedback(
-            vibrate = haptics,
+            vibrate = haptics && env.ringer != Ringer.SILENT,
             sound = sounds && !quiet && env.ringer == Ringer.NORMAL,
         )
     }

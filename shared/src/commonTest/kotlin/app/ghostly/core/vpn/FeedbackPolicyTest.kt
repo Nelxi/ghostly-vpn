@@ -44,8 +44,8 @@ class FeedbackPolicyTest {
     fun silentRingerAndDoNotDisturb() {
         assertEquals(Feedback.NONE, bg(open.copy(ringer = Ringer.SILENT)))
         assertEquals(Feedback.NONE, bg(open.copy(dnd = true)))
-        // A tap keeps its vibration but makes no sound.
-        assertEquals(Feedback(vibrate = true, sound = false), tap(open.copy(ringer = Ringer.SILENT)))
+        // Silent ringer: a tap gets nothing either; under «Не беспокоить» it keeps its vibration only.
+        assertEquals(Feedback.NONE, tap(open.copy(ringer = Ringer.SILENT)))
         assertEquals(Feedback(vibrate = true, sound = false), tap(open.copy(dnd = true)))
     }
 
