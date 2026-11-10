@@ -59,7 +59,7 @@ class DesktopPlatform : PlatformInfo {
     var quitForUpdate: (() -> Unit)? = null
 
     override suspend fun downloadVerified(urls: List<String>, sha256: String, size: Long, onProgress: (Float) -> Unit): String =
-        downloadVerifiedTo(File(System.getProperty("java.io.tmpdir"), "ghostly-update/Ghostly-Windows.exe"), urls, sha256, size, onProgress)
+        app.ghostly.core.update.downloadVerifiedTo(File(System.getProperty("java.io.tmpdir"), "ghostly-update/Ghostly-Windows.exe"), urls, sha256, size, onProgress)
 
     override fun clearDownloadedUpdate() {
         File(System.getProperty("java.io.tmpdir"), "ghostly-update").deleteRecursively()

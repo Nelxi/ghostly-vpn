@@ -50,6 +50,8 @@ private data class UiState(
     val dismissedUpdate: String? = null,
     /** mihomo selector choices per profile (profileId → group → member): survive reconnects and restarts. */
     val mihomoPicks: Map<String, Map<String, String>> = emptyMap(),
+    /** The last hand-over of an update to the installer: bounds what the background updater does by itself. */
+    val updateTry: app.ghostly.core.update.InstallTry? = null,
 )
 
 class GhostlyController(
@@ -95,6 +97,8 @@ class GhostlyController(
     val refreshing: StateFlow<Set<String>> = _refreshing.asStateFlow()
 
     private var dismissedUpdate: String? = _ui.value.dismissedUpdate
+    @kotlin.concurrent.Volatile
+    private var updateTry: app.ghostly.core.update.InstallTry? = _ui.value.updateTry
 
     /** Server-tunable look (glow, parallax, seasonal accent, announcement) — changes without an app update. */
     val design = app.ghostly.core.design.RemoteDesign(store, "GhostlyVPN/${platform.appVersion} (${platform.os})")
@@ -114,7 +118,18 @@ class GhostlyController(
     val mihomoGroups = app.ghostly.core.mihomo.MihomoGroups(backend as? app.ghostly.core.mihomo.DualCoreBackend, scope) { _settings.value.mihomoPingUrl }
 
     /** App self-update (our server first, GitHub mirror), verified by SHA-256. */
-    val updater = app.ghostly.core.update.Updater(platform) { v -> v == dismissedUpdate }
+    val updater = app.ghostly.core.update.Updater(
+        platform,
+        lastTry = { updateTry },
+        saveTry = { updateTry = it; saveUi() },
+    ) { v -> v == dismissedUpdate }
+
+    private val updateWake = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
+
+    /** The app came to the screen: an update that waits for that can be installed now (see the update loop). */
+    fun appShown() {
+        updateWake.trySend(Unit)
+    }
 
     /** The log of the last run of [core] (Xray or mihomo), newest lines last; null when empty. */
     suspend fun coreLogs(core: app.ghostly.core.model.CoreType): String? =
@@ -302,17 +317,24 @@ class GhostlyController(
         }
         scope.launch(Dispatchers.IO) {
             kotlinx.coroutines.delay(4_000)
+            var askedAt = 0L
             while (true) {
                 val s = _settings.value
                 if (s.autoCheckUpdates) {
-                    val offer = runCatching { updater.check() }.getOrNull()
+                    // Coming to the screen wakes this loop early; the servers are still asked once per period.
+                    val now = Clock.System.now().toEpochMilliseconds()
+                    val offer = if (now - askedAt in 0 until UPDATE_CHECK_MS) updater.offer.value else {
+                        askedAt = now
+                        runCatching { updater.check() }.getOrNull()
+                    }
                     // Hands-off updates: fetch, verify SHA-256, install (desktop relaunches and reconnects).
-                    if (offer != null && s.autoInstallUpdates && platform.canAutoInstall() && !updater.gaveUp(offer.version)) {
+                    // Only when the installer can really be shown, and a bounded number of times per version.
+                    if (offer != null && s.autoInstallUpdates && platform.canAutoInstall() && updater.mayAutoInstall(offer.version)) {
                         _events.emit(tr("Вышла Ghostly {0} — скачиваю и ставлю сама ♡", offer.version))
-                        runCatching { updater.install(offer) }
+                        runCatching { updater.install(offer, auto = true) }
                     }
                 }
-                kotlinx.coroutines.delay(2 * 60_000L)
+                kotlinx.coroutines.withTimeoutOrNull(UPDATE_CHECK_MS) { updateWake.receive() }
             }
         }
         scope.launch(Dispatchers.IO) {
@@ -1669,7 +1691,7 @@ class GhostlyController(
 
     private fun saveUi() = store.save(
         STATE, UiState.serializer(),
-        UiState(_selected.value, _favorites.value, _pings.value, _onboarded.value, dismissedUpdate, _mihomoPicks.value),
+        UiState(_selected.value, _favorites.value, _pings.value, _onboarded.value, dismissedUpdate, _mihomoPicks.value, updateTry),
     )
 
     private fun randomUser(): String = "ghostly_" + secureToken("abcdefghijkmnpqrstuvwxyz23456789", 6)
@@ -1743,6 +1765,9 @@ class GhostlyController(
         private const val SETTINGS = "settings.json"
         private const val STATE = "state.json"
         const val MANUAL = "manual"
+
+        /** How often the update servers are asked for a newer build. */
+        private const val UPDATE_CHECK_MS = 2 * 60_000L
 
         /** Normal poll of the connection guard. */
         private const val GUARD_DELAY_MS = 20_000L

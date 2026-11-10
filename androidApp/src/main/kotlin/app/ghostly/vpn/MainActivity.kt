@@ -91,9 +91,11 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         AmbientMotion.visible.value = true
-        // Background events vibrate / sound only while we are on screen (see FeedbackPolicy).
+        // On screen: a downloaded update may go to the installer, and background events may vibrate / sound
+        // (see FeedbackPolicy).
         app.platform.onScreen = true
         app.platform.ambientVisible(true)
+        app.controller.appShown()
     }
 
     override fun onResume() {

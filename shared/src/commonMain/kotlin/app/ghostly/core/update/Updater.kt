@@ -13,6 +13,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.serialization.Serializable
 import app.ghostly.i18n.tr
 
@@ -34,6 +35,13 @@ data class ReleaseManifest(val version: String, val files: Map<String, ReleaseFi
 
 data class UpdateOffer(val version: String, val file: String, val sha256: String, val size: Long)
 
+/**
+ * The latest hand-over of [version] to the system installer: [count] of them were started by the app
+ * itself (not by a tap on «Обновить»), the last one at [atMs]. Kept across restarts.
+ */
+@Serializable
+data class InstallTry(val version: String, val count: Int = 0, val atMs: Long = 0)
+
 sealed interface UpdateStep {
     data object Idle : UpdateStep
     data class Downloading(val progress: Float) : UpdateStep
@@ -46,7 +54,14 @@ sealed interface UpdateStep {
  * Checks our server (both domains, then GitHub) for a newer build of this platform's file,
  * downloads it and only hands it to the installer after the SHA-256 matches the manifest.
  */
-class Updater(private val platform: PlatformInfo, private val isDismissed: (String) -> Boolean) {
+class Updater(
+    private val platform: PlatformInfo,
+    /** Reads / stores the last hand-over to the installer (the store must have written before it returns). */
+    private val lastTry: () -> InstallTry? = { null },
+    private val saveTry: (InstallTry?) -> Unit = {},
+    private val nowMs: () -> Long = { kotlin.time.Clock.System.now().toEpochMilliseconds() },
+    private val isDismissed: (String) -> Boolean,
+) {
 
     private val http = HttpClient {
         install(HttpTimeout) { requestTimeoutMillis = 15_000; connectTimeoutMillis = 8_000 }
@@ -119,31 +134,73 @@ class Updater(private val platform: PlatformInfo, private val isDismissed: (Stri
     /** True when [version] already failed twice: the background updater stops retrying it (no 98% -> 1% loop). */
     fun gaveUp(version: String): Boolean = (failures[version] ?: 0) >= 2
 
-    suspend fun install(offer: UpdateOffer) {
-        if (_step.value is UpdateStep.Downloading || _step.value is UpdateStep.Verifying) return
-        _step.value = UpdateStep.Downloading(0f)
-        // Versioned folders first: a URL that never changes can't be served stale by a cache.
-        val urls = SERVERS.map { it + offer.version + "/" + offer.file } + MIRRORS.map { it + offer.file } +
-            "https://github.com/Nelxi/ghostly-vpn/releases/download/v${offer.version}/${offer.file}"
-        val path = try {
-            platform.downloadVerified(urls, offer.sha256, offer.size) { p ->
-                _step.value = if (p >= 1f) UpdateStep.Verifying else UpdateStep.Downloading(p)
+    /**
+     * May the background updater start the installer for [version] by itself right now? Not after two
+     * failed downloads in this run, and not shortly after the installer was already given this version:
+     * nobody tells us whether the install went through (Android shows a system dialog the user may close,
+     * the desktop installer may fail and start the old app again), so without this the same version was
+     * downloaded and launched again every two minutes. It is offered again after [AUTO_GAP_MS], at most
+     * [AUTO_TRIES] times per version; the banner's «Обновить» always works.
+     */
+    fun mayAutoInstall(version: String): Boolean = !gaveUp(version) && autoAllowed(version, lastTry(), nowMs())
+
+    /** One download / hand-over at a time, whoever asked (the background loop or a tap). */
+    private val busy = Mutex()
+
+    /**
+     * Downloads [offer] (or takes the file that is already there), verifies it and starts the installer.
+     * [auto] = asked by the background loop rather than by a tap: the installer is then started only if
+     * the platform still allows it once the file is ready, and the try is counted.
+     */
+    suspend fun install(offer: UpdateOffer, auto: Boolean = false) {
+        if (!busy.tryLock()) return
+        var handedOver = false
+        try {
+            _step.value = UpdateStep.Downloading(0f)
+            // Versioned folders first: a URL that never changes can't be served stale by a cache.
+            val urls = SERVERS.map { it + offer.version + "/" + offer.file } + MIRRORS.map { it + offer.file } +
+                "https://github.com/Nelxi/ghostly-vpn/releases/download/v${offer.version}/${offer.file}"
+            val path = try {
+                platform.downloadVerified(urls, offer.sha256, offer.size) { p ->
+                    _step.value = if (p >= 1f) UpdateStep.Verifying else UpdateStep.Downloading(p)
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                _step.value = UpdateStep.Idle
+                throw e
+            } catch (e: Exception) {
+                failures[offer.version] = (failures[offer.version] ?: 0) + 1
+                _step.value = UpdateStep.Failed(e.message ?: tr("Не удалось скачать обновление"))
+                return
             }
-        } catch (e: Exception) {
-            failures[offer.version] = (failures[offer.version] ?: 0) + 1
-            _step.value = UpdateStep.Failed(e.message ?: tr("Не удалось скачать обновление"))
-            return
+            // The download may have taken minutes and the app may have left the screen meanwhile: the
+            // verified file stays where it is, and the installer starts when the app is opened again.
+            if (auto && !(platform.canAutoInstall() && mayAutoInstall(offer.version))) {
+                _step.value = UpdateStep.Idle
+                return
+            }
+            _step.value = UpdateStep.Installing
+            val before = lastTry()
+            val autoTries = before?.takeIf { it.version == offer.version }?.count ?: 0
+            // Written down before the hand-over: the desktop app quits inside installUpdate.
+            saveTry(InstallTry(offer.version, autoTries + if (auto) 1 else 0, nowMs()))
+            try {
+                platform.installUpdate(path)
+                handedOver = true
+            } catch (e: Exception) {
+                // The installer never started (no permission yet, nothing to show it): not a try.
+                saveTry(before)
+                _step.value = UpdateStep.Failed(e.message ?: tr("Не удалось запустить установку"))
+            }
+        } finally {
+            busy.unlock()
         }
-        _step.value = UpdateStep.Installing
-        runCatching { platform.installUpdate(path) }
-            .onFailure { _step.value = UpdateStep.Failed(it.message ?: tr("Не удалось запустить установку")) }
-            .onSuccess {
-                // Android hands the APK to the system installer and stays alive: if the user cancels it,
-                // the banner must come back to "Обновить" instead of hanging on "Запускаю установку".
-                // (Desktop quits for the installer before this fires.)
-                kotlinx.coroutines.delay(6_000)
-                if (_step.value == UpdateStep.Installing) _step.value = UpdateStep.Idle
-            }
+        if (handedOver) {
+            // Android hands the APK to the system installer and stays alive: if the user cancels it,
+            // the banner must come back to "Обновить" instead of hanging on "Запускаю установку".
+            // (Desktop quits for the installer before this fires.)
+            kotlinx.coroutines.delay(6_000)
+            if (_step.value == UpdateStep.Installing) _step.value = UpdateStep.Idle
+        }
     }
 
     fun reset() {
@@ -164,6 +221,20 @@ class Updater(private val platform: PlatformInfo, private val isDismissed: (Stri
             "https://ghostlynex.fun/dl/",
             "https://github.com/Nelxi/ghostly-vpn/releases/latest/download/",
         )
+
+        /** How many times the background updater starts the installer for one version by itself. */
+        const val AUTO_TRIES = 3
+
+        /** The least time between two hand-overs of the same version that nobody asked for. */
+        const val AUTO_GAP_MS = 6 * 3600_000L
+
+        /** See [mayAutoInstall]; [last] is the stored hand-over, of whatever version. */
+        fun autoAllowed(version: String, last: InstallTry?, nowMs: Long): Boolean {
+            if (last == null || last.version != version) return true
+            if (last.count >= AUTO_TRIES) return false
+            // A clock that was set back must not lock the update out: the count still bounds the tries.
+            return nowMs - last.atMs !in 0 until AUTO_GAP_MS
+        }
 
         /** "0.1.10" > "0.1.9"; suffixes like "-dev" are ignored. */
         fun compareVersions(a: String, b: String): Int {
