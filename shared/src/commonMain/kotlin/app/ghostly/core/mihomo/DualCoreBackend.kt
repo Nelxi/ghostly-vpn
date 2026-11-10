@@ -13,6 +13,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -57,7 +58,18 @@ class DualCoreBackend(
 
     val onMihomo: Boolean get() = active.value === mihomo
 
-    override val state: StateFlow<VpnState> = active.flatMapLatest { it.state }.stateIn(scope, SharingStarted.Eagerly, VpnState.Idle)
+    /**
+     * The failure the other core was left in when the tunnel moved to it. Cores keep their last
+     * [VpnState.Failed] until they are started again, and [active] flips before the new core's connect
+     * sets Connecting: without this filter the controller saw that old failure as a fresh one (its toast,
+     * the error vibration, a retry, the kill switch on desktop) right while the new connect was going fine.
+     */
+    @kotlin.concurrent.Volatile
+    private var staleFailure: VpnState.Failed? = null
+
+    override val state: StateFlow<VpnState> = active
+        .flatMapLatest { core -> core.state.filter { it !is VpnState.Failed || it !== staleFailure } }
+        .stateIn(scope, SharingStarted.Eagerly, VpnState.Idle)
     override val traffic: StateFlow<Traffic> = active.flatMapLatest { it.traffic }.stateIn(scope, SharingStarted.Eagerly, Traffic())
 
     override fun needsPermission(): Boolean = xray.needsPermission()
@@ -70,6 +82,7 @@ class DualCoreBackend(
         val previous = active.value
         if (previous !== target) {
             if (previous.state.value !is VpnState.Idle && previous.state.value !is VpnState.Failed) previous.disconnect()
+            staleFailure = target.state.value as? VpnState.Failed
             active.value = target
         }
         if (target === mihomo) mihomo.connect(server, profile, settings, profile?.let { picksOf(it.id) } ?: emptyMap()) else xray.connect(server, settings)
