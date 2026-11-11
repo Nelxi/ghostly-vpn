@@ -87,7 +87,12 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
 
     fun isElevated(): Boolean = runCatching {
         when (hostOs) {
-            HostOs.WINDOWS -> ProcessBuilder("net", "session").redirectErrorStream(true).start().let { it.inputStream.readAllBytes(); it.waitFor() == 0 }
+            // Not `net session`: it fails when the Server (LanmanServer) service is disabled, even elevated.
+            // An elevated token carries the High (or System) mandatory level SID; the SIDs don't depend on the UI language.
+            HostOs.WINDOWS -> ProcessBuilder("whoami", "/groups").redirectErrorStream(true).start().let { p ->
+                val out = p.inputStream.readAllBytes().decodeToString()
+                p.waitFor() == 0 && ("S-1-16-12288" in out || "S-1-16-16384" in out)
+            }
             else -> exec("id", "-u").trim() == "0"
         }
     }.getOrDefault(false)
