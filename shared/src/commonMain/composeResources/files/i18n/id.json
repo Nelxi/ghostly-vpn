@@ -853,5 +853,22 @@
  "Подарить другу": "Hadiahkan ke teman",
  "Тариф с открыткой": "Paket dengan kartu ucapan",
  "Сквад: +7 дней": "Skuad: +7 hari",
- "Оплатите втроём от месяца": "Bertiga bayar sebulan atau lebih"
+ "Оплатите втроём от месяца": "Bertiga bayar sebulan atau lebih",
+ "Сервер не ответил — попробуйте ещё раз": "Server tidak menjawab — coba lagi",
+ "Заморозка длится {0} {1} и снимется сама": "Pembekuan berlangsung {0} {1} dan berakhir sendiri",
+ "Пока подписка заморожена, VPN не работает ни на одном устройстве, а её срок стоит на месте": "Selama langganan dibekukan, VPN tidak berfungsi di perangkat mana pun dan masa aktifnya berhenti",
+ "Разморозить можно в любой момент: неиспользованные дни вернутся в запас. После окончания можно заморозить снова": "Kamu bisa mencairkan kapan saja: hari yang tidak terpakai kembali ke jatah. Setelah berakhir, bisa dibekukan lagi",
+ "Всего до {0} дней заморозки за оплаченный срок, осталось {1}": "Hingga {0} hari pembekuan per masa berbayar, sisa {1}",
+ "Разморозить": "Cairkan",
+ "Заморозить": "Bekukan",
+ "Какую подписку заморозить?": "Langganan mana yang dibekukan?",
+ "Узнаю состояние заморозки…": "Memeriksa status pembekuan…",
+ "Открыть кабинет на сайте": "Buka akun di situs",
+ "Подписка заморожена до {0}": "Langganan dibekukan sampai {0}",
+ "Снимется сама. Срок подписки сдвинут вперёд на время заморозки": "Berakhir sendiri. Masa langganan diperpanjang selama waktu pembekuan",
+ "Минутку…": "Sebentar…",
+ "Разморозить сейчас": "Cairkan sekarang",
+ "Нажмите ещё раз: VPN выключится на {0} {1}": "Ketuk lagi: VPN mati selama {0} {1}",
+ "Заморозить на {0} {1}": "Bekukan selama {0} {1}",
+ "Сейчас заморозить нельзя": "Saat ini tidak bisa dibekukan"
 }

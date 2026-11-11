@@ -80,6 +80,14 @@ object Format {
         return full.substringBeforeLast(' ').ifEmpty { full }
     }
 
+    /** "18 ноября, 05:31": [dateShort] with the time, for a unix-milliseconds moment. */
+    fun dateTimeShort(epochMs: Long, offsetMin: Int): String {
+        val sec = epochMs.floorDiv(1000L)
+        val minutes = (sec + offsetMin * 60L).mod(86_400L) / 60
+        val hm = "${(minutes / 60).toString().padStart(2, '0')}:${(minutes % 60).toString().padStart(2, '0')}"
+        return "${dateShort(sec, offsetMin)}, $hm"
+    }
+
     private val MONTHS = listOf("января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря")
 
     fun plural(n: Long, one: String, few: String, many: String): String = app.ghostly.i18n.L10n.plural(n, one, few, many)

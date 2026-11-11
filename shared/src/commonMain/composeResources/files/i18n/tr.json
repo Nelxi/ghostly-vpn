@@ -853,5 +853,22 @@
  "Подарить другу": "Arkadaşına hediye et",
  "Тариф с открыткой": "Kartpostallı bir tarife",
  "Сквад: +7 дней": "Ekip: +7 gün",
- "Оплатите втроём от месяца": "Üç kişi bir ay+ ödeyin"
+ "Оплатите втроём от месяца": "Üç kişi bir ay+ ödeyin",
+ "Сервер не ответил — попробуйте ещё раз": "Sunucu yanıt vermedi — tekrar deneyin",
+ "Заморозка длится {0} {1} и снимется сама": "Dondurma {0} {1} sürer ve kendiliğinden kalkar",
+ "Пока подписка заморожена, VPN не работает ни на одном устройстве, а её срок стоит на месте": "Abonelik donduruluyken VPN hiçbir cihazda çalışmaz, süresi de durur",
+ "Разморозить можно в любой момент: неиспользованные дни вернутся в запас. После окончания можно заморозить снова": "İstediğin an çözebilirsin: kullanılmayan günler hakkına geri döner. Bittikten sonra yeniden dondurabilirsin",
+ "Всего до {0} дней заморозки за оплаченный срок, осталось {1}": "Ödenen dönem başına {0} güne kadar dondurma, {1} kaldı",
+ "Разморозить": "Çöz",
+ "Заморозить": "Dondur",
+ "Какую подписку заморозить?": "Hangi abonelik dondurulsun?",
+ "Узнаю состояние заморозки…": "Dondurma durumu kontrol ediliyor…",
+ "Открыть кабинет на сайте": "Hesabı web sitesinde aç",
+ "Подписка заморожена до {0}": "Abonelik {0} tarihine kadar donduruldu",
+ "Снимется сама. Срок подписки сдвинут вперёд на время заморозки": "Kendiliğinden kalkar. Abonelik süresi dondurma süresi kadar uzatıldı",
+ "Минутку…": "Bir saniye…",
+ "Разморозить сейчас": "Şimdi çöz",
+ "Нажмите ещё раз: VPN выключится на {0} {1}": "Tekrar dokun: VPN {0} {1} kapanacak",
+ "Заморозить на {0} {1}": "{0} {1} dondur",
+ "Сейчас заморозить нельзя": "Şu anda dondurulamıyor"
 }

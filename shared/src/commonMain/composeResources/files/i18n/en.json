@@ -853,5 +853,22 @@
  "Подарить другу": "Gift to a friend",
  "Тариф с открыткой": "A plan with a postcard",
  "Сквад: +7 дней": "Squad: +7 days",
- "Оплатите втроём от месяца": "Three of you pay for a month+"
+ "Оплатите втроём от месяца": "Three of you pay for a month+",
+ "Сервер не ответил — попробуйте ещё раз": "The server didn't answer — try again",
+ "Заморозка длится {0} {1} и снимется сама": "The freeze lasts {0} {1} and ends by itself",
+ "Пока подписка заморожена, VPN не работает ни на одном устройстве, а её срок стоит на месте": "While the subscription is frozen, the VPN works on no device and its term stands still",
+ "Разморозить можно в любой момент: неиспользованные дни вернутся в запас. После окончания можно заморозить снова": "You can unfreeze at any moment: unused days go back to your allowance. When it ends you can freeze again",
+ "Всего до {0} дней заморозки за оплаченный срок, осталось {1}": "Up to {0} days of freezing per paid term, {1} left",
+ "Разморозить": "Unfreeze",
+ "Заморозить": "Freeze",
+ "Какую подписку заморозить?": "Which subscription to freeze?",
+ "Узнаю состояние заморозки…": "Checking the freeze…",
+ "Открыть кабинет на сайте": "Open the account on the website",
+ "Подписка заморожена до {0}": "Subscription frozen until {0}",
+ "Снимется сама. Срок подписки сдвинут вперёд на время заморозки": "Ends by itself. The subscription's term is moved forward by the frozen time",
+ "Минутку…": "One moment…",
+ "Разморозить сейчас": "Unfreeze now",
+ "Нажмите ещё раз: VPN выключится на {0} {1}": "Tap again: the VPN turns off for {0} {1}",
+ "Заморозить на {0} {1}": "Freeze for {0} {1}",
+ "Сейчас заморозить нельзя": "Can't freeze right now"
 }

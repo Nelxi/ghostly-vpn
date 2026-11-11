@@ -853,5 +853,22 @@
  "Подарить другу": "Offrir à un ami",
  "Тариф с открыткой": "Un forfait avec une carte",
  "Сквад: +7 дней": "Escouade : +7 jours",
- "Оплатите втроём от месяца": "Payez à trois pour un mois+"
+ "Оплатите втроём от месяца": "Payez à trois pour un mois+",
+ "Сервер не ответил — попробуйте ещё раз": "Le serveur n'a pas répondu — réessayez",
+ "Заморозка длится {0} {1} и снимется сама": "Le gel dure {0} {1} et se lève tout seul",
+ "Пока подписка заморожена, VPN не работает ни на одном устройстве, а её срок стоит на месте": "Tant que l'abonnement est gelé, le VPN ne fonctionne sur aucun appareil et sa durée est suspendue",
+ "Разморозить можно в любой момент: неиспользованные дни вернутся в запас. После окончания можно заморозить снова": "Vous pouvez dégeler à tout moment : les jours non utilisés reviennent dans votre réserve. Ensuite, vous pouvez geler à nouveau",
+ "Всего до {0} дней заморозки за оплаченный срок, осталось {1}": "Jusqu'à {0} jours de gel par période payée, il en reste {1}",
+ "Разморозить": "Dégeler",
+ "Заморозить": "Geler",
+ "Какую подписку заморозить?": "Quel abonnement geler ?",
+ "Узнаю состояние заморозки…": "Vérification du gel…",
+ "Открыть кабинет на сайте": "Ouvrir le compte sur le site",
+ "Подписка заморожена до {0}": "Abonnement gelé jusqu'au {0}",
+ "Снимется сама. Срок подписки сдвинут вперёд на время заморозки": "Se lève tout seul. La durée de l'abonnement est prolongée du temps de gel",
+ "Минутку…": "Un instant…",
+ "Разморозить сейчас": "Dégeler maintenant",
+ "Нажмите ещё раз: VPN выключится на {0} {1}": "Touchez encore : le VPN s'arrête pour {0} {1}",
+ "Заморозить на {0} {1}": "Geler pour {0} {1}",
+ "Сейчас заморозить нельзя": "Impossible de geler pour le moment"
 }

@@ -436,6 +436,27 @@ class Cabinet(
         else api.post("/api/web/device/$act", jsonOf("sub_id" to sub.id, "device" to device.id))
     }
 
+    /**
+     * Freeze state, freeze or unfreeze ([op], see [Freeze]) of the app's Ghostly subscription [subId]. Asked by
+     * device, so it works without signing in to the cabinet on the subscription's first device.
+     */
+    suspend fun freeze(subId: String, op: String): FreezeResult = scope.async {
+        val change = op != Freeze.STATUS
+        try {
+            val a = api.decode(FreezeAnswer.serializer(), api.post("/sub/$subId/freeze", jsonOf("op" to op), safe = !change, device = true))
+            val st = a.freeze ?: return@async FreezeResult.Refused(tr("Сервер не ответил — попробуйте ещё раз"), null)
+            if (change) {
+                haptic(Haptic.SUCCESS)
+                refreshSub(subId)
+                if (_ui.value is CabinetUi.Ready) reload()
+            }
+            FreezeResult.Done(st, a.message)
+        } catch (e: CabinetException) {
+            if (change) haptic(Haptic.ERROR)
+            Freeze.refused(e)
+        }
+    }.await()
+
     /** Removes an ended site subscription from the cabinet (orders and history stay). */
     suspend fun hide(sub: CabinetSub) = act("hide", null, tr("Подписка убрана из кабинета")) {
         api.post("/api/web/sub/hide", jsonOf("sub_id" to sub.id))

@@ -853,5 +853,22 @@
  "Подарить другу": "Einem Freund schenken",
  "Тариф с открыткой": "Ein Tarif mit Grußkarte",
  "Сквад: +7 дней": "Squad: +7 Tage",
- "Оплатите втроём от месяца": "Zu dritt ab einem Monat zahlen"
+ "Оплатите втроём от месяца": "Zu dritt ab einem Monat zahlen",
+ "Сервер не ответил — попробуйте ещё раз": "Der Server hat nicht geantwortet — bitte erneut versuchen",
+ "Заморозка длится {0} {1} и снимется сама": "Das Pausieren dauert {0} {1} und endet von selbst",
+ "Пока подписка заморожена, VPN не работает ни на одном устройстве, а её срок стоит на месте": "Solange das Abo pausiert ist, funktioniert das VPN auf keinem Gerät und die Laufzeit steht still",
+ "Разморозить можно в любой момент: неиспользованные дни вернутся в запас. После окончания можно заморозить снова": "Du kannst jederzeit fortsetzen: ungenutzte Tage gehen zurück ins Kontingent. Danach kannst du erneut pausieren",
+ "Всего до {0} дней заморозки за оплаченный срок, осталось {1}": "Bis zu {0} Tage Pause pro bezahlter Laufzeit, {1} übrig",
+ "Разморозить": "Fortsetzen",
+ "Заморозить": "Pausieren",
+ "Какую подписку заморозить?": "Welches Abo pausieren?",
+ "Узнаю состояние заморозки…": "Prüfe den Pausenstatus…",
+ "Открыть кабинет на сайте": "Konto auf der Website öffnen",
+ "Подписка заморожена до {0}": "Abo pausiert bis {0}",
+ "Снимется сама. Срок подписки сдвинут вперёд на время заморозки": "Endet von selbst. Die Laufzeit wurde um die Pausenzeit verlängert",
+ "Минутку…": "Einen Moment…",
+ "Разморозить сейчас": "Jetzt fortsetzen",
+ "Нажмите ещё раз: VPN выключится на {0} {1}": "Nochmal tippen: Das VPN schaltet sich für {0} {1} ab",
+ "Заморозить на {0} {1}": "Für {0} {1} pausieren",
+ "Сейчас заморозить нельзя": "Pausieren ist gerade nicht möglich"
 }

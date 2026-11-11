@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AcUnit
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Campaign
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -38,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -48,7 +50,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.ghostly.core.GhostlyController
+import app.ghostly.core.account.Cabinet
+import app.ghostly.core.account.Freeze
+import app.ghostly.core.account.FreezeResult
 import app.ghostly.core.model.Profile
+import app.ghostly.core.sub.GhostlyDomains
 import app.ghostly.core.model.ProviderNotice
 import app.ghostly.ui.Format
 import app.ghostly.ui.components.AccentButton
@@ -58,6 +64,7 @@ import app.ghostly.ui.components.SoftButton
 import app.ghostly.ui.components.Spinner
 import app.ghostly.ui.theme.Ghost
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import app.ghostly.i18n.tr
 
 /** How any screen opens the subscription page or the "add" sheet; provided by the app shell. */
@@ -217,6 +224,12 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
             }
         }
 
+        // Freeze (Ghostly's own subscriptions): the state is asked when the page shows a subscription.
+        val ghostlyId = profile.url?.takeIf { GhostlyDomains.isOurs(it) }?.let { Cabinet.subIdOf(it) }
+        var freezeOpen by remember { mutableStateOf(false) }
+        var freeze by remember(ghostlyId) { mutableStateOf<FreezeResult?>(null) }
+        LaunchedEffect(ghostlyId) { if (ghostlyId != null) freeze = controller.cabinet.freeze(ghostlyId, Freeze.STATUS) }
+
         // Actions
         Spacer(Modifier.height(14.dp))
         val busy = profile.id in refreshing
@@ -227,6 +240,10 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
             // Without its own renew link "Продлить" already opens the support link: no second button for it.
             profile.supportUrl?.takeIf { profile.renewUrl != null }?.let { url -> add(Triple(Icons.Rounded.SupportAgent, tr("Поддержка")) { controller.platform.openUrl(url) }) }
             profile.url?.let { url -> add(Triple(Icons.Rounded.ContentCopy, tr("Ссылка")) { controller.platform.copyToClipboard(url) }) }
+            if (ghostlyId != null) {
+                val frozen = (freeze as? FreezeResult.Done)?.state?.frozen == true
+                add(Triple(Icons.Rounded.AcUnit, if (frozen) tr("Разморозить") else tr("Заморозить")) { controller.haptic(); freezeOpen = !freezeOpen })
+            }
         }
         actions.chunked(2).forEach { row ->
             Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -244,6 +261,10 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
                 }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
             }
+        }
+        if (freezeOpen && ghostlyId != null) {
+            val ours = profiles.subscriptions().filter { p -> p.url?.takeIf { GhostlyDomains.isOurs(it) }?.let { Cabinet.subIdOf(it) } != null }
+            FreezePanel(controller, ghostlyId, freeze, ours, profile.id, offset, onPick = { shownId = it }, onState = { freeze = it })
         }
         if (!active && profile.servers.isNotEmpty()) {
             AccentButton(tr("Сделать активной"), { controller.haptic(); controller.switchProfile(profile.id) }, Modifier.fillMaxWidth().padding(top = 4.dp), Icons.Rounded.CheckCircle)
@@ -289,6 +310,106 @@ fun SubscriptionPage(controller: GhostlyController, profileId: String, onAdd: ()
             Icon(Icons.Rounded.Delete, null, tint = c.bad, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
             Text(if (confirm) tr("Нажмите ещё раз, чтобы удалить") else tr("Удалить подписку"), style = MaterialTheme.typography.labelMedium, color = c.bad)
+        }
+    }
+}
+
+/**
+ * Freezing [subId]: which subscription (when the app has several of Ghostly's), the rules, and the button.
+ * A device the server doesn't trust with the account is sent to the site cabinet instead.
+ */
+@Composable
+private fun FreezePanel(
+    controller: GhostlyController,
+    subId: String,
+    state: FreezeResult?,
+    ours: List<Profile>,
+    shownId: String,
+    offset: Int,
+    onPick: (String) -> Unit,
+    onState: (FreezeResult) -> Unit,
+) {
+    val c = Ghost.colors
+    val scope = rememberCoroutineScope()
+    var working by remember(subId) { mutableStateOf(false) }
+    var confirm by remember(subId) { mutableStateOf(false) }
+    val tone = Color(0xFF6EA8FF)
+    Column(
+        Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(20.dp)).background(tone.copy(alpha = 0.08f))
+            .border(1.dp, tone.copy(alpha = 0.24f), RoundedCornerShape(20.dp)).padding(14.dp),
+    ) {
+        if (ours.size > 1) {
+            Text(tr("Какую подписку заморозить?"), style = MaterialTheme.typography.labelMedium, color = c.ink2)
+            Spacer(Modifier.height(8.dp))
+            ours.forEach { p ->
+                val on = p.id == shownId
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 2.dp).clip(RoundedCornerShape(12.dp))
+                        .background(if (on) tone.copy(alpha = 0.16f) else Color.Transparent)
+                        .hoverSound().clickable { controller.haptic(); onPick(p.id) }.padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(if (on) tone else c.ink3.copy(alpha = 0.4f)))
+                    Spacer(Modifier.width(10.dp))
+                    FlagText(p.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+        }
+        fun run(op: String) {
+            working = true
+            scope.launch {
+                val r = controller.cabinet.freeze(subId, op)
+                working = false
+                confirm = false
+                if (r is FreezeResult.Done) {
+                    onState(r)
+                    if (r.message.isNotBlank()) controller.toast(r.message)
+                } else onState(r)
+            }
+        }
+        when (state) {
+            null -> Row(verticalAlignment = Alignment.CenterVertically) {
+                Spinner(tone, Modifier.size(16.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(tr("Узнаю состояние заморозки…"), style = MaterialTheme.typography.bodySmall, color = c.ink3)
+            }
+            is FreezeResult.Refused -> {
+                Text(state.message, style = MaterialTheme.typography.bodyMedium)
+                state.cabinetUrl?.let {
+                    Spacer(Modifier.height(10.dp))
+                    SoftButton(tr("Открыть кабинет на сайте"), { controller.openAccountOnSite("cabinet") }, Modifier.fillMaxWidth(), Icons.Rounded.Public, tint = tone)
+                }
+            }
+            is FreezeResult.Done -> {
+                val s = state.state
+                if (s.frozen) {
+                    Text(tr("Подписка заморожена до {0}", Format.dateTimeShort(s.untilMs, offset)), style = MaterialTheme.typography.titleSmall)
+                    Spacer(Modifier.height(4.dp))
+                    Text(tr("Снимется сама. Срок подписки сдвинут вперёд на время заморозки"), style = MaterialTheme.typography.bodySmall, color = c.ink3)
+                    Spacer(Modifier.height(12.dp))
+                    AccentButton(if (working) tr("Минутку…") else tr("Разморозить сейчас"), { if (!working) run(Freeze.UNFREEZE) }, Modifier.fillMaxWidth(), Icons.Rounded.AcUnit)
+                } else {
+                    Freeze.rules(s).forEach { line ->
+                        Text("• $line", style = MaterialTheme.typography.bodySmall, color = c.ink2, modifier = Modifier.padding(bottom = 4.dp))
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    if (s.canFreeze) {
+                        val days = s.nextDays.takeIf { it > 0 } ?: s.freezeDays
+                        AccentButton(
+                            when {
+                                working -> tr("Минутку…")
+                                confirm -> tr("Нажмите ещё раз: VPN выключится на {0} {1}", days, Format.plural(days.toLong(), "день", "дня", "дней"))
+                                else -> tr("Заморозить на {0} {1}", days, Format.plural(days.toLong(), "день", "дня", "дней"))
+                            },
+                            { if (!working) { if (confirm) run(Freeze.FREEZE) else { controller.haptic(); confirm = true } } },
+                            Modifier.fillMaxWidth(), Icons.Rounded.AcUnit,
+                        )
+                    } else {
+                        Text(s.reason.ifBlank { tr("Сейчас заморозить нельзя") }, style = MaterialTheme.typography.bodyMedium, color = c.warn)
+                    }
+                }
+            }
         }
     }
 }

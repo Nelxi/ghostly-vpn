@@ -853,5 +853,22 @@
  "Подарить другу": "Presentear um amigo",
  "Тариф с открыткой": "Um plano com cartão",
  "Сквад: +7 дней": "Esquadrão: +7 dias",
- "Оплатите втроём от месяца": "Paguem em três um mês ou mais"
+ "Оплатите втроём от месяца": "Paguem em três um mês ou mais",
+ "Сервер не ответил — попробуйте ещё раз": "O servidor não respondeu — tente novamente",
+ "Заморозка длится {0} {1} и снимется сама": "O congelamento dura {0} {1} e termina sozinho",
+ "Пока подписка заморожена, VPN не работает ни на одном устройстве, а её срок стоит на месте": "Enquanto a assinatura está congelada, a VPN não funciona em nenhum dispositivo e o prazo fica parado",
+ "Разморозить можно в любой момент: неиспользованные дни вернутся в запас. После окончания можно заморозить снова": "Você pode descongelar a qualquer momento: os dias não usados voltam para a reserva. Depois de terminar, pode congelar de novo",
+ "Всего до {0} дней заморозки за оплаченный срок, осталось {1}": "Até {0} dias de congelamento por período pago, restam {1}",
+ "Разморозить": "Descongelar",
+ "Заморозить": "Congelar",
+ "Какую подписку заморозить?": "Qual assinatura congelar?",
+ "Узнаю состояние заморозки…": "Verificando o congelamento…",
+ "Открыть кабинет на сайте": "Abrir a conta no site",
+ "Подписка заморожена до {0}": "Assinatura congelada até {0}",
+ "Снимется сама. Срок подписки сдвинут вперёд на время заморозки": "Termina sozinho. O prazo da assinatura foi estendido pelo tempo congelado",
+ "Минутку…": "Um momento…",
+ "Разморозить сейчас": "Descongelar agora",
+ "Нажмите ещё раз: VPN выключится на {0} {1}": "Toque de novo: a VPN desliga por {0} {1}",
+ "Заморозить на {0} {1}": "Congelar por {0} {1}",
+ "Сейчас заморозить нельзя": "Não é possível congelar agora"
 }

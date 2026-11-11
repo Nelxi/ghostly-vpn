@@ -853,5 +853,22 @@
  "Подарить другу": "Do‘stga sovg‘a qilish",
  "Тариф с открыткой": "Otkritkali tarif",
  "Сквад: +7 дней": "Skvad: +7 kun",
- "Оплатите втроём от месяца": "Uchovlon bir oydan to‘lang"
+ "Оплатите втроём от месяца": "Uchovlon bir oydan to‘lang",
+ "Сервер не ответил — попробуйте ещё раз": "Server javob bermadi — qayta urinib ko'ring",
+ "Заморозка длится {0} {1} и снимется сама": "Muzlatish {0} {1} davom etadi va o'zi olinadi",
+ "Пока подписка заморожена, VPN не работает ни на одном устройстве, а её срок стоит на месте": "Obuna muzlatilganda VPN hech qaysi qurilmada ishlamaydi, muddati esa to'xtab turadi",
+ "Разморозить можно в любой момент: неиспользованные дни вернутся в запас. После окончания можно заморозить снова": "Istalgan payt muzdan chiqarish mumkin: ishlatilmagan kunlar zaxiraga qaytadi. Tugagach yana muzlatish mumkin",
+ "Всего до {0} дней заморозки за оплаченный срок, осталось {1}": "To'langan muddatga {0} kungacha muzlatish, {1} qoldi",
+ "Разморозить": "Muzdan chiqarish",
+ "Заморозить": "Muzlatish",
+ "Какую подписку заморозить?": "Qaysi obunani muzlatamiz?",
+ "Узнаю состояние заморозки…": "Muzlatish holatini tekshiryapman…",
+ "Открыть кабинет на сайте": "Saytdagi kabinetni ochish",
+ "Подписка заморожена до {0}": "Obuna {0} gacha muzlatildi",
+ "Снимется сама. Срок подписки сдвинут вперёд на время заморозки": "O'zi olinadi. Obuna muddati muzlatish vaqtiga oldinga surildi",
+ "Минутку…": "Bir daqiqa…",
+ "Разморозить сейчас": "Hozir muzdan chiqarish",
+ "Нажмите ещё раз: VPN выключится на {0} {1}": "Yana bosing: VPN {0} {1} o'chadi",
+ "Заморозить на {0} {1}": "{0} {1} ga muzlatish",
+ "Сейчас заморозить нельзя": "Hozir muzlatib bo'lmaydi"
 }
