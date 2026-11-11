@@ -158,7 +158,7 @@ val fetchMihomoCore = tasks.register<FetchMihomoDesktop>("fetchMihomoCore") {
 tasks.matching { it.name == "prepareAppResources" }.configureEach { dependsOn(fetchXrayCore, fetchMihomoCore) }
 
 /** The one place to bump the desktop version (Windows/Linux use it as is, macOS as 1.x.y). */
-val ghostlyVersion = "0.3.54"
+val ghostlyVersion = "0.3.55"
 
 compose.desktop {
     application {
@@ -213,5 +213,7 @@ tasks.register<JavaExec>("shots") {
     classpath = shots.runtimeClasspath
     args(layout.buildDirectory.dir("shots").get().asFile.absolutePath)
     providers.gradleProperty("only").orNull?.let { args(it.split(',')) }
+    // -Psky=HH:MM[,rain|snow]: the lake at that time of day and weather (SkyClock.jvm.kt)
+    providers.gradleProperty("sky").orNull?.let { systemProperty("ghostly.sky", it) }
     jvmArgs("-Xmx1g")
 }

@@ -83,6 +83,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.exp
@@ -494,6 +495,85 @@ private val MOON_RAYS: List<FloatArray> = Random(23).let { r ->
     List(11) { i -> floatArrayOf(i * 360f / 11f + r.nextFloat() * 14f, 0.55f + r.nextFloat() * 0.6f, 0.6f + r.nextFloat() * 0.8f, r.nextFloat()) }
 }
 
+// ---- the real day (see SkyClock.kt): daylight colours, the low sun's warm light, an overcast sky.
+private val DAY_SKY_TOP = Color(0xFF3F7CC4)
+private val DAY_SKY_MID = Color(0xFF7DB3E3)
+private val DAY_SKY_HORIZON = Color(0xFFCFE5F3)
+private val DAWN_SKY_MID = Color(0xFFE59AB4)
+private val DAWN_SKY_HORIZON = Color(0xFFFFC890)
+private val DUSK_SKY_MID = Color(0xFFD9707A)
+private val DUSK_SKY_HORIZON = Color(0xFFFFA45E)
+private val GOLD_SKY_TOP = Color(0xFF3A4884)
+private val OVERCAST_TOP = Color(0xFF6E7987)
+private val OVERCAST_MID = Color(0xFF8E98A5)
+private val OVERCAST_HORIZON = Color(0xFFABB3BD)
+private val DAY_WATER_TOP = Color(0xFF5A8EBE)
+private val DAY_WATER_BOTTOM = Color(0xFF1E4466)
+private val DAY_ISLAND = Color(0xFF34503F)
+private val DAY_FAR_ISLE = Color(0xFF7091A3)
+private val SUN = Color(0xFFFFF3D2)
+private val SUN_LOW = Color(0xFFFFA45A)
+private val BIRD = Color(0xFF29323D)
+
+/** A daylight colour drained toward grey: the world off the tunnel is grey by day as well, only lighter. */
+private fun muted(c: Color, vivid: Float): Color {
+    val l = 0.299f * c.red + 0.587f * c.green + 0.114f * c.blue
+    return lerp(Color(l, l, l * 1.04f, c.alpha), c, vivid.coerceIn(0f, 1f))
+}
+
+/** Clouds in world space: x (screen widths), height (sky heights), width (dp), puff seed. */
+private val CLOUDS: List<FloatArray> = Random(73).let { r ->
+    List(9) { i -> floatArrayOf(i * 0.42f - 0.6f + r.nextFloat() * 0.2f, 0.42f + r.nextFloat() * 0.42f, 120f + r.nextFloat() * 110f, r.nextFloat()) }
+}
+private const val CLOUD_TILE = 3.8f
+private val CLOUD_PUFF = Brush.radialGradient(
+    0f to Color.White, 0.55f to Color.White.copy(alpha = 0.8f), 1f to Color.Transparent,
+    center = Offset.Zero, radius = 1f,
+)
+
+/** Raindrops: x on a tile, fall phase, fall time (ms), length (dp), layer (0 = far, falls into the sea; 1 = near). */
+private const val RAIN_TILE = 1.5f
+private val RAIN: List<FloatArray> = Random(61).let { r ->
+    List(170) { i ->
+        val near = i % 3 == 0
+        floatArrayOf(
+            r.nextFloat() * RAIN_TILE, r.nextFloat(),
+            if (near) 620f + r.nextFloat() * 260f else 1_050f + r.nextFloat() * 450f,
+            if (near) 16f + r.nextFloat() * 9f else 6f + r.nextFloat() * 5f,
+            if (near) 1f else 0f,
+        )
+    }
+}
+
+/** Sparkles of the sun's / moon's light on the water: depth (0 = horizon), side (−1..1), length, phase, twinkle time. */
+private val GLITTER: List<FloatArray> = Random(17).let { r ->
+    List(64) { floatArrayOf(r.nextFloat(), (r.nextFloat() + r.nextFloat() - 1f), 0.5f + r.nextFloat(), r.nextFloat(), 900f + r.nextFloat() * 1_600f) }
+}
+
+/** Wavelets on the open water: depth (0 = horizon), x on a tile, width factor, phase. */
+private val WAVELETS: List<FloatArray> = Random(29).let { r ->
+    List(34) { floatArrayOf(r.nextFloat(), r.nextFloat() * 1.4f, 0.6f + r.nextFloat() * 0.8f, r.nextFloat()) }
+}
+
+/** Reeds in the near corners: side (−1 left, 1 right), x from the edge (dp), height (dp), lean, phase, kind (0 stalk, 1 blade, 2 cattail). */
+private val REEDS: List<FloatArray> = Random(53).let { r ->
+    List(22) { i ->
+        val side = if (i % 2 == 0) -1f else 1f
+        floatArrayOf(side, 2f + r.nextFloat() * 62f, 60f + r.nextFloat() * 95f, 0.15f + r.nextFloat() * 0.35f, r.nextFloat(), (i % 3).toFloat())
+    }
+}
+
+/** Lily pads on the near water: x (screen widths), depth in the water (0..1), size (dp), turn (deg), flower (0/1). */
+private val LILIES = listOf(
+    floatArrayOf(0.13f, 0.30f, 26f, 20f, 1f), floatArrayOf(0.25f, 0.38f, 18f, 140f, 0f),
+    floatArrayOf(0.84f, 0.25f, 22f, 250f, 1f), floatArrayOf(0.93f, 0.34f, 15f, 70f, 0f),
+    floatArrayOf(0.06f, 0.45f, 20f, 300f, 0f),
+)
+private val LILY_PAD = Color(0xFF2F5C3F)
+private val LILY_PAD_NIGHT = Color(0xFF0E1814)
+private val REED_DAY = Color(0xFF203427)
+private val REED_NIGHT = Color(0xFF06080A)
+
 private fun smooth(x: Float): Float {
     val t = x.coerceIn(0f, 1f)
     return t * t * (3f - 2f * t)
@@ -621,6 +701,9 @@ fun NightScene(
     val mirrorLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
     val ghostRec = remember { LongArray(2) { Long.MIN_VALUE } } // [time, size]
     val isles = remember { arrayOf(Path(), Path(), Path(), Path()) }
+    // The real local time: sampled now and then, carried forward by the ambient clock in between.
+    val skyClock = remember { LongArray(2) { Long.MIN_VALUE } } // [ambient ms at sample, wall-clock ms]
+    val birdPath = remember { Path() }
 
     Box(
         modifier.fillMaxSize().background(OFF_WATER_BOTTOM)
@@ -667,6 +750,32 @@ fun NightScene(
             // Seamless loops from the ambient clock (Long modulo keeps them exact after days of uptime).
             fun loop(ms: Long): Float = (now % (ms * slow)).toFloat() / (ms * slow)
             fun wave(ms: Long, shift: Float = 0f): Float = sin(TAU * (loop(ms) + shift))
+
+            // ---- the real day: time of day, sun and moon, weather (SkyClock.kt)
+            if (skyClock[0] == Long.MIN_VALUE || now - skyClock[0] > 15_000L || now < skyClock[0]) {
+                skyClock[0] = now
+                skyClock[1] = localWallClockMs()
+            }
+            val wall = skyClock[1] + (now - skyClock[0])
+            val dl = dayLight(minuteOfDay(wall))
+            val wx = weatherAt(wall)
+            val dayK = dl.day
+            val nightK = 1f - dayK
+            val rain = if (wx.kind == Weather.RAIN) wx.amount else 0f
+            val snowW = if (wx.kind == Weather.SNOW) wx.amount else 0f
+            val overcast = max(rain, snowW * 0.8f)
+            // Off the tunnel the day is grey too (lighter than the night); colour comes with the connection.
+            val vivid = 0.35f + 0.65f * e
+            val goldVivid = 0.55f + 0.45f * e
+            fun skyStop(night: Color, day: Color, gold: Color, over: Color, goldW: Float): Color {
+                var col = lerp(night, muted(day, vivid), dayK)
+                col = lerp(col, muted(gold, goldVivid), dl.golden * goldW)
+                return lerp(col, lerp(lerp(night, Color(0xFF15181E), 0.5f), over, dayK), overcast * 0.62f)
+            }
+            val goldMid = lerp(DUSK_SKY_MID, DAWN_SKY_MID, dl.morning)
+            val goldHorizon = lerp(DUSK_SKY_HORIZON, DAWN_SKY_HORIZON, dl.morning)
+            val starK = nightK * (1f - 0.85f * overcast)
+            val snowAmt = max(snowAmount, snowW * 1.6f)
 
             // ---- the shot (moving between pages)
             // The page changed in this very frame, before the move's clock was reset: hold the shot where it
@@ -735,7 +844,7 @@ fun NightScene(
             val snowTint = lerp(Color.White, palette.light, 0.28f * e)
             val wind = (0.6f * wave(41_000) + 0.4f * wave(17_000, 0.3f)) * motion
             fun snow(layer: Int) {
-                val n = (SNOW_COUNT[layer] * snowAmount).toInt().coerceIn(0, SNOW[layer].size)
+                val n = (SNOW_COUNT[layer] * snowAmt).toInt().coerceIn(0, SNOW[layer].size)
                 if (n == 0) return
                 val depth = SNOW_DEPTH[layer]
                 val bottom = if (layer == 0) hz else h
@@ -802,18 +911,20 @@ fun NightScene(
             val ghostLit = smooth(e * (1f + band) / band)
 
             // ---- sky
+            val skyMidC = skyStop(lerp(OFF_SKY_MID, palette.skyMid, e), DAY_SKY_MID, goldMid, OVERCAST_MID, 0.7f)
+            val skyHorizonC = skyStop(lerp(OFF_SKY_HORIZON, palette.skyHorizon, e), DAY_SKY_HORIZON, goldHorizon, OVERCAST_HORIZON, 0.95f)
             if (hz > 0f) drawRect(
                 Brush.verticalGradient(
-                    0f to lerp(OFF_SKY_TOP, palette.skyTop, e),
-                    0.62f to lerp(OFF_SKY_MID, palette.skyMid, e),
-                    1f to lerp(OFF_SKY_HORIZON, palette.skyHorizon, e),
+                    0f to skyStop(lerp(OFF_SKY_TOP, palette.skyTop, e), DAY_SKY_TOP, GOLD_SKY_TOP, OVERCAST_TOP, 0.45f),
+                    0.62f to skyMidC,
+                    1f to skyHorizonC,
                     startY = sy(1.05f), endY = hz,
                 ),
                 size = Size(w, hz),
             )
 
             // ---- stars
-            if (hz > 0f) clipRect(0f, 0f, w, hz) {
+            if (hz > 0f && starK > 0.01f) clipRect(0f, 0f, w, hz) {
                 STARS.forEach { s ->
                     var u = ((s.x - yaw * DEPTH_STARS) % STAR_TILE + STAR_TILE) % STAR_TILE
                     if (u > 1.35f) u -= STAR_TILE
@@ -822,7 +933,7 @@ fun NightScene(
                     if (y < -4f || y > hz || x < -6f || x > w + 6f) return@forEach
                     val tw = 0.5f + 0.5f * wave(1_900L * s.speed, s.tw)
                     val nearHorizon = 0.5f + 0.5f * smooth((hz - y) / 30.dp.toPx())
-                    val a = ((0.20f + 0.26f * e) + (0.28f + 0.25f * e) * tw) * (1f + bass * 0.4f) * nearHorizon
+                    val a = ((0.20f + 0.26f * e) + (0.28f + 0.25f * e) * tw) * (1f + bass * 0.4f) * nearHorizon * starK
                     val r = s.r.dp.toPx() * (0.85f + 0.3f * tw) * (0.8f + 0.2f * zoom)
                     drawCircle(Color.White.copy(alpha = a.coerceIn(0f, 0.95f)), r, Offset(x, y))
                     if (s.glint) {
@@ -835,7 +946,7 @@ fun NightScene(
             }
 
             // ---- the sky's depth: a slanted Milky Way of haze and fine stars, and two nebulae
-            if (hz > 0f) clipRect(0f, 0f, w, hz) {
+            if (hz > 0f && starK > 0.01f) clipRect(0f, 0f, w, hz) {
                 val haze = lerp(Color(0xFFC9D2E8), palette.halo, e)
                 val bandX = cx - yaw * w * 0.10f - par.x * 6.dp.toPx()
                 val bandY = sy(0.56f)
@@ -846,19 +957,19 @@ fun NightScene(
                     val len = w * 2.6f
                     val thick = 150.dp.toPx() * (0.8f + 0.2f * zoom)
                     drawRect(
-                        Brush.verticalGradient(0f to Color.Transparent, 0.5f to haze.copy(alpha = 0.07f + 0.05f * e), 1f to Color.Transparent, startY = -thick, endY = thick),
+                        Brush.verticalGradient(0f to Color.Transparent, 0.5f to haze.copy(alpha = (0.07f + 0.05f * e) * starK), 1f to Color.Transparent, startY = -thick, endY = thick),
                         topLeft = Offset(-len / 2f, -thick), size = Size(len, thick * 2f),
                     )
                     val core = thick * 0.34f
                     drawRect(
-                        Brush.verticalGradient(0f to Color.Transparent, 0.5f to haze.copy(alpha = 0.06f + 0.05f * e), 1f to Color.Transparent, startY = -core, endY = core),
+                        Brush.verticalGradient(0f to Color.Transparent, 0.5f to haze.copy(alpha = (0.06f + 0.05f * e) * starK), 1f to Color.Transparent, startY = -core, endY = core),
                         topLeft = Offset(-len / 2f, -core), size = Size(len, core * 2f),
                     )
                     MILKY.forEach { m ->
                         val x = (m[0] - 0.5f) * len
                         if (x * 0.9f < -w * 1.5f || x > w * 1.5f) return@forEach
                         val tw = 0.55f + 0.45f * wave(2_300L + (m[3] * 1_900f).toLong(), m[3])
-                        drawCircle(Color.White.copy(alpha = ((0.10f + 0.30f * m[2]) * tw * (0.7f + 0.3f * e)).coerceIn(0f, 0.9f)), (0.35f + 0.55f * m[2]).dp.toPx(), Offset(x, m[1] * thick * 0.9f))
+                        drawCircle(Color.White.copy(alpha = ((0.10f + 0.30f * m[2]) * tw * (0.7f + 0.3f * e) * starK).coerceIn(0f, 0.9f)), (0.35f + 0.55f * m[2]).dp.toPx(), Offset(x, m[1] * thick * 0.9f))
                     }
                 }
                 fun nebula(xw: Float, f: Float, rDp: Float, c: Color, a: Float) {
@@ -866,7 +977,7 @@ fun NightScene(
                     val y = sy(f)
                     val r = rDp.dp.toPx() * zoom
                     if (x < -r || x > w + r) return
-                    drawCircle(Brush.radialGradient(listOf(c.copy(alpha = a), Color.Transparent), Offset(x, y), r), r, Offset(x, y))
+                    drawCircle(Brush.radialGradient(listOf(c.copy(alpha = a * starK), Color.Transparent), Offset(x, y), r), r, Offset(x, y))
                 }
                 nebula(0.20f, 0.70f, 200f, lerp(Color(0xFFAEB8D6), palette.halo, e), 0.035f + 0.075f * e)
                 nebula(0.92f, 0.42f, 170f, lerp(Color(0xFFB9B2D6), hsv(palette.hue - 55f, 0.5f, 1f), e), 0.03f + 0.065f * e)
@@ -875,12 +986,14 @@ fun NightScene(
             }
 
             // ---- the moon: it shoots rays now and then, its path lies on the water
-            val mx = sx(0.79f, DEPTH_MOON) - par.x * 5.dp.toPx()
-            val my = sy(0.75f) - par.y * 4.dp.toPx()
+            // It rises at sunset on the left, crosses the night sky and sets on the right at dawn.
+            val mx = sx(0.2f + 0.6f * dl.moonPath, DEPTH_MOON) - par.x * 5.dp.toPx()
+            val my = sy(0.04f + 0.74f * dl.moonAlt) - par.y * 4.dp.toPx()
             val moonTint = lerp(MOONLIGHT, palette.light, 0.45f * e)
-            val moonPower = 1f - 0.45f * e
+            val moonVis = smooth(dl.moonAlt / 0.12f) * (1f - 0.9f * dayK) * (1f - 0.75f * overcast)
+            val moonPower = (1f - 0.45f * e) * moonVis
             val mr = 15.dp.toPx() * (0.85f + 0.15f * zoom)
-            if (hz > 0f && mx > -260.dp.toPx() && mx < w + 260.dp.toPx() && my > -300.dp.toPx()) clipRect(0f, 0f, w, hz) {
+            if (moonVis > 0.01f && hz > 0f && mx > -260.dp.toPx() && mx < w + 260.dp.toPx() && my > -300.dp.toPx()) clipRect(0f, 0f, w, hz) {
                 // a faint haze, then the rays
                 val haze = 170.dp.toPx() * zoom
                 drawCircle(Brush.radialGradient(listOf(moonTint.copy(alpha = 0.07f * moonPower), Color.Transparent), Offset(mx, my), haze), haze, Offset(mx, my))
@@ -922,11 +1035,26 @@ fun NightScene(
                     arcTo(Rect(mx - ix, my - mr, mx + ix, my + mr), 90f, 180f, false)
                     close()
                 }
-                drawPath(crescent, lerp(MOON, palette.light, 0.3f * e).copy(alpha = 1f - 0.35f * e))
+                drawPath(crescent, lerp(MOON, palette.light, 0.3f * e).copy(alpha = (1f - 0.35f * e) * moonVis))
+            }
+
+            // ---- the sun: rises on the left in the morning, sets on the right, warm and low at both ends
+            val sunX = sx(0.2f + 0.6f * dl.sunPath, DEPTH_MOON) - par.x * 5.dp.toPx()
+            val sunY = sy(-0.03f + 0.82f * dl.sunAlt) - par.y * 4.dp.toPx()
+            val sunVis = smooth((dl.sunAlt + 0.06f) / 0.1f) * (1f - 0.8f * overcast)
+            val sunTint = muted(lerp(SUN, SUN_LOW, dl.golden), goldVivid)
+            if (sunVis > 0.01f && hz > 0f && sunX > -300.dp.toPx() && sunX < w + 300.dp.toPx()) clipRect(0f, 0f, w, hz) {
+                val sr = 17.dp.toPx() * (0.85f + 0.15f * zoom) * (1f + 0.25f * dl.golden)
+                val wide = 230.dp.toPx() * zoom * (1f + 0.6f * dl.golden)
+                drawCircle(Brush.radialGradient(listOf(sunTint.copy(alpha = 0.30f * sunVis), Color.Transparent), Offset(sunX, sunY), wide), wide, Offset(sunX, sunY))
+                val glow = 70.dp.toPx() * zoom
+                drawCircle(Brush.radialGradient(listOf(sunTint.copy(alpha = 0.55f * sunVis), Color.Transparent), Offset(sunX, sunY), glow), glow, Offset(sunX, sunY))
+                drawCircle(lerp(Color.White, sunTint, 0.35f + 0.5f * dl.golden).copy(alpha = sunVis), sr, Offset(sunX, sunY))
             }
 
             // ---- aurora: soft curtains from the small picture, crisp rays over them
-            val glowK = design.aurora * (1f + bass * 0.55f + beat * 0.15f)
+            // By day the aurora is only a faint veil (it still shows the tunnel is up).
+            val glowK = design.aurora * (1f + bass * 0.55f + beat * 0.15f) * (1f - 0.8f * dayK) * (1f - 0.5f * overcast)
             val yawA = yaw * DEPTH_AURORA
             val ph1 = loop(41_000)
             val ph2 = loop(29_000)
@@ -1014,7 +1142,7 @@ fun NightScene(
             }
 
             // ---- a shooting star now and then
-            if (!reduce && hz > 40.dp.toPx()) {
+            if (!reduce && hz > 40.dp.toPx() && starK > 0.6f) {
                 val period = if (e > 0.5f) 13_000L else 23_000L
                 val n = now / period
                 val q = (now % period).toFloat() / 900f
@@ -1030,6 +1158,68 @@ fun NightScene(
                         Brush.linearGradient(listOf(Color.Transparent, Color.White.copy(alpha = a)), tail, head),
                         tail, head, 1.3.dp.toPx(), StrokeCap.Round,
                     )
+                }
+            }
+
+            // ---- clouds: a few by day, a full sky under rain or snow; lit pink-gold by a low sun, dark at night
+            val cloudCover = 0.34f + 0.66f * overcast
+            if (hz > 0f && cloudCover > 0.01f) clipRect(0f, 0f, w, hz) {
+                val lit = muted(lerp(Color.White, lerp(Color(0xFFFFC2A0), Color(0xFFFFB0C4), dl.morning), dl.golden * 0.75f), goldVivid)
+                val dark = lerp(Color(0xFF2B303B), Color(0xFF7F8894), dayK)
+                val tint = lerp(lerp(Color(0xFF3A404C), lit, dayK), dark, overcast * 0.7f)
+                val filter = androidx.compose.ui.graphics.ColorFilter.tint(tint, BlendMode.Modulate)
+                // They drift with the wall clock, so the same sky shows on every device.
+                val drift = (wall % 4_000_000L).toFloat() / 4_000_000f * CLOUD_TILE
+                val shown = (CLOUDS.size * cloudCover).toInt().coerceIn(1, CLOUDS.size)
+                val baseA = (0.30f + 0.55f * dayK) * (0.6f + 0.4f * overcast)
+                for (i in 0 until shown) {
+                    val cl = CLOUDS[i]
+                    var u = ((cl[0] + drift - yaw * 0.4f) % CLOUD_TILE + CLOUD_TILE) % CLOUD_TILE
+                    if (u > 2.2f) u -= CLOUD_TILE
+                    val cxw = cx + (u - 0.5f) * w * zoom
+                    val cyw = sy(cl[1] * (1f - 0.35f * overcast))
+                    val cw = cl[2].dp.toPx() * zoom * (1f + 0.5f * overcast)
+                    if (cxw < -cw * 1.4f || cxw > w + cw * 1.4f) continue
+                    for (k in 0 until 5) {
+                        val px = cxw + (k - 2f) * cw * 0.28f + sin(cl[3] * 40f + k) * cw * 0.06f
+                        val py = cyw - (1f - abs(k - 2f) / 2f) * cw * 0.12f + cos(cl[3] * 17f + k) * cw * 0.03f
+                        val pr = cw * (0.26f + 0.10f * (1f - abs(k - 2f) / 2f))
+                        withTransform({ translate(px, py); scale(pr, pr * 0.62f, Offset.Zero) }) {
+                            drawCircle(CLOUD_PUFF, 1f, Offset.Zero, alpha = baseA.coerceIn(0f, 1f), colorFilter = filter)
+                        }
+                    }
+                }
+            }
+
+            // ---- birds: a small flock crosses the sky now and then, by day and at dusk
+            val birdK = smooth((dayK + 0.25f * dl.golden - 0.2f) / 0.4f) * (1f - smooth((rain + snowW - 0.3f) / 0.4f))
+            if (birdK > 0.01f && hz > 60.dp.toPx()) {
+                val period = 41_000L
+                val n = wall / period
+                val q = (wall % period).toFloat() / 24_000f
+                val rnd = Random((n * 7919L + 13L).toInt())
+                if (q < 1f && rnd.nextFloat() < 0.75f) {
+                    val toRight = rnd.nextBoolean()
+                    val count = 3 + rnd.nextInt(5)
+                    val alt = 0.45f + rnd.nextFloat() * 0.35f
+                    val span = w * 1.4f
+                    val lead = if (toRight) -0.2f * w + span * q else w * 1.2f - span * q
+                    val size = (5.5f + rnd.nextFloat() * 2.5f).dp.toPx() * zoom
+                    val ink = lerp(BIRD, Color(0xFF3B2A2E), dl.golden * 0.6f).copy(alpha = 0.78f * birdK)
+                    for (i in 0 until count) {
+                        // a loose V: each bird a step behind and to the side of the one before
+                        val row = (i + 1) / 2
+                        val side = if (i % 2 == 0) 1f else -1f
+                        val bx = lead - (if (toRight) 1f else -1f) * row * size * 3.2f + sin(i * 2.3f) * size
+                        val by = sy(alt) + side * row * size * 1.9f + wave(3_100, i * 0.21f) * size * 0.6f * motion
+                        val flap = sin(TAU * (loop(520L + i * 37L) + i * 0.17f))
+                        val tip = -size * (0.15f + 0.55f * flap)
+                        birdPath.reset()
+                        birdPath.moveTo(bx - size, by + tip)
+                        birdPath.quadraticTo(bx - size * 0.45f, by - size * 0.35f * flap - size * 0.1f, bx, by)
+                        birdPath.quadraticTo(bx + size * 0.45f, by - size * 0.35f * flap - size * 0.1f, bx + size, by + tip)
+                        drawPath(birdPath, ink, style = Stroke(1.4.dp.toPx() * (0.8f + 0.2f * zoom), cap = StrokeCap.Round))
+                    }
                 }
             }
 
@@ -1061,8 +1251,8 @@ fun NightScene(
                 path.lineTo(w + 2f, hz + 1f)
                 path.close()
             }
-            val farIsle = lerp(lerp(OFF_ISLAND, OFF_SKY_HORIZON, 0.45f), lerp(palette.island, palette.skyHorizon, 0.4f), e)
-            val nearIsle = lerp(OFF_ISLAND, palette.island, e)
+            val farIsle = lerp(lerp(lerp(OFF_ISLAND, OFF_SKY_HORIZON, 0.45f), lerp(palette.island, palette.skyHorizon, 0.4f), e), muted(DAY_FAR_ISLE, vivid), dayK * (1f - 0.3f * overcast))
+            val nearIsle = lerp(lerp(OFF_ISLAND, palette.island, e), muted(DAY_ISLAND, vivid), dayK * (1f - 0.3f * overcast))
             if (hz > 0f && hz < h) {
                 isle(isles[0], isles[1], FAR_ISLES, DEPTH_FAR_ISLES)
                 isle(isles[2], isles[3], NEAR_ISLES, DEPTH_NEAR_ISLES)
@@ -1074,14 +1264,14 @@ fun NightScene(
 
             // ---- low mist along the horizon: a few soft banks drifting very slowly, lit by the aurora
             if (hz > 0f) clipRect(0f, 0f, w, hz + 4.dp.toPx()) {
-                val mist = lerp(Color(0xFFB8C0D4), palette.halo, e)
+                val mist = lerp(lerp(Color(0xFFB8C0D4), palette.halo, e), Color.White, 0.5f * dayK)
                 val mistBrush = Brush.radialGradient(listOf(mist, Color.Transparent), Offset.Zero, 1f)
                 for (i in 0 until 5) {
                     val xw = (((i * 0.31f + loop(70_000L + i * 13_000L) * 1.6f - yaw * 0.9f) % 1.6f) + 1.6f) % 1.6f - 0.3f
                     val x = cx + (xw - 0.5f) * w * zoom
                     val bwid = (170f + 60f * (i % 3)).dp.toPx() * zoom
                     val bhei = (22f + 8f * (i % 2)).dp.toPx() * zoom
-                    val a = (0.07f + 0.07f * e) * (0.6f + 0.4f * wave(9_000L + i * 700L, i * 0.2f))
+                    val a = (0.07f + 0.07f * e + 0.08f * overcast) * (0.6f + 0.4f * wave(9_000L + i * 700L, i * 0.2f))
                     val bankY = hz - 5.dp.toPx() - i * 3.dp.toPx() * zoom
                     withTransform({ translate(x, bankY); scale(bwid, bhei, Offset.Zero) }) {
                         drawCircle(mistBrush, 1f, Offset.Zero, alpha = a)
@@ -1090,6 +1280,34 @@ fun NightScene(
             }
 
             snow(0)
+
+            // ---- rain: thin slanted streaks, far ones fall into the sea, near ones cross the whole screen
+            val rainInk = lerp(Color(0xFFAFBCCD), Color(0xFFE6EDF5), dayK)
+            fun rainLayer(layer: Int) {
+                if (rain <= 0.01f) return
+                val bottom = if (layer == 0) hz else h
+                if (bottom <= 0f) return
+                val top = -30.dp.toPx()
+                val slant = 0.18f + 0.12f * wind
+                val stroke = (if (layer == 0) 0.8f else 1.1f).dp.toPx()
+                val n = (RAIN.size * rain).toInt()
+                for (i in 0 until n) {
+                    val d = RAIN[i]
+                    if (d[4].toInt() != layer) continue
+                    val q = (loop(d[2].toLong()) + d[1]) % 1f
+                    val y = top + q * (bottom - top)
+                    val depth = if (layer == 0) 0.5f else 1.2f
+                    var u = ((d[0] - yaw * depth) % RAIN_TILE + RAIN_TILE) % RAIN_TILE
+                    if (u > 1.2f) u -= RAIN_TILE
+                    val x = cx + (u - 0.5f) * w * zoom + slant * (y - top)
+                    if (x < -20f || x > w + 20f) continue
+                    val len = d[3].dp.toPx()
+                    val a = (if (layer == 0) 0.22f else 0.30f) * rain * smooth((bottom - y) / 20.dp.toPx())
+                    if (a <= 0.01f) continue
+                    drawLine(rainInk.copy(alpha = a), Offset(x - slant * len, y - len), Offset(x, y), stroke, StrokeCap.Round)
+                }
+            }
+            if (hz > 0f) clipRect(0f, 0f, w, hz) { rainLayer(0) }
 
             // ---- halo behind the ghost
             val haloColor = lerp(lerp(OFF_HALO, palette.halo, ghostLit), Color(0xFFFF9AA9), er * 0.7f)
@@ -1108,7 +1326,10 @@ fun NightScene(
                 val top = max(hz, 0f)
                 drawRect(
                     Brush.verticalGradient(
-                        listOf(lerp(OFF_WATER_TOP, palette.waterTop, e), lerp(OFF_WATER_BOTTOM, palette.waterBottom, e)),
+                        listOf(
+                            skyStop(lerp(OFF_WATER_TOP, palette.waterTop, e), DAY_WATER_TOP, lerp(goldHorizon, DAY_WATER_TOP, 0.55f), OVERCAST_TOP, 0.5f),
+                            skyStop(lerp(OFF_WATER_BOTTOM, palette.waterBottom, e), DAY_WATER_BOTTOM, DAY_WATER_BOTTOM, Color(0xFF2E3640), 0f),
+                        ),
                         startY = hz, endY = hz + h * 0.5f,
                     ),
                     topLeft = Offset(0f, top), size = Size(w, h - top),
@@ -1134,32 +1355,99 @@ fun NightScene(
                         drawPath(isles[0], farIsle.copy(alpha = 0.55f))
                         drawPath(isles[2], nearIsle.copy(alpha = 0.7f))
                     }
-                    // the moon's path on the water
-                    if (mx > -40.dp.toPx() && mx < w + 40.dp.toPx()) {
-                        val n = 26
-                        val depthH = h * 0.42f
-                        for (i in 0 until n) {
-                            val t = i / (n - 1f)
-                            val y = hz + 3.dp.toPx() + t.pow(1.45f) * depthH
-                            val half = (5f + 46f * t).dp.toPx() * zoom * (0.75f + 0.25f * (0.5f + 0.5f * wave(3_300, i * 0.17f)))
-                            val x = mx + wave(4_100, i * 0.21f) * (2f + 6f * t).dp.toPx() * motion
-                            val a = (0.30f * (1f - t).pow(0.8f) * (0.45f + 0.55f * (0.5f + 0.5f * wave(2_200, i * 0.37f))) * moonPower).coerceIn(0f, 1f)
-                            drawLine(moonTint.copy(alpha = a), Offset(x - half, y), Offset(x + half, y), (1f + 0.6f * t).dp.toPx(), StrokeCap.Round)
+                    // the sky, mirrored: near the horizon the lake shows the sky's own colours, fading toward us
+                    val reflH = min(h - hz, skyH * 0.55f)
+                    if (hz > 0f && reflH > 1f) drawRect(
+                        Brush.verticalGradient(
+                            0f to skyHorizonC.copy(alpha = 0.62f), 0.35f to skyMidC.copy(alpha = 0.30f), 1f to Color.Transparent,
+                            startY = hz, endY = hz + reflH,
+                        ),
+                        topLeft = Offset(0f, hz), size = Size(w, reflH),
+                    )
+                    // A light's reflection: a soft blurred column under it and sparkles dancing in a widening fan.
+                    fun shimmer(lx: Float, ly: Float, tint: Color, power: Float, widen: Float) {
+                        if (power <= 0.01f || lx < -90.dp.toPx() || lx > w + 90.dp.toPx()) return
+                        val depthH = min(h - hz, max(h * 0.30f, (hz - ly) * 0.9f))
+                        val colW = (26f + 30f * (widen - 1f)).dp.toPx() * zoom
+                        withTransform({ translate(lx, hz + depthH * 0.32f); scale(colW, depthH * 0.42f, Offset.Zero) }) {
+                            drawCircle(DOT_GLOW, 1f, Offset.Zero, alpha = (0.55f * power).coerceIn(0f, 1f), colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(tint, BlendMode.Modulate))
+                        }
+                        val stroke = 1.1.dp.toPx()
+                        GLITTER.forEach { g ->
+                            val t = g[0]
+                            val y = hz + 2.dp.toPx() + t.pow(1.7f) * depthH
+                            val fan = (5f + 58f * t).dp.toPx() * zoom * widen
+                            val x = lx + g[1] * fan + wave(4_300, g[3]) * (1f + 4f * t).dp.toPx() * motion
+                            val tw = (0.5f + 0.5f * wave(g[4].toLong(), g[3])).pow(3f)
+                            val a = (power * (1f - t).pow(1.2f) * (0.12f + 0.88f * tw) * (1f - 0.55f * abs(g[1]))).coerceIn(0f, 1f)
+                            if (a <= 0.01f) return@forEach
+                            val half = (1.2f + 7f * t).dp.toPx() * g[2] * zoom * (0.6f + 0.4f * tw)
+                            drawLine(tint.copy(alpha = a), Offset(x - half, y), Offset(x + half, y), stroke * (0.8f + 0.6f * t), StrokeCap.Round)
                         }
                     }
-                    // the surface: faint long glints drifting, denser near the horizon; the nearer a row, the
-                    // faster it slides past as the camera travels (the water lies flat towards the viewer)
-                    for (i in 0 until 14) {
-                        val y = hz + (3f + 1.9f * (i + 1f).pow(1.55f)).dp.toPx() * zoom
-                        val drift = loop(26_000L + i * 1_700L)
-                        val depth = 0.55f + 0.12f * i
-                        for (j in 0 until 3) {
-                            val u = (((j * 0.41f + i * 0.17f + drift - yaw * depth) % 1.3f) + 1.3f) % 1.3f - 0.15f
-                            val x0 = u * w
-                            val len = w * (0.08f + 0.05f * ((i + j) % 3))
-                            val a = (0.028f + 0.03f * e) * (0.6f + 0.4f * wave(3_700, i * 0.11f + j * 0.3f))
-                            drawLine(lineColor.copy(alpha = a), Offset(x0, y), Offset(x0 + len, y), 0.8.dp.toPx(), StrokeCap.Round)
+                    shimmer(mx, my, moonTint, 0.75f * moonPower, 1f)
+                    val sunOnWater = sunVis * smooth((dl.sunAlt + 0.02f) / 0.08f)
+                    shimmer(sunX, sunY, sunTint, 0.9f * sunOnWater, 1f + 0.9f * dl.golden)
+                    // rings on the water: raindrops, and now and then a fish
+                    val ringInk = lerp(lineColor, Color.White, 0.3f * dayK)
+                    fun ring(x: Float, y: Float, q: Float, maxDp: Float, alpha: Float) {
+                        val persp = ((y - hz) / max(h - hz, 1f)).coerceIn(0.08f, 1f)
+                        val rx = (2f + maxDp * q).dp.toPx() * persp * zoom
+                        val a = (1f - q) * alpha
+                        if (a > 0.005f) drawOval(ringInk.copy(alpha = a.coerceIn(0f, 1f)), Offset(x - rx, y - rx * 0.22f), Size(rx * 2f, rx * 0.44f), style = Stroke(0.9.dp.toPx()))
+                    }
+                    if (rain > 0.01f) {
+                        val n = (26 * rain).toInt()
+                        for (i in 0 until n) {
+                            val period = 900L + i * 53L
+                            val cyc = now / period
+                            val q = (now % period).toFloat() / period
+                            val rr = Random((cyc * 131L + i * 977L).toInt())
+                            val y = hz + 4.dp.toPx() + rr.nextFloat().pow(1.6f) * (h - hz) * 0.92f
+                            ring(rr.nextFloat() * w, y, q, 14f, 0.32f * rain)
                         }
+                    }
+                    if (!reduce && rain < 0.3f) {
+                        val period = 29_000L
+                        val cyc = wall / period
+                        val q = (wall % period).toFloat() / 2_400f
+                        val rr = Random((cyc * 389L + 5L).toInt())
+                        if (q < 1f && rr.nextFloat() < 0.6f) {
+                            val fx = w * (0.08f + rr.nextFloat() * 0.84f)
+                            val fy = hz + (0.15f + rr.nextFloat() * 0.5f) * (h - hz) * 0.6f
+                            if (abs(fx - gx) > gs * 0.6f) {
+                                ring(fx, fy, q, 30f, 0.38f)
+                                ring(fx, fy, (q - 0.25f).coerceAtLeast(0f) / 0.75f, 22f, if (q > 0.25f) 0.3f else 0f)
+                                // the fish itself: a tiny arc over the water at the start
+                                if (q < 0.3f) {
+                                    val k = q / 0.3f
+                                    val s = 7.dp.toPx() * ((fy - hz) / max(h - hz, 1f) + 0.4f) * zoom
+                                    val jx = fx - s + 2f * s * k
+                                    val jy = fy - sin(PI.toFloat() * k) * s * 1.6f
+                                    drawCircle(lerp(Color(0xFF1C2430), lineColor, 0.2f).copy(alpha = 0.7f * sin(PI.toFloat() * k)), s * 0.28f, Offset(jx, jy))
+                                }
+                            }
+                        }
+                    }
+                    // the surface: small wavelets catching the light, tiny and dense far off, wider near us; the
+                    // nearer one is, the faster it slides past as the camera travels (the water lies flat)
+                    val waveletInk = lerp(lineColor, Color.White, 0.25f * dayK)
+                    WAVELETS.forEach { v ->
+                        val t = v[0]
+                        val y = hz + 3.dp.toPx() + t.pow(1.9f) * (h - hz) * 0.95f
+                        val depth = 0.6f + 1.2f * t
+                        val u = (((v[1] + loop(60_000L + (v[3] * 30_000f).toLong()) * 0.25f - yaw * depth) % 1.4f) + 1.4f) % 1.4f - 0.2f
+                        val x = u * w
+                        val ww = (6f + 46f * t).dp.toPx() * v[2] * zoom
+                        val bob = 0.5f + 0.5f * wave(3_900L + (v[3] * 2_000f).toLong(), v[3])
+                        val a = (0.05f + 0.05f * e + 0.07f * dayK) * (0.35f + 0.65f * bob) * (1f - 0.35f * t)
+                        if (a <= 0.005f || x < -ww || x > w + ww) return@forEach
+                        val hh = ww * (0.16f + 0.06f * bob)
+                        drawArc(
+                            waveletInk.copy(alpha = a.coerceIn(0f, 1f)), 200f, 140f, false,
+                            topLeft = Offset(x - ww / 2f, y - hh / 2f), size = Size(ww, hh),
+                            style = Stroke((0.7f + 0.6f * t).dp.toPx(), cap = StrokeCap.Round),
+                        )
                     }
                     // the ghost, mirrored: slices that sway a little, fading with depth
                     val phase = loop(GHOST_LOOP_MS) * TAU
@@ -1254,6 +1542,82 @@ fun NightScene(
                 }
             }
 
+            // ---- the near shore: lily pads on the water, reeds and cattails in the corners, all swaying a little
+            if (hz < h - 40.dp.toPx()) {
+                val waterH = h - max(hz, 0f)
+                val padC = lerp(LILY_PAD_NIGHT, muted(LILY_PAD, vivid), dayK)
+                val padRim = lerp(padC, Color.White, 0.18f + 0.1f * dayK)
+                LILIES.forEach { lp ->
+                    val y = max(hz, 0f) + lp[1] * waterH + wave(5_200, lp[0]) * 1.2.dp.toPx() * motion
+                    val x = cx + (lp[0] - 0.5f - yaw * 1.3f) * w * zoom
+                    val r = lp[2].dp.toPx() * zoom * (0.55f + 0.6f * lp[1])
+                    if (x < -r * 2f || x > w + r * 2f) return@forEach
+                    val sq = 0.36f
+                    val turn = lp[3] + wave(9_000, lp[0] * 3f) * 6f * motion
+                    // its dark reflection-shadow, the pad (a disc with a notch), a light rim
+                    drawOval(Color.Black.copy(alpha = 0.18f), Offset(x - r * 1.05f, y - r * sq + 1.5.dp.toPx()), Size(r * 2.1f, r * 2f * sq))
+                    withTransform({ scale(1f, sq, Offset(x, y)) }) {
+                        drawArc(padC, turn + 14f, 332f, true, Offset(x - r, y - r), Size(r * 2f, r * 2f))
+                        drawArc(padRim.copy(alpha = 0.35f), turn + 14f, 332f, false, Offset(x - r, y - r), Size(r * 2f, r * 2f), style = Stroke(0.9.dp.toPx() / sq))
+                        drawLine(padRim.copy(alpha = 0.18f), Offset(x, y), Offset(x + cos((turn + 180f) * PI.toFloat() / 180f) * r * 0.85f, y + sin((turn + 180f) * PI.toFloat() / 180f) * r * 0.85f), 0.8.dp.toPx() / sq)
+                    }
+                    if (lp[4] > 0.5f) {
+                        // a water lily: a few pale petals, glowing a little at night
+                        val petal = lerp(Color(0xFFF3D5E2), Color(0xFFFFF4F8), dayK).let { muted(it, 0.5f + 0.5f * vivid) }
+                        val fr = r * 0.34f
+                        val fy = y - fr * 0.35f
+                        if (dayK < 0.6f) drawCircle(Brush.radialGradient(listOf(petal.copy(alpha = 0.22f * (1f - dayK)), Color.Transparent), Offset(x, fy), fr * 3.2f), fr * 3.2f, Offset(x, fy))
+                        for (k in 0 until 6) {
+                            val ang = (k * 60f + lp[3]) * PI.toFloat() / 180f
+                            drawOval(petal.copy(alpha = 0.9f), Offset(x + cos(ang) * fr * 0.55f - fr * 0.42f, fy + sin(ang) * fr * 0.25f - fr * 0.55f), Size(fr * 0.84f, fr * 1.1f))
+                        }
+                        drawCircle(Color(0xFFF2C14E).copy(alpha = 0.95f), fr * 0.26f, Offset(x, fy - fr * 0.1f))
+                    }
+                }
+                // reeds: rooted below the screen's bottom corners
+                val reedC = lerp(REED_NIGHT, muted(REED_DAY, vivid), dayK)
+                val rim = lerp(moonTint.copy(alpha = 0.22f * moonPower), sunTint.copy(alpha = 0.3f * sunVis), dayK)
+                REEDS.forEach { rd ->
+                    val left = rd[0] < 0f
+                    val bx = if (left) rd[1].dp.toPx() else w - rd[1].dp.toPx()
+                    val by = h + 6.dp.toPx()
+                    val tall = rd[2].dp.toPx() * (0.85f + 0.15f * zoom)
+                    val lean = (if (left) 1f else -1f) * rd[3] * tall * 0.35f + (wind * 6f + wave(4_600L + (rd[4] * 1_500f).toLong(), rd[4]) * 4f).dp.toPx() * motion
+                    val tx = bx + lean
+                    val ty = by - tall
+                    val ctrl = Offset(bx + lean * 0.15f, by - tall * 0.55f)
+                    birdPath.reset()
+                    when (rd[5].toInt()) {
+                        1 -> {
+                            // a blade: a narrow leaf curving over
+                            val wdt = 3.2.dp.toPx()
+                            birdPath.moveTo(bx - wdt, by)
+                            birdPath.quadraticTo(ctrl.x - wdt * 0.6f, ctrl.y, tx + lean * 0.25f, ty + tall * 0.06f)
+                            birdPath.quadraticTo(ctrl.x + wdt * 0.6f, ctrl.y, bx + wdt, by)
+                            birdPath.close()
+                            drawPath(birdPath, reedC)
+                        }
+                        else -> {
+                            birdPath.moveTo(bx, by)
+                            birdPath.quadraticTo(ctrl.x, ctrl.y, tx, ty)
+                            drawPath(birdPath, reedC, style = Stroke(1.8.dp.toPx(), cap = StrokeCap.Round))
+                            drawPath(birdPath, rim, style = Stroke(0.6.dp.toPx(), cap = StrokeCap.Round))
+                            if (rd[5].toInt() == 2) {
+                                // a cattail head just under the tip
+                                val hx = bx + (tx - bx) * 0.86f
+                                val hy = by + (ty - by) * 0.86f
+                                val ang = atan2(ty - by, tx - bx) * 180f / PI.toFloat() + 90f
+                                withTransform({ rotate(ang, Offset(hx, hy)) }) {
+                                    val cw = 5.dp.toPx()
+                                    val ch = 18.dp.toPx() * (0.8f + 0.2f * zoom)
+                                    drawRoundRect(lerp(Color(0xFF0B0907), muted(Color(0xFF5A3A22), vivid), dayK), Offset(hx - cw / 2f, hy - ch / 2f), Size(cw, ch), androidx.compose.ui.geometry.CornerRadius(cw / 2f))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             snow(1)
 
             // ---- the ban: everything drawn so far (sky, moon, its path, islands, water) takes a blood-red hue
@@ -1322,7 +1686,7 @@ fun NightScene(
             }
 
             // ---- fireflies
-            val fa = ghostLit * e
+            val fa = ghostLit * e * (0.3f + 0.7f * nightK) * (1f - 0.6f * rain)
             if (fa > 0.01f) {
                 for (i in 0 until FIREFLIES.size / 2) {
                     val fx = gx + FIREFLIES[i * 2] * gs + gs * 0.035f * wave(7_000, i * 0.13f) * motion
@@ -1338,6 +1702,7 @@ fun NightScene(
             }
 
             snow(2)
+            rainLayer(1)
         }
         content()
     }

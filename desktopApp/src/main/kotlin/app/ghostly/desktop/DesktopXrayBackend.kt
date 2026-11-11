@@ -128,7 +128,7 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
                 else Ingress.Proxy(proxy, osPort, appPort0)
 
                 apiPort = freePort()
-                val config = withStatsApi(XrayConfigBuilder.build(server, settings, ingress), apiPort)
+                val config = withStatsApi(DohResolver.pin(XrayConfigBuilder.build(server, settings, ingress)), apiPort)
                 val file = File(platform.dataDir, "run").apply { mkdirs() }.resolve("config.json")
                 file.writeText(JsonX.encodeToString(JsonObject.serializer(), config))
 
@@ -291,7 +291,7 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
 
     /** One throwaway Xray per server: SOCKS inbound → that server, then time an HTTP request through it. */
     override suspend fun ping(server: Server, url: String): Long = withContext(Dispatchers.IO) {
-        val base = XrayConfigBuilder.buildPing(server) ?: return@withContext -1L
+        val base = XrayConfigBuilder.buildPing(server)?.let { DohResolver.pin(it) } ?: return@withContext -1L
         if (!exe.isFile) return@withContext -1L
         val port = freePort()
         val config = JsonObject(
@@ -343,7 +343,7 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
             }
         }
         val file = File.createTempFile("ghostly-ping", ".json")
-        file.writeText(JsonX.encodeToString(JsonObject.serializer(), config))
+        file.writeText(JsonX.encodeToString(JsonObject.serializer(), DohResolver.pin(config)))
         val p = ProcessBuilder(exe.absolutePath, "run", "-c", file.absolutePath)
             .directory(coreDir).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD)
             .apply { environment()["XRAY_LOCATION_ASSET"] = coreDir.absolutePath }
