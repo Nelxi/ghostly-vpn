@@ -128,8 +128,13 @@ object XrayConfigBuilder {
             }
             else -> return null
         }
+        // A provider may dial a name that only exists in its config's dns.hosts (Ghostly's second door:
+        // "de.invalid" -> the node and the RU entry, raced by happyEyeballs). Without those hosts the ping
+        // can't resolve it and a working server shows «нет».
+        val hosts = ((server.config?.get("dns") as? JsonObject)?.get("hosts") as? JsonObject)?.takeIf { it.isNotEmpty() }
         return buildJsonObject {
             putJsonObject("log") { put("loglevel", "none") }
+            if (hosts != null) putJsonObject("dns") { put("hosts", hosts) }
             put("outbounds", JsonArray(outbounds.map { stripMeta(it) }))
         }
     }

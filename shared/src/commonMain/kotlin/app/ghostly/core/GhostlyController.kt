@@ -1020,7 +1020,9 @@ class GhostlyController(
     private suspend fun pingDirect(targets: List<Server>, method: app.ghostly.core.model.PingMethod) {
         val udp = setOf("hysteria", "tuic", "wireguard", "hysteria2")
         val (direct, viaCore) = targets.partition { s ->
-            s.host != null && (method == app.ghostly.core.model.PingMethod.ICMP || (s.port > 0 && s.protocol !in udp))
+            // A ".invalid" name lives only in the config's dns.hosts: only the core can dial it.
+            s.host != null && !s.host.endsWith(".invalid") &&
+                (method == app.ghostly.core.model.PingMethod.ICMP || (s.port > 0 && s.protocol !in udp))
         }
         val gate = Semaphore(24)
         kotlinx.coroutines.coroutineScope {

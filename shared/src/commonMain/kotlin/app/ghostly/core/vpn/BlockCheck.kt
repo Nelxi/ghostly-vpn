@@ -42,6 +42,9 @@ object BlockCheck {
         // answers the plain `GET /` probe differently from the tunnel paths (bot protection / site
         // routing). That produced a false "DPI" verdict on Wi-Fi while the LTE tunnel itself worked.
         if (server.isAuto || server.isWhitelist || server.port <= 0 || server.protocol in UDP) return null
+        // A name from the config's own dns.hosts (".invalid", several IPs raced by the core): nothing to
+        // connect to directly, so no verdict instead of a false «IP блок».
+        if (host.endsWith(".invalid")) return null
         val outbound = server.outbound ?: (server.config?.get("outbounds") as? JsonArray)
             ?.mapNotNull { it as? JsonObject }
             ?.firstOrNull { (it["tag"] as? JsonPrimitive)?.content == "proxy" }

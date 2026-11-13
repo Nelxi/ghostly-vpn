@@ -181,6 +181,22 @@ class ParserTest {
     }
 
     @Test
+    fun secondDoorNameIsPingedThroughTheConfigHosts() {
+        val cfg = """{"remarks":"🇩🇪 Vision","dns":{"hosts":{"de.invalid":["147.45.63.107","2.26.252.228"]}},
+            "outbounds":[{"tag":"proxy","protocol":"vless","settings":{"vnext":[{"address":"de.invalid","port":31443,
+            "users":[{"id":"00000000-0000-4000-8000-000000000000","encryption":"none"}]}]},
+            "streamSettings":{"network":"tcp","security":"reality","realitySettings":{"serverName":"deepseek.com"},
+            "sockopt":{"domainStrategy":"UseIPv4","happyEyeballs":{"tryDelayMs":250}}}},
+            {"tag":"direct","protocol":"freedom"}]}"""
+        val s = SubscriptionParser.serverFromConfig(JsonX.parseToJsonElement(cfg).jsonObject, "d:0")!!
+        val ping = XrayConfigBuilder.buildPing(s) as JsonObject
+        val hosts = ping["dns"]!!.jsonObject["hosts"]!!.jsonObject
+        assertEquals(2, hosts["de.invalid"]!!.jsonArray.size)
+        // No direct verdict for a name that exists only inside the config.
+        assertNull(app.ghostly.core.vpn.BlockCheck.target(s))
+    }
+
+    @Test
     fun versionCompare() {
         val cmp = app.ghostly.core.update.Updater.Companion::compareVersions
         assertTrue(cmp("0.1.10", "0.1.9") > 0)
