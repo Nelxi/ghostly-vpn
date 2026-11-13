@@ -143,6 +143,8 @@ class SubscriptionClient(private val platform: PlatformInfo) {
             header("x-device-os", platform.os)
             header("x-ver-os", platform.osVersion)
             header("x-device-model", platform.deviceModel)
+            // Wi-Fi / mobile / Ethernet: support sees it next to the region and operator of the request.
+            header("x-net", platform.networkType().name)
         }
         // Ghostly's server wants proof that this is the real app (trials on Android): answer once and ask again.
         if (!attested) Attest.parse(response.headers[Attest.HEADER])?.let { ask ->
