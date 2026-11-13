@@ -353,6 +353,8 @@
  "Проверить пинг": "Pingni tekshirish",
  "Проверка блокировок": "Bloklarni tekshirish",
  "Проверять недоступные серверы": "Mavjud bo'lmagan serverlarni tekshirish",
+ "Анонимная статистика качества": "Anonim sifat statistikasi",
+ "Ghostly отправляет пинги и подключения к своим серверам и тип сети (Wi-Fi или мобильная). Сервер видит только регион, город и оператора, без подписки и устройства: так мы узнаём, какие серверы работают у каждого оператора": "Ghostly o'z serverlariga pinglar va ulanishlarni hamda tarmoq turini (Wi-Fi yoki mobil) yuboradi. Server faqat hudud, shahar va operatorni ko'radi, obuna va qurilmasiz: shu tarzda har bir operatorda qaysi serverlar ishlashini bilib olamiz",
  "Проверяю брандмауэр…": "Xavfsizlik devori tekshirilmoqda…",
  "Проверяю контрольную сумму…": "Nazorat yig'indisi tekshirilmoqda…",
  "Продлить": "Uzaytirish",

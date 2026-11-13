@@ -221,6 +221,11 @@ data class AppSettings(
     val mihomoLogLevel: String = "warning",
     /** A server that doesn't answer the ping gets a direct check: is its IP blocked, or does the TSPU cut it at ~16 KB. */
     val blockCheck: Boolean = true,
+    /**
+     * Anonymous quality reports: pings and connects to Ghostly's servers with the network type; the server
+     * keeps only the region, city and operator of the address (see [app.ghostly.core.telemetry.QualityReports]).
+     */
+    val qualityReports: Boolean = true,
     // --- look & feel
     val accent: ThemeAccent = ThemeAccent.GHOST,
     val haptics: Boolean = true,

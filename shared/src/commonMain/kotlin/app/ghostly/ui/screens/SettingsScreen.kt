@@ -48,6 +48,7 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.AltRoute
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Devices
+import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Payments
 import androidx.compose.material.icons.rounded.SupportAgent
@@ -853,6 +854,11 @@ private fun AdvancedPage(controller: GhostlyController, contentPadding: PaddingV
                 tr("Если сервер не пингуется, Ghostly стучится к нему напрямую и пишет причину: блок IP, обрыв TLS (DPI) или заморозка ТСПУ после ~16 КБ"),
                 s.blockCheck, Icons.Rounded.Shield,
             ) { v -> set { it.copy(blockCheck = v) } }
+            ToggleRow(
+                tr("Анонимная статистика качества"),
+                tr("Ghostly отправляет пинги и подключения к своим серверам и тип сети (Wi-Fi или мобильная). Сервер видит только регион, город и оператора, без подписки и устройства: так мы узнаём, какие серверы работают у каждого оператора"),
+                s.qualityReports, Icons.Rounded.Insights,
+            ) { v -> set { it.copy(qualityReports = v) } }
         }
         SectionTitle(tr("Журнал · {0}", coreName(core)))
         Group {

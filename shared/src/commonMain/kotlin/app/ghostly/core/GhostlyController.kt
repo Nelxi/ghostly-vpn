@@ -269,7 +269,25 @@ class GhostlyController(
 
     /** Every (re)connect goes through here: one at a time, remembering what the tunnel was built from. */
     private suspend fun connectTo(server: Server) =
-        applier.connect(server.id to tunnelAffecting(_settings.value)) { backend.connect(server, _settings.value) }
+        applier.connect(server.id to tunnelAffecting(_settings.value)) {
+            connectStarted = server to now()
+            backend.connect(server, _settings.value)
+        }
+
+    /** The connect in progress and when it began: its outcome goes into the quality reports. */
+    private var connectStarted: Pair<Server, Long>? = null
+
+    private val quality = app.ghostly.core.telemetry.QualityReports(
+        scope, platform.appVersion, platform.os, enabled = { _settings.value.qualityReports }, now = ::now,
+    )
+
+    /** One measurement for the anonymous quality reports; only servers of a Ghostly subscription count. */
+    private fun report(kind: String, server: Server?, ms: Long, method: String? = null, block: String? = null) {
+        if (server == null || !_settings.value.qualityReports) return
+        val ours = profileOf(server.id)?.url?.let { app.ghostly.core.sub.GhostlyDomains.isOurs(it) } == true
+        if (!ours) return
+        quality.record(kind, server.name, server.protocol, ms, platform.networkType().name, _settings.value.core.name, method, block)
+    }
 
     init {
         // 0.2.1 switched everyone to mihomo; Xray is the default again — move back once, later choices stick.
@@ -296,6 +314,8 @@ class GhostlyController(
             backend.state.collect { s ->
                 when (s) {
                     is VpnState.Connected -> {
+                        connectStarted?.let { (srv, at) -> report("connect", srv, (now() - at).coerceAtLeast(1)) }
+                        connectStarted = null
                         if (userWantsConnection) haptic(app.ghostly.core.vpn.Haptic.SUCCESS, fromUser = false)
                         failoverAttempts = 0
                         retryAttempts = 0
@@ -305,6 +325,8 @@ class GhostlyController(
                         if (_settings.value.autoUpdateSubs) launch(Dispatchers.IO) { kotlinx.coroutines.delay(3_000); refreshAll() }
                     }
                     is VpnState.Failed -> {
+                        connectStarted?.let { (srv, _) -> report("connect", srv, 0) }
+                        connectStarted = null
                         stopGuard()
                         if (userWantsConnection) {
                             engageKillSwitch()
@@ -973,6 +995,7 @@ class GhostlyController(
     private fun pinged(id: String, ms: Long) {
         _pings.update { it + (id to Ping(app.ghostly.core.vpn.Latency.shown(it[id], ms, now()), now())) }
         _pinging.update { it - id }
+        server(id)?.let { s -> report("ping", s, ms, method = if (s.isWhitelist) "TCP" else _settings.value.let { it.pingMethodOf(it.core) }.name) }
         if (ms > 0 || !_settings.value.blockCheck) return
         val target = server(id)?.let { app.ghostly.core.vpn.BlockCheck.target(it) } ?: return
         if (backend.state.value is VpnState.Connected && !backend.directProbesBypassTunnel) return
@@ -982,6 +1005,7 @@ class GhostlyController(
         scope.launch(Dispatchers.IO) {
             try {
                 val verdict = platform.blockCheck(target) ?: return@launch
+                report("block", server(id), 0, block = verdict.name)
                 _pings.update { m -> m[id]?.takeIf { !it.ok }?.let { m + (id to it.copy(block = verdict)) } ?: m }
             } finally {
                 blockChecking.update { it - id }
@@ -1233,6 +1257,7 @@ class GhostlyController(
                     val netChanged = lastNet != null && net != lastNet
                     lastNet = net
                     val ms = runCatching { backend.healthCheck(s.pingUrlOf(s.core)) }.getOrDefault(-1L)
+                    report("health", cur, ms)
                     if (ms > 0) {
                         fails = 0
                         offlineSaid = false

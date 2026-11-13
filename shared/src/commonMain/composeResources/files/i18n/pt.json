@@ -353,6 +353,8 @@
  "Проверить пинг": "Verificar ping",
  "Проверка блокировок": "Verificação de bloqueios",
  "Проверять недоступные серверы": "Verificar servidores indisponíveis",
+ "Анонимная статистика качества": "Estatísticas de qualidade anônimas",
+ "Ghostly отправляет пинги и подключения к своим серверам и тип сети (Wi-Fi или мобильная). Сервер видит только регион, город и оператора, без подписки и устройства: так мы узнаём, какие серверы работают у каждого оператора": "O Ghostly envia pings e conexões aos seus próprios servidores e o tipo de rede (Wi-Fi ou móvel). O servidor vê apenas a região, a cidade e a operadora, sem assinatura nem dispositivo: assim sabemos quais servidores funcionam em cada operadora",
  "Проверяю брандмауэр…": "Verificando o firewall…",
  "Проверяю контрольную сумму…": "Verificando a soma de verificação…",
  "Продлить": "Renovar",
