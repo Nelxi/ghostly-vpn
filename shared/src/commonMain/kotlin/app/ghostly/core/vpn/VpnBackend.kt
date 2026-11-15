@@ -93,6 +93,8 @@ interface PlatformInfo {
     val os: String
     val osVersion: String
     val deviceModel: String
+    /** [deviceModel] for HTTP headers: printable ASCII only (a PC can be named «комп»). */
+    val deviceModelHeader: String get() = app.ghostly.core.headerSafe(deviceModel)
     /** Stable device id, sent as x-hwid to subscription servers (Happ-compatible). */
     val hwid: String
     val appVersion: String

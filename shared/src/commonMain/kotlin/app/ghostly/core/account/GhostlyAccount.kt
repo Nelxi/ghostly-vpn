@@ -86,7 +86,7 @@ class GhostlyAccount(private val platform: PlatformInfo, private val userAgent: 
             header("x-hwid", platform.hwid)
             header("Accept-Language", app.ghostly.i18n.L10n.language)
             header("x-device-os", platform.os)
-            header("x-device-model", platform.deviceModel)
+            header("x-device-model", platform.deviceModelHeader)
             contentType(ContentType.Application.Json)
             setBody("""{"go":"$go"}""")
         }
