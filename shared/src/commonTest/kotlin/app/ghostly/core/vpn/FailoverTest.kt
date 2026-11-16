@@ -83,7 +83,7 @@ class FailoverTest {
     @Test
     fun countryIsTheFirstFlagInTheName() {
         assertEquals("🇳🇱", Failover.country(nlVision))
-        assertEquals("🇩🇪", Failover.country(server("x", "LTE · 🇩🇪 Германия", "v.frameloft.online")))
+        assertEquals("🇩🇪", Failover.country(server("x", "LTE · 🇩🇪 Германия", "frameloft.online")))
         assertNull(Failover.country(server("y", "Server 1", "example.com")))
         assertEquals("example.com", Failover.entry(server("z", "Z", " Example.COM ")))
     }
