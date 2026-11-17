@@ -89,7 +89,7 @@ fun PokeGhost(modifier: Modifier = Modifier, happy: Float = 1f) {
 
     fun poke(at: Offset, w: Float) {
         haptic()
-        val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+        val now = app.ghostly.core.GhostlyController.now()
         pokes.addLast(now)
         while (pokes.isNotEmpty() && now - pokes.first() > 2200) pokes.removeFirst()
         val side = if (at.x < w / 2) -1f else 1f
@@ -121,7 +121,7 @@ fun PokeGhost(modifier: Modifier = Modifier, happy: Float = 1f) {
         }
         scope.launch {
             delay(exprUntil - now + 20)
-            if (kotlin.time.Clock.System.now().toEpochMilliseconds() >= exprUntil) expr = GhostExpr.NONE
+            if (app.ghostly.core.GhostlyController.now() >= exprUntil) expr = GhostExpr.NONE
         }
     }
 
@@ -140,7 +140,7 @@ fun PokeGhost(modifier: Modifier = Modifier, happy: Float = 1f) {
     ) {
         @Suppress("UNUSED_EXPRESSION") clock // redraw particles every frame while they live
         val s = size.minDimension
-        val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+        val now = app.ghostly.core.GhostlyController.now()
         val sq = squish.value
         val look = hover?.let { Offset(((it.x / s) - 0.5f) * 2f, ((it.y / s) - 0.5f) * 2f) } ?: Offset.Zero
         val dizzyWobble = if (expr == GhostExpr.DIZZY) sin(now / 90f) * 6f else 0f

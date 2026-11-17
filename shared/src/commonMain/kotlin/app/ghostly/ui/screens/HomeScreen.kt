@@ -316,7 +316,8 @@ fun HomeDesktop(controller: GhostlyController, onAdd: () -> Unit, onServers: () 
 
 /** Time-of-day greeting for the desktop header (local clock). */
 private fun greeting(nowMs: Long, offsetMin: Int): String {
-    val h = (((nowMs / 60_000 + offsetMin) / 60) % 24).toInt()
+    val h = app.ghostly.ui.components.ShowClock.wallMs?.let { ((it / 3_600_000) % 24).toInt() }
+        ?: (((nowMs / 60_000 + offsetMin) / 60) % 24).toInt()
     return when (h) {
         in 5..11 -> tr("Доброе утро")
         in 12..17 -> tr("Добрый день")

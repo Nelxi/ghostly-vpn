@@ -649,7 +649,7 @@ class Cabinet(
     companion object {
         private const val WATCH_MS = 20 * 60_000L
 
-        fun now(): Long = Clock.System.now().toEpochMilliseconds()
+        fun now(): Long = app.ghostly.core.GhostlyController.now()
 
         /** `sub_…` of a subscription link, null for anything else. */
         fun subIdOf(url: String): String? =

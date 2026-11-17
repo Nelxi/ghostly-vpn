@@ -35,6 +35,10 @@ class DesktopPlatform : PlatformInfo {
     override val deviceModel: String = runCatching { java.net.InetAddress.getLocalHost().hostName }.getOrDefault("PC")
     override val appVersion: String = System.getProperty("jpackage.app-version") ?: "0.1.5-dev"
     override val isDesktop = true
+    override val supportsPerAppSplit: Boolean get() = hostOs == HostOs.WINDOWS
+    override suspend fun installedApps(): List<app.ghostly.core.vpn.AppEntry> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        WindowsApps.list()
+    }
 
     override val tcpTuning: app.ghostly.core.vpn.TcpTuning? = if (hostOs == HostOs.WINDOWS) WindowsTcpTuning else null
 

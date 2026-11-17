@@ -6,6 +6,7 @@ import app.ghostly.core.model.DnsPreset
 import app.ghostly.core.model.Profile
 import app.ghostly.core.model.RoutingMode
 import app.ghostly.core.model.Server
+import app.ghostly.core.model.SplitMode
 import app.ghostly.core.vpn.LoopbackAuth
 import app.ghostly.core.xray.LocalProxy
 import kotlinx.serialization.json.JsonArray
@@ -348,6 +349,19 @@ object MihomoConfigBuilder {
 
     /** The user's switches and domain lists as mihomo rules; forced-proxy entries go to [proxyTarget]. */
     private fun userRules(settings: AppSettings, proxyTarget: String): List<String> = buildList {
+        val procApps = settings.splitApps.filter { it.endsWith(".exe", ignoreCase = true) || !it.contains(".") }
+        if (procApps.isNotEmpty()) {
+            when (settings.splitMode) {
+                SplitMode.ONLY_SELECTED -> {
+                    procApps.forEach { add("PROCESS-NAME,$it,$proxyTarget") }
+                    add("MATCH,DIRECT")
+                }
+                SplitMode.BYPASS_SELECTED -> {
+                    procApps.forEach { add("PROCESS-NAME,$it,DIRECT") }
+                }
+                SplitMode.OFF -> {}
+            }
+        }
         settings.blockDomains.mapNotNull { domainRule(it, "REJECT") }.let(::addAll)
         if (settings.blockAds) add("GEOSITE,category-ads-all,REJECT")
         if (settings.blockQuic) add("AND,((NETWORK,UDP),(DST-PORT,443)),REJECT")

@@ -6,6 +6,7 @@ import app.ghostly.core.model.ExtraProxy
 import app.ghostly.core.model.ExtraProxyType
 import app.ghostly.core.model.RoutingMode
 import app.ghostly.core.model.Server
+import app.ghostly.core.model.SplitMode
 import app.ghostly.core.vpn.LoopbackAuth
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -376,6 +377,25 @@ object XrayConfigBuilder {
         }
 
         val userRules = buildList {
+            val catchAll = rules.lastOrNull { it["domain"] == null && it["ip"] == null && it["port"] == null }
+            val target = catchAll?.filterKeys { it == "outboundTag" || it == "balancerTag" }?.takeIf { it.isNotEmpty() } ?: mapOf("outboundTag" to JsonPrimitive(PROXY))
+            val procApps = settings.splitApps.filter { it.endsWith(".exe", ignoreCase = true) || !it.contains(".") }
+            if (procApps.isNotEmpty()) {
+                when (settings.splitMode) {
+                    SplitMode.ONLY_SELECTED -> {
+                        add(JsonObject(mapOf("type" to JsonPrimitive("field"), "process" to JsonArray(procApps.map { JsonPrimitive(it) })) + target))
+                        add(buildJsonObject { put("type", "field"); put("network", "tcp,udp"); put("outboundTag", DIRECT) })
+                    }
+                    SplitMode.BYPASS_SELECTED -> {
+                        add(buildJsonObject {
+                            put("type", "field")
+                            putJsonArray("process") { procApps.forEach { add(JsonPrimitive(it)) } }
+                            put("outboundTag", DIRECT)
+                        })
+                    }
+                    SplitMode.OFF -> {}
+                }
+            }
             if (settings.blockDomains.isNotEmpty()) add(rule(domain = settings.blockDomains.map(::domainRule), outbound = BLOCK))
             if (settings.blockAds) add(rule(domain = listOf("geosite:category-ads-all"), outbound = BLOCK))
             if (settings.blockQuic) add(buildJsonObject {

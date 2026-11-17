@@ -1,11 +1,25 @@
 package app.ghostly.ui.components
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
 
 /** Milliseconds of the device's local wall clock: epoch time shifted by the time zone's current offset. */
 internal expect fun localWallClockMs(): Long
+
+/**
+ * Renders that script the time of day (the desktop showcase reel): while [wallMs] is set, the lake and the
+ * greeting follow it frame by frame instead of the device clock. Never set by the app itself.
+ */
+object ShowClock {
+    var wallMs: Long? by mutableStateOf(null)
+
+    /** Clear weather whatever the slot says. */
+    var clear: Boolean = false
+}
 
 private const val DAY_MS = 86_400_000L
 private const val MINUTE_MS = 60_000L
@@ -89,6 +103,7 @@ internal var weatherOverride: WeatherNow? = null
 
 /** The weather at local wall-clock time [wallMs]: it fades in and out over a few minutes at each slot's ends. */
 internal fun weatherAt(wallMs: Long): WeatherNow {
+    if (ShowClock.clear) return WeatherNow(Weather.CLEAR, 0f)
     weatherOverride?.let { return it }
     val slot = floorDiv(wallMs, WEATHER_SLOT_MS)
     val inSlot = wallMs - slot * WEATHER_SLOT_MS

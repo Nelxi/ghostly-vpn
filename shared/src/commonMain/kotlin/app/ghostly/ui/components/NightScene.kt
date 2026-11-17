@@ -756,7 +756,7 @@ fun NightScene(
                 skyClock[0] = now
                 skyClock[1] = localWallClockMs()
             }
-            val wall = skyClock[1] + (now - skyClock[0])
+            val wall = ShowClock.wallMs ?: (skyClock[1] + (now - skyClock[0]))
             val dl = dayLight(minuteOfDay(wall))
             val wx = weatherAt(wall)
             val dayK = dl.day

@@ -264,12 +264,6 @@ private fun MainSettings(controller: GhostlyController, contentPadding: PaddingV
                 RoutingMode.SMART -> tr("Умная: российские сайты напрямую")
                 RoutingMode.GLOBAL -> tr("Весь трафик через VPN")
             }, Icons.AutoMirrored.Rounded.AltRoute, onClick = { open(Page.ROUTING) }) { Chevron() }
-            SettingRow(
-                "DNS",
-                (if (s.dns == DnsPreset.CUSTOM) s.customDns.ifBlank { tr("Свой") } else if (s.dns == DnsPreset.PROVIDER) tr("Как в подписке") else s.dns.title) +
-                    if (s.dnsDefaults) "" else tr(" · настроен"),
-                Icons.Rounded.Dns, onClick = { open(Page.DNS) },
-            ) { Chevron() }
             if (controller.platform.supportsPerAppSplit) {
                 SettingRow(tr("Приложения"), when (s.splitMode) {
                     SplitMode.OFF -> tr("Все приложения через VPN")
@@ -284,6 +278,12 @@ private fun MainSettings(controller: GhostlyController, contentPadding: PaddingV
                     }
                 }, Icons.AutoMirrored.Rounded.CallSplit, onClick = { open(Page.APPS) }) { Chevron() }
             }
+            SettingRow(
+                "DNS",
+                (if (s.dns == DnsPreset.CUSTOM) s.customDns.ifBlank { tr("Свой") } else if (s.dns == DnsPreset.PROVIDER) tr("Как в подписке") else s.dns.title) +
+                    if (s.dnsDefaults) "" else tr(" · настроен"),
+                Icons.Rounded.Dns, onClick = { open(Page.DNS) },
+            ) { Chevron() }
             if (controller.platform.isDesktop) {
                 SettingRow(tr("Режим"), null, Icons.Rounded.Cable)
                 Segmented(

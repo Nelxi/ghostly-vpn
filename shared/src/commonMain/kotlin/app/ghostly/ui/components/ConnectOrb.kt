@@ -326,7 +326,7 @@ fun DrawScope.drawGhost(
 
 /** Idle loop phase from the wall clock, for ghosts drawn without their own animation clock. */
 internal fun ghostPhase(): Float =
-    ((kotlin.time.Clock.System.now().toEpochMilliseconds() % GHOST_LOOP_MS).toFloat() / GHOST_LOOP_MS) * 2 * PI.toFloat()
+    ((app.ghostly.core.GhostlyController.now() % GHOST_LOOP_MS).toFloat() / GHOST_LOOP_MS) * 2 * PI.toFloat()
 
 internal const val GHOST_LOOP_MS = 2400L
 

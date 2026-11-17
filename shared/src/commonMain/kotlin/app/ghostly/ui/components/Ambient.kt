@@ -33,6 +33,9 @@ object AmbientMotion {
 
     /** Clock step while visible. */
     const val STEP_MS = 16L
+
+    /** Scripted renders (the desktop showcase reel): the ambient clock reads this on every frame; null = real time. */
+    var reelClock: (() -> Long)? = null
 }
 
 /**
@@ -74,6 +77,9 @@ fun rememberAmbientClock(frameSync: Boolean = false): State<Long> {
     val visible by AmbientMotion.visible.collectAsState()
     LaunchedEffect(visible, frameSync) {
         if (!visible) return@LaunchedEffect
+        AmbientMotion.reelClock?.let { clock ->
+            while (true) androidx.compose.runtime.withFrameMillis { time.longValue = clock() }
+        }
         if (frameSync) {
             // Phones: tick on the display's frames (at most ~60 a second), so motion steps evenly with the
             // screen instead of drifting against a 90/120 Hz refresh and stuttering.

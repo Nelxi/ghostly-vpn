@@ -1822,6 +1822,9 @@ class GhostlyController(
         /** After a failover that found nothing alive, the next search waits this long. */
         private const val NONE_ANSWERED_BACKOFF_MS = 60_000L
 
-        fun now(): Long = Clock.System.now().toEpochMilliseconds()
+        /** Scripted renders (the desktop showcase reel) run the app on their own clock; null = the real one. */
+        var clock: (() -> Long)? = null
+
+        fun now(): Long = clock?.invoke() ?: Clock.System.now().toEpochMilliseconds()
     }
 }

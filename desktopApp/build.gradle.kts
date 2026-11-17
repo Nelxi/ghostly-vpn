@@ -158,7 +158,7 @@ val fetchMihomoCore = tasks.register<FetchMihomoDesktop>("fetchMihomoCore") {
 tasks.matching { it.name == "prepareAppResources" }.configureEach { dependsOn(fetchXrayCore, fetchMihomoCore) }
 
 /** The one place to bump the desktop version (Windows/Linux use it as is, macOS as 1.x.y). */
-val ghostlyVersion = "0.3.58"
+val ghostlyVersion = "0.3.59"
 
 compose.desktop {
     application {
@@ -203,6 +203,20 @@ compose.desktop {
 val shots: SourceSet by sourceSets.creating {
     compileClasspath += sourceSets["main"].output + sourceSets["main"].compileClasspath
     runtimeClasspath += output + compileClasspath + sourceSets["main"].runtimeClasspath
+}
+dependencies { "shotsImplementation"(libs.kotlinx.coroutines.test) }
+// ./gradlew :desktopApp:reel -Pmain=ReelSpikeKt  →  the desktop showcase reel (D:\ghostly-edit)
+tasks.register<JavaExec>("reel") {
+    group = "verification"
+    mainClass.set("app.ghostly.shots." + (providers.gradleProperty("main").orNull ?: "ReelKt"))
+    javaLauncher.set(javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(JavaVersion.current().majorVersion)) })
+    classpath = shots.runtimeClasspath
+    providers.gradleProperty("args").orNull?.let { args(it.split(' ')) }
+    jvmArgs("-Xmx6g")
+}
+tasks.register("reelClasspath") {
+    dependsOn("shotsClasses")
+    doLast { File("D:/ghostly-edit/classpath.txt").writeText(shots.runtimeClasspath.asPath) }
 }
 tasks.register<JavaExec>("shots") {
     group = "verification"
