@@ -75,7 +75,7 @@ class CabinetApi(private val platform: PlatformInfo, private val store: FileStor
             if (v != saved.auto) persist(saved.copy(auto = v))
         }
 
-    val userAgent: String get() = "GhostlyVPN/${platform.appVersion} (${platform.os} ${platform.osVersion}; ${platform.deviceModel})"
+    val userAgent: String get() = "GhostlyVPN/${platform.appVersion} (${platform.os} ${platform.osVersion}; ${platform.deviceModelHeader})"
 
     private fun newClient(socks: Int?) = HttpClient {
         install(HttpTimeout) {
@@ -171,7 +171,7 @@ class CabinetApi(private val platform: PlatformInfo, private val store: FileStor
             if (device) {
                 header("x-hwid", platform.hwid)
                 header("x-device-os", platform.os)
-                header("x-device-model", platform.deviceModel)
+                header("x-device-model", platform.deviceModelHeader)
             }
         }
         return if (body == null) client.get(url) { headers() }

@@ -17,16 +17,16 @@ object GhostlyDomains {
     const val COM = "ghostlyvpn.com"
 
     /**
-     * The white-list CDN name (Yandex Cloud CDN). It passes mobile white lists when [MAIN] does not, and serves
-     * the subscription next to the tunnels under a media-looking path ([LTE_PATH] instead of `/sub/`; the origin
-     * answers it only to this app). A refresh mirror only: a link is never saved on it ([current] maps it back),
-     * so the CDN can change freely.
+     * The white-list CDN name. It passes mobile white lists when [MAIN] does not, and serves the subscription
+     * next to the tunnels under a media-looking path ([LTE_PATH] instead of `/sub/`; the origin answers it only to
+     * this app). A refresh mirror only: a link is never saved on it ([current] maps it back), so the CDN can change
+     * freely.
      */
-    const val LTE = "v.frameloft.online"
+    const val LTE = "frameloft.online"
     const val LTE_PATH = "/media/stream/manifest/"
 
-    /** The previous white-list CDN name (TurboFlare, given up): recognised as ours, never tried again. */
-    private const val LTE_OLD = "frameloft.online"
+    /** The previous white-list CDN name: recognised as ours, never tried again. */
+    private const val LTE_OLD = "v.frameloft.online"
 
     /** The previous domain's names: still ours (saved links are moved off them), never contacted. */
     private val LEGACY = listOf("ghostlinknex.online", "srv.ghostlinknex.online")

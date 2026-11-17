@@ -211,13 +211,13 @@ class GhostlyDomainsTest {
     fun mirrorsCoverEveryOwnDomain() {
         val d = app.ghostly.core.sub.GhostlyDomains
         // A link on the previous domain is tried on the current one too…
-        val all = listOf("https://ghostlynex.fun/sub/abc", "https://ghostlyvpn.com/sub/abc", "https://v.frameloft.online/media/stream/manifest/abc")
+        val all = listOf("https://ghostlynex.fun/sub/abc", "https://ghostlyvpn.com/sub/abc", "https://frameloft.online/media/stream/manifest/abc")
         kotlin.test.assertEquals(all, d.mirrorsOf("https://ghostlinknex.online/sub/abc"))
         kotlin.test.assertEquals(all, d.mirrorsOf("https://srv.ghostlinknex.online/sub/abc"))
         // …and the current one falls back to the brand domain (Cloudflare) and the white-list CDN name (its media
         // path; it passes mobile white lists), never to the previous domain. Suffixes like /notices ride along.
         kotlin.test.assertEquals(
-            listOf("https://ghostlyvpn.com/sub/x?y=1", "https://v.frameloft.online/media/stream/manifest/x?y=1"),
+            listOf("https://ghostlyvpn.com/sub/x?y=1", "https://frameloft.online/media/stream/manifest/x?y=1"),
             d.mirrorsOf("https://ghostlynex.fun/sub/x?y=1"),
         )
         // A link on the brand domain stays there and falls back to the main one.
@@ -226,7 +226,7 @@ class GhostlyDomainsTest {
         kotlin.test.assertTrue(d.isLegacy("https://www.ghostlinknex.online/sub/x"))
         kotlin.test.assertTrue(!d.isLegacy("https://ghostlynex.fun/sub/x"))
         kotlin.test.assertEquals(
-            "https://v.frameloft.online/media/stream/manifest/sub_1/notices",
+            "https://frameloft.online/media/stream/manifest/sub_1/notices",
             d.mirrorsOf("https://ghostlynex.fun/sub/sub_1/notices").last(),
         )
         kotlin.test.assertTrue(d.mirrorsOf("https://example.com/sub/abc").isEmpty())
@@ -246,12 +246,12 @@ class GhostlyDomainsTest {
         kotlin.test.assertEquals("https://ghostlynex.fun/sub/x?fmt=xray", d.current("https://www.ghostlinknex.online/sub/x?fmt=xray"))
         kotlin.test.assertEquals(now, d.linkToSave(now, now, ownAddressFailed = false))
         // The white-list CDN name answers a refresh but is never the saved link, even when it was the only one that answered.
-        val cdn = "https://v.frameloft.online/media/stream/manifest/sub_6d0a6b02f44f29b1#Ghostly%20VPN%F0%9F%91%BB"
+        val cdn = "https://frameloft.online/media/stream/manifest/sub_6d0a6b02f44f29b1#Ghostly%20VPN%F0%9F%91%BB"
         kotlin.test.assertEquals(now, d.linkToSave(now, cdn, ownAddressFailed = true))
         kotlin.test.assertEquals(now, d.current(cdn))
         kotlin.test.assertTrue(d.isOurs(cdn))
-        // Links saved on the old TurboFlare name are still ours and move to the main domain.
-        val old2 = "https://frameloft.online/sub/sub_6d0a6b02f44f29b1#Ghostly%20VPN%F0%9F%91%BB"
+        // Links on the previous white-list CDN name are still ours and move to the main domain.
+        val old2 = "https://v.frameloft.online/media/stream/manifest/sub_6d0a6b02f44f29b1#Ghostly%20VPN%F0%9F%91%BB"
         kotlin.test.assertEquals(now, d.current(old2))
         kotlin.test.assertTrue(d.isOurs(old2))
         // Someone else's subscription is never rewritten.
@@ -269,7 +269,7 @@ class GhostlyDomainsTest {
         // From the white-list CDN's media path back to /sub/.
         kotlin.test.assertEquals(
             listOf("https://ghostlyvpn.com/sub/abc" to "1.2.3.4"),
-            d.doorsOf("https://v.frameloft.online/media/stream/manifest/abc", listOf("1.2.3.4")),
+            d.doorsOf("https://frameloft.online/media/stream/manifest/abc", listOf("1.2.3.4")),
         )
         // Capped, and never for someone else's subscription.
         kotlin.test.assertEquals(d.MAX_DOORS, d.doorsOf("https://ghostlynex.fun/sub/a", (1..9).map { "10.0.0.$it" }).size)

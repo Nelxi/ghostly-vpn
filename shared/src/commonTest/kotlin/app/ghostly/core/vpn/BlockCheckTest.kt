@@ -16,7 +16,7 @@ class BlockCheckTest {
             protocol = "vless",
             transport = "xhttp",
             security = "tls",
-            host = "v.frameloft.online",
+            host = "frameloft.online",
             port = 443,
             pool = POOL_WL,
         )

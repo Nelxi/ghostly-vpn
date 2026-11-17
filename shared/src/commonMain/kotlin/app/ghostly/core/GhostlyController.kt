@@ -959,7 +959,7 @@ class GhostlyController(
         if (targets.isEmpty()) return null
         _pinging.update { it + targets.map { s -> s.id } }
         val method = _settings.value.let { it.pingMethodOf(it.core) }
-        // White-list entries live behind the Yandex CDN. Pinging them through the proxy is slow and
+        // White-list entries live behind a CDN. Pinging them through the proxy is slow and
         // sometimes fails on Wi-Fi (the CDN answers the probe differently from the tunnel paths), which
         // then made the whole LTE group look dead. A direct TCP handshake to the CDN edge is the honest
         // reachability check for them: stable on Wi-Fi and mobile, and it never runs BlockCheck (see

@@ -71,7 +71,7 @@ class SubscriptionClient(private val platform: PlatformInfo) {
      * we accept the same format. "ghostly" stays for Ghostly's own servers.
      */
     val userAgent: String
-        get() = "Happ/2.0.0 GhostlyVPN/${platform.appVersion} (${platform.os} ${platform.osVersion}; ${platform.deviceModel})"
+        get() = "Happ/2.0.0 GhostlyVPN/${platform.appVersion} (${platform.os} ${platform.osVersion}; ${platform.deviceModelHeader})"
 
     /** For mihomo: providers match "clash"/"mihomo" in the User-Agent and send a Clash YAML with proxy groups. */
     val mihomoUserAgent: String
@@ -142,7 +142,7 @@ class SubscriptionClient(private val platform: PlatformInfo) {
             header("Accept-Language", app.ghostly.i18n.L10n.language)
             header("x-device-os", platform.os)
             header("x-ver-os", platform.osVersion)
-            header("x-device-model", platform.deviceModel)
+            header("x-device-model", platform.deviceModelHeader)
             // Wi-Fi / mobile / Ethernet: support sees it next to the region and operator of the request.
             header("x-net", platform.networkType().name)
         }
@@ -195,7 +195,7 @@ class SubscriptionClient(private val platform: PlatformInfo) {
                 header("Accept-Language", app.ghostly.i18n.L10n.language)
                 header("x-device-os", platform.os)
                 header("x-ver-os", platform.osVersion)
-                header("x-device-model", platform.deviceModel)
+                header("x-device-model", platform.deviceModelHeader)
                 contentType(ContentType.Application.Json)
                 setBody(app.ghostly.core.JsonX.encodeToString(Attest.Answer.serializer(), answer))
             }.status.isSuccess()

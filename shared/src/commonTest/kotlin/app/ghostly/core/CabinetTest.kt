@@ -64,8 +64,8 @@ class CabinetTest {
             CabinetApi.baseOrder(null, "https://ghostlinknex.online/sub/sub_ec3df87ca5d81fc8"),
         )
         assertEquals(
-            listOf("https://v.frameloft.online", "https://ghostlynex.fun"),
-            CabinetApi.baseOrder("https://v.frameloft.online", null),
+            listOf("https://frameloft.online", "https://ghostlynex.fun"),
+            CabinetApi.baseOrder("https://frameloft.online", null),
         )
         // A base remembered on the previous domain is never asked again.
         assertEquals(listOf("https://ghostlynex.fun"), CabinetApi.baseOrder("https://ghostlinknex.online", null))
