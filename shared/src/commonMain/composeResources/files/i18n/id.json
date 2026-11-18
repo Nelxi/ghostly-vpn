@@ -872,5 +872,9 @@
  "Разморозить сейчас": "Cairkan sekarang",
  "Нажмите ещё раз: VPN выключится на {0} {1}": "Ketuk lagi: VPN mati selama {0} {1}",
  "Заморозить на {0} {1}": "Bekukan selama {0} {1}",
- "Сейчас заморозить нельзя": "Saat ini tidak bisa dibekukan"
+ "Сейчас заморозить нельзя": "Saat ini tidak bisa dibekukan",
+ "Добавить приложение": "Tambahkan aplikasi",
+ "Путь к файлу .exe": "Jalur ke file .exe",
+ "Укажи полный путь к существующему файлу .exe.": "Masukkan jalur lengkap ke file .exe yang ada.",
+ "Выбрать файл": "Pilih file"
 }

@@ -62,7 +62,8 @@ import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.ShoppingBag
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
+import app.ghostly.ui.components.Icon
+import app.ghostly.ui.components.pageFade
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -362,14 +363,15 @@ fun GhostlyApp(controller: GhostlyController) {
             // Toast
             AnimatedVisibility(
                 toast != null,
-                enter = slideInVertically { -it } + fadeIn(),
-                exit = slideOutVertically { -it } + fadeOut(),
+                enter = slideInVertically { -it },
+                exit = slideOutVertically { -it },
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = insets.calculateTopPadding() + 10.dp, start = 16.dp, end = 16.dp),
             ) {
                 var last by remember { mutableStateOf("") }
                 toast?.let { last = it }
                 Box(
-                    Modifier.widthIn(max = 520.dp).softShadow(RoundedCornerShape(22.dp), 1f)
+                    Modifier.widthIn(max = 520.dp).pageFade(this, 220, 160)
+                        .softShadow(RoundedCornerShape(22.dp), 1f)
                         .plate(RoundedCornerShape(22.dp), strong = true)
                         .hoverSound().clickable { toast = null }.padding(horizontal = 18.dp, vertical = 13.dp),
                 ) { Text(last, style = MaterialTheme.typography.bodyMedium.copy(color = Ghost.colors.ink)) }
@@ -616,6 +618,9 @@ internal fun Modifier.travel(scope: androidx.compose.animation.AnimatedVisibilit
         transitionSpec = { androidx.compose.animation.core.tween(PAGE_MS + 700) },
         label = "hold",
     ) { if (it == androidx.compose.animation.EnterExitState.Visible) 0f else 1f }
+    // A settled page draws directly. Keep the temporary blur layer only while it is moving.
+    val moving by remember(move) { androidx.compose.runtime.derivedStateOf { move.progress.value < 1f } }
+    if (!moving) return if (leaving) graphicsLayer { alpha = 0f } else this
     return graphicsLayer {
         // One clock for both pages: 0 when the change starts, 1 when it is over.
         val p = move.progress.value

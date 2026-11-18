@@ -37,7 +37,7 @@ import androidx.compose.material.icons.rounded.LinkOff
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
+import app.ghostly.ui.components.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -502,7 +502,7 @@ private fun DeviceRow(d: Device, mine: Boolean, actions: @Composable ColumnScope
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(c.surface3), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.Devices, null, tint = if (d.active) c.accent else c.ink3, modifier = Modifier.size(20.dp))
+                Icon(Icons.Rounded.Devices, null, tint = if (d.active) c.accent else c.ink3, modifier = Modifier.size(20.dp), shadow = false)
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {

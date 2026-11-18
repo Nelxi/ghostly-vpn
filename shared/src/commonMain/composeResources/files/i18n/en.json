@@ -872,5 +872,9 @@
  "Разморозить сейчас": "Unfreeze now",
  "Нажмите ещё раз: VPN выключится на {0} {1}": "Tap again: the VPN turns off for {0} {1}",
  "Заморозить на {0} {1}": "Freeze for {0} {1}",
- "Сейчас заморозить нельзя": "Can't freeze right now"
+ "Сейчас заморозить нельзя": "Can't freeze right now",
+ "Добавить приложение": "Add app",
+ "Путь к файлу .exe": "Path to the .exe file",
+ "Укажи полный путь к существующему файлу .exe.": "Enter the full path to an existing .exe file.",
+ "Выбрать файл": "Choose file"
 }

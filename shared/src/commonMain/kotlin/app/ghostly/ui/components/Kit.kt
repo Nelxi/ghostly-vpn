@@ -32,7 +32,6 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -64,6 +63,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.ghostly.i18n.tr
 import app.ghostly.ui.theme.Ghost
+import app.ghostly.ui.theme.withDarkTextShadow
 import app.ghostly.ui.theme.LocalReduceMotion
 import app.ghostly.ui.theme.Motion
 
@@ -184,7 +184,7 @@ fun Field(
                     Modifier.size(42.dp).clip(CircleShape).hoverSound().clickable { reveal = !reveal },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(if (reveal) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, if (reveal) tr("Скрыть") else tr("Показать"), tint = c.ink3, modifier = Modifier.size(20.dp))
+                    Icon(if (reveal) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, if (reveal) tr("Скрыть") else tr("Показать"), tint = c.ink3, modifier = Modifier.size(20.dp), shadow = false)
                 }
             }
         }
@@ -224,7 +224,7 @@ private fun StepButton(icon: ImageVector, enabled: Boolean, onClick: () -> Unit)
             .hoverSound().clickable(interaction, null, enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, null, tint = if (enabled) c.ink else c.ink3.copy(alpha = 0.4f), modifier = Modifier.size(20.dp))
+        Icon(icon, null, tint = if (enabled) c.ink else c.ink3.copy(alpha = 0.4f), modifier = Modifier.size(20.dp), shadow = false)
     }
 }
 
@@ -268,11 +268,12 @@ fun ActionTile(icon: ImageVector, label: String, onClick: () -> Unit, modifier: 
         ) {
             Icon(icon, null, tint = if (primary) c.accentInk else c.accent, modifier = Modifier.size(22.dp))
             Spacer(Modifier.height(7.dp))
-            Text(label, style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.5.sp), color = if (primary) c.accentInk else c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+            val style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.5.sp)
+            Text(label, style = if (primary) style.withDarkTextShadow() else style, color = if (primary) c.accentInk else c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
         }
         badge?.let {
             Text(
-                it, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = c.accentInk,
+                it, style = MaterialTheme.typography.labelSmall.withDarkTextShadow().copy(fontSize = 10.sp), color = c.accentInk,
                 modifier = Modifier.align(Alignment.TopEnd).padding(5.dp).clip(RoundedCornerShape(6.dp)).background(c.warn).padding(horizontal = 5.dp, vertical = 1.dp),
             )
         }
@@ -296,7 +297,8 @@ fun ActionWide(icon: ImageVector, label: String, onClick: () -> Unit, modifier: 
     ) {
         Icon(icon, null, tint = if (primary) c.accentInk else c.accent, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(10.dp))
-        Text(label, style = MaterialTheme.typography.labelLarge, color = if (primary) c.accentInk else c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        val style = MaterialTheme.typography.labelLarge
+        Text(label, style = if (primary) style.withDarkTextShadow() else style, color = if (primary) c.accentInk else c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

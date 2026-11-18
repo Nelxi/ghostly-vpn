@@ -379,7 +379,13 @@ object XrayConfigBuilder {
         val userRules = buildList {
             val catchAll = rules.lastOrNull { it["domain"] == null && it["ip"] == null && it["port"] == null }
             val target = catchAll?.filterKeys { it == "outboundTag" || it == "balancerTag" }?.takeIf { it.isNotEmpty() } ?: mapOf("outboundTag" to JsonPrimitive(PROXY))
-            val procApps = settings.splitApps.filter { it.endsWith(".exe", ignoreCase = true) || !it.contains(".") }
+            val procApps = settings.splitApps.mapNotNull { app ->
+                when {
+                    app in settings.customAppPaths -> app.replace('\\', '/')
+                    app.endsWith(".exe", ignoreCase = true) || !app.contains(".") -> app
+                    else -> null
+                }
+            }
             if (procApps.isNotEmpty()) {
                 when (settings.splitMode) {
                     SplitMode.ONLY_SELECTED -> {

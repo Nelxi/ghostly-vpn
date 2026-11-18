@@ -1,5 +1,8 @@
 package app.ghostly.ui.screens
 
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+
 import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.ui.input.pointer.pointerInput
@@ -64,6 +67,7 @@ import androidx.compose.material.icons.rounded.RocketLaunch
 import androidx.compose.material.icons.rounded.Savings
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Dns
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
@@ -80,9 +84,12 @@ import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
-import androidx.compose.material3.Icon
+import app.ghostly.ui.components.Icon
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -96,6 +103,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontFamily
@@ -113,6 +122,7 @@ import app.ghostly.core.model.RuApps
 import app.ghostly.core.model.SplitMode
 import app.ghostly.core.model.ThemeAccent
 import app.ghostly.core.vpn.AppEntry
+import app.ghostly.core.vpn.PlatformInfo
 import app.ghostly.ui.components.GhostMark
 import app.ghostly.ui.components.GhostSwitch
 import app.ghostly.ui.components.GlassCard
@@ -596,7 +606,24 @@ private fun AppsPage(controller: GhostlyController, contentPadding: PaddingValue
     var apps by remember { mutableStateOf<List<AppEntry>?>(null) }
     var showSystem by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
+    var addApp by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { apps = controller.platform.installedApps().sortedBy { it.label.lowercase() } }
+    val customApps = remember(s.customAppPaths) {
+        s.customAppPaths.map { path ->
+            AppEntry(path, path.substringAfterLast('\\'), isSystem = false)
+        }
+    }
+
+    if (addApp) {
+        AddAppDialog(controller.platform, onDismiss = { addApp = false }) { path ->
+            controller.updateSettings { current ->
+                val saved = current.customAppPaths.firstOrNull { it.equals(path, ignoreCase = true) } ?: path
+                current.copy(customAppPaths = current.customAppPaths + saved, splitApps = current.splitApps + saved)
+            }
+            query = ""
+            addApp = false
+        }
+    }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
         item {
@@ -604,7 +631,12 @@ private fun AppsPage(controller: GhostlyController, contentPadding: PaddingValue
                 Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconBubble(Icons.AutoMirrored.Rounded.ArrowBack, back)
                     Spacer(Modifier.width(12.dp))
-                    Text(tr("Приложения"), style = MaterialTheme.typography.headlineMedium)
+                    Text(tr("Приложения"), style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
+                    if (controller.platform.isDesktop) {
+                        val label = tr("Добавить приложение")
+                        IconBubble(Icons.Rounded.Add, onClick = { addApp = true },
+                            modifier = Modifier.semantics { contentDescription = label }, tint = c.accent)
+                    }
                 }
                 Segmented(
                     listOf(SplitMode.OFF to tr("Все"), SplitMode.ONLY_SELECTED to tr("Только эти"), SplitMode.BYPASS_SELECTED to tr("Кроме этих")),
@@ -631,39 +663,103 @@ private fun AppsPage(controller: GhostlyController, contentPadding: PaddingValue
                 Spacer(Modifier.height(8.dp))
             }
         }
-        val list = apps
-        if (list == null) {
+        if (apps == null) {
             item { Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { Spinner(c.accent, Modifier.size(28.dp)) } }
-        } else {
-            val shown = list.filter { (showSystem || !it.isSystem || it.packageName in s.splitApps) && (query.isBlank() || it.label.contains(query, true) || it.packageName.contains(query, true)) }
+        }
+        val shown = (customApps + apps.orEmpty()).filter { (showSystem || !it.isSystem || it.packageName in s.splitApps) && (query.isBlank() || it.label.contains(query, true) || it.packageName.contains(query, true)) }
                 .sortedByDescending { it.packageName in s.splitApps }
-            items(shown, key = { it.packageName }) { app ->
-                val checked = app.packageName in s.splitApps
-                Row(
-                    Modifier.fillMaxWidth().hoverSound().clickable {
-                        controller.updateSettings { st -> st.copy(splitApps = if (checked) st.splitApps - app.packageName else st.splitApps + app.packageName) }
-                    }.padding(horizontal = 22.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(c.accent.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                        Text(app.label.take(1).uppercase(), style = MaterialTheme.typography.titleSmall, color = c.accent)
+        items(shown, key = { it.packageName }) { app ->
+            val checked = app.packageName in s.splitApps
+            Row(
+                Modifier.fillMaxWidth().hoverSound().clickable {
+                    controller.updateSettings { st ->
+                        val selected = st.splitApps
+                        st.copy(splitApps = if (app.packageName in selected) selected - app.packageName else selected + app.packageName)
                     }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(app.label, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(app.packageName, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    Box(
-                        Modifier.size(24.dp).clip(RoundedCornerShape(8.dp))
-                            .background(if (checked) c.accent else Color.Transparent)
-                            .border(1.5.dp, if (checked) c.accent else c.ink3, RoundedCornerShape(8.dp)),
-                        contentAlignment = Alignment.Center,
-                    ) { if (checked) Icon(Icons.Rounded.Check, null, tint = c.accentInk, modifier = Modifier.size(16.dp)) }
+                }.padding(horizontal = 22.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(c.accent.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                    Text(app.label.take(1).uppercase(), style = MaterialTheme.typography.titleSmall, color = c.accent)
                 }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(app.label, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(app.packageName, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                if (app.packageName in s.customAppPaths) {
+                    val label = tr("Удалить")
+                    IconBubble(Icons.Rounded.DeleteOutline, onClick = {
+                        controller.updateSettings { st ->
+                            st.copy(customAppPaths = st.customAppPaths - app.packageName, splitApps = st.splitApps - app.packageName)
+                        }
+                    }, modifier = Modifier.semantics { contentDescription = label }.padding(end = 8.dp), size = 34.dp)
+                }
+                Box(
+                    Modifier.size(24.dp).clip(RoundedCornerShape(8.dp))
+                        .background(if (checked) c.accent else Color.Transparent)
+                        .border(1.5.dp, if (checked) c.accent else c.ink3, RoundedCornerShape(8.dp)),
+                    contentAlignment = Alignment.Center,
+                ) { if (checked) Icon(Icons.Rounded.Check, null, tint = c.accentInk, modifier = Modifier.size(16.dp)) }
             }
         }
         item { Spacer(Modifier.height(24.dp)) }
     }
+}
+
+@Composable
+private fun AddAppDialog(platform: PlatformInfo, onDismiss: () -> Unit, onAdd: (String) -> Unit) {
+    val scope = rememberCoroutineScope()
+    val title = tr("Добавить приложение")
+    var path by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var invalid by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text(title) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = path,
+                    onValueChange = { path = it; invalid = false },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(tr("Путь к файлу .exe")) },
+                    textStyle = MaterialTheme.typography.bodyLarge,
+                    singleLine = true,
+                    enabled = !busy,
+                    isError = invalid,
+                    supportingText = if (invalid) {
+                        { Text(tr("Укажи полный путь к существующему файлу .exe.")) }
+                    } else null,
+                )
+                TextButton(enabled = !busy, onClick = {
+                    busy = true
+                    scope.launch {
+                        try {
+                            platform.pickAppFile(title)?.let { path = it; invalid = false }
+                        } finally {
+                            busy = false
+                        }
+                    }
+                }) { Text(tr("Выбрать файл")) }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = path.isNotBlank() && !busy, onClick = {
+                busy = true
+                scope.launch {
+                    try {
+                        val resolved = platform.resolveAppPath(path)
+                        if (resolved == null) invalid = true else onAdd(resolved)
+                    } finally {
+                        busy = false
+                    }
+                }
+            }) { Text(tr("Добавить")) }
+        },
+        dismissButton = { TextButton(enabled = !busy, onClick = onDismiss) { Text(tr("Отмена")) } },
+    )
 }
 
 // ============================================================================ local proxy

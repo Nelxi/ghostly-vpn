@@ -4,7 +4,6 @@ import app.ghostly.ui.Tab
 import app.ghostly.ui.tabSky
 import app.ghostly.ui.components.nightGhost
 import app.ghostly.ui.components.hoverSound
-import app.ghostly.ui.components.outerShadow
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
@@ -49,7 +48,7 @@ import androidx.compose.material.icons.rounded.SupportAgent
 import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
+import app.ghostly.ui.components.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -62,10 +61,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Bolt
@@ -287,7 +282,7 @@ private fun SearchField(value: String, onChange: (String) -> Unit, modifier: Mod
             .border(1.dp, c.hairline, RoundedCornerShape(app.ghostly.ui.components.Radius.tile)).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Rounded.Search, null, tint = c.ink3, modifier = Modifier.size(18.dp))
+        Icon(Icons.Rounded.Search, null, tint = c.ink3, modifier = Modifier.size(18.dp), shadow = false)
         Spacer(Modifier.width(8.dp))
         Box(Modifier.weight(1f)) {
             if (value.isEmpty()) Text(tr("Поиск"), style = MaterialTheme.typography.bodyMedium, color = c.ink3)
@@ -446,7 +441,7 @@ private fun ServerRow(
     val c = Ghost.colors
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
-    // A list, not a stack of cards: rows are flat, the chosen one gets a tint and an accent bar.
+    // The chosen row is highlighted by its tinted background.
     val bg by animateColorAsState(
         when {
             selected -> c.accent.copy(alpha = 0.11f)
@@ -455,7 +450,6 @@ private fun ServerRow(
         },
         Motion.quick(),
     )
-    val bar by animateFloatAsState(if (selected) 1f else 0f, Motion.bouncy())
     val showTools = !controller.platform.isDesktop || hovered || selected
     var menu by remember { mutableStateOf(false) }
     Row(
@@ -463,18 +457,10 @@ private fun ServerRow(
             .pressScale(interaction, 0.985f, hover = 1f)
             .clip(RoundedCornerShape(16.dp))
             .background(bg)
-            .drawBehind {
-                if (bar > 0.01f) drawRoundRect(
-                    c.accent,
-                    topLeft = Offset(0f, size.height * (0.5f - 0.28f * bar)),
-                    size = Size(3.dp.toPx(), size.height * 0.56f * bar),
-                    cornerRadius = CornerRadius(2.dp.toPx()),
-                )
-            }
             .pointerHoverIcon(PointerIcon.Hand)
             .hoverSound().clickable(interaction, null, onClick = onClick)
-            .padding(start = 12.dp, end = 6.dp, top = 9.dp, bottom = 9.dp)
-            .animateContentSize(),
+            .animateContentSize()
+            .padding(start = 12.dp, end = 6.dp, top = 9.dp, bottom = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ServerGlyph(server, showFlag)
@@ -483,7 +469,7 @@ private fun ServerRow(
             val t = server.title().let { if (underLte) it.withoutLte() else it }
             Row(verticalAlignment = Alignment.Bottom) {
                 // The name stays whole; the variant ("Стабильный", "Резерв") is what gets ellipsized.
-                app.ghostly.ui.components.FlagText(t.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, softWrap = false)
+                app.ghostly.ui.components.FlagText(t.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                 t.subtitle?.let {
                     app.ghostly.ui.components.FlagText(" · $it", style = MaterialTheme.typography.bodyMedium.copy(color = c.ink2), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 }
@@ -491,7 +477,7 @@ private fun ServerRow(
             // One quiet line instead of coloured badges; the protocol is skipped when the name already says it.
             val proto = server.protocolLabel()
             val meta = listOfNotNull(proto.takeUnless { t.title.contains(it, ignoreCase = true) }, server.transportLabel()).joinToString(" · ")
-            if (meta.isNotEmpty()) Text(meta, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+            if (meta.isNotEmpty()) Text(meta, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             // Why it doesn't answer, from the direct check (IP / DPI / 16 KB).
             ping?.block?.takeIf { !ping.ok && it != app.ghostly.core.vpn.BlockVerdict.REACHABLE && it != app.ghostly.core.vpn.BlockVerdict.OFFLINE }?.let {
                 Text(it.title, style = MaterialTheme.typography.bodySmall, color = c.bad, maxLines = 2)

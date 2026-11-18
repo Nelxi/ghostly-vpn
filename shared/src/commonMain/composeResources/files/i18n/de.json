@@ -872,5 +872,9 @@
  "Разморозить сейчас": "Jetzt fortsetzen",
  "Нажмите ещё раз: VPN выключится на {0} {1}": "Nochmal tippen: Das VPN schaltet sich für {0} {1} ab",
  "Заморозить на {0} {1}": "Für {0} {1} pausieren",
- "Сейчас заморозить нельзя": "Pausieren ist gerade nicht möglich"
+ "Сейчас заморозить нельзя": "Pausieren ist gerade nicht möglich",
+ "Добавить приложение": "App hinzufügen",
+ "Путь к файлу .exe": "Pfad zur EXE-Datei",
+ "Укажи полный путь к существующему файлу .exe.": "Gib den vollständigen Pfad zu einer vorhandenen EXE-Datei ein.",
+ "Выбрать файл": "Datei auswählen"
 }

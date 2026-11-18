@@ -220,6 +220,12 @@ interface PlatformInfo {
     /** Installed apps for per-app split tunnelling (Android). */
     suspend fun installedApps(): List<AppEntry> = emptyList()
 
+    /** Returns the path picked in the native file dialog. */
+    suspend fun pickAppFile(title: String): String? = null
+
+    /** Resolves an absolute path to an executable supported by desktop app routing. */
+    suspend fun resolveAppPath(path: String): String? = null
+
     /** Music on the computer: audio analysis + now playing (desktop "stage mode"). */
     val stage: app.ghostly.core.stage.StageSource? get() = null
 

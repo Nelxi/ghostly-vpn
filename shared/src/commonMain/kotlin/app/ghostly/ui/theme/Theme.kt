@@ -12,13 +12,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
 import app.ghostly.resources.Res
 import app.ghostly.resources.onest_bold
 import app.ghostly.resources.onest_extrabold
@@ -130,22 +135,13 @@ fun GhostlyTheme(accentArgb: Long, reduceMotion: Boolean, protected: Boolean = f
         accentInk = lerp(accent, Color.Black, 0.86f),
     )
     val family = onestFamily()
-    val text = TextStyle(fontFamily = family, color = colors.ink)
-    val typography = Typography(
-        displayLarge = text.copy(fontSize = 54.sp, lineHeight = 56.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-2.1).sp),
-        displayMedium = text.copy(fontSize = 34.sp, lineHeight = 36.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-1.0).sp),
-        headlineMedium = text.copy(fontSize = 30.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.9).sp),
-        headlineSmall = text.copy(fontSize = 21.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp),
-        titleLarge = text.copy(fontSize = 18.sp, fontWeight = FontWeight.SemiBold),
-        titleMedium = text.copy(fontSize = 16.sp, fontWeight = FontWeight.SemiBold),
-        titleSmall = text.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
-        bodyLarge = text.copy(fontSize = 16.sp, lineHeight = 22.sp),
-        bodyMedium = text.copy(fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink2),
-        bodySmall = text.copy(fontSize = 12.sp, lineHeight = 16.sp, color = colors.ink3),
-        labelLarge = text.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
-        labelMedium = text.copy(fontSize = 13.sp, fontWeight = FontWeight.Medium),
-        labelSmall = text.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.4.sp),
-    )
+    val density = LocalDensity.current
+    val typography = remember(family, density, base) {
+        val shadow = with(density) {
+            Shadow(Color.Black.copy(alpha = 0.78f), Offset(0f, 0.55.dp.toPx()), blurRadius = 2.dp.toPx())
+        }
+        ghostTypography(TextStyle(fontFamily = family, color = base.ink, shadow = shadow), base)
+    }
     val scheme = darkColorScheme(
         primary = colors.accent,
         onPrimary = colors.accentInk,
@@ -167,4 +163,29 @@ fun GhostlyTheme(accentArgb: Long, reduceMotion: Boolean, protected: Boolean = f
     CompositionLocalProvider(LocalGhostColors provides colors, LocalReduceMotion provides reduceMotion) {
         MaterialTheme(colorScheme = scheme, typography = typography, content = content)
     }
+}
+
+private fun ghostTypography(text: TextStyle, colors: GhostColors): Typography =
+    Typography(
+        displayLarge = text.copy(fontSize = 54.sp, lineHeight = 56.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-2.1).sp),
+        displayMedium = text.copy(fontSize = 34.sp, lineHeight = 36.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-1.0).sp),
+        displaySmall = text.copy(fontSize = 26.sp, lineHeight = 30.sp, fontWeight = FontWeight.SemiBold),
+        headlineLarge = text.copy(fontSize = 32.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold),
+        headlineMedium = text.copy(fontSize = 30.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.9).sp),
+        headlineSmall = text.copy(fontSize = 21.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.3).sp),
+        titleLarge = text.copy(fontSize = 18.sp, fontWeight = FontWeight.SemiBold),
+        titleMedium = text.copy(fontSize = 16.sp, fontWeight = FontWeight.SemiBold),
+        titleSmall = text.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
+        bodyLarge = text.copy(fontSize = 16.sp, lineHeight = 22.sp),
+        bodyMedium = text.copy(fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink2),
+        bodySmall = text.copy(fontSize = 12.sp, lineHeight = 16.sp, color = colors.ink3),
+        labelLarge = text.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
+        labelMedium = text.copy(fontSize = 13.sp, fontWeight = FontWeight.Medium),
+        labelSmall = text.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.4.sp),
+    )
+
+/** Dark text on bright controls already has contrast and only needs a faint shadow. */
+internal fun TextStyle.withDarkTextShadow(): TextStyle {
+    val glyphShadow = shadow ?: return this
+    return copy(shadow = Shadow(glyphShadow.color.copy(alpha = 0.08f), glyphShadow.offset, glyphShadow.blurRadius))
 }

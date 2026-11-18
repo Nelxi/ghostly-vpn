@@ -5,8 +5,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -40,7 +38,6 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material.icons.rounded.WarningAmber
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -73,6 +70,7 @@ import app.ghostly.core.GhostlyController
 import app.ghostly.core.notice.Notice
 import app.ghostly.core.vpn.Haptic
 import app.ghostly.ui.theme.Ghost
+import app.ghostly.ui.theme.withDarkTextShadow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -107,12 +105,14 @@ fun NoticeOverlay(controller: GhostlyController, modifier: Modifier = Modifier) 
     if (head != null) shown = head
     AnimatedVisibility(
         head != null, modifier,
-        enter = slideInVertically(spring(dampingRatio = 0.62f, stiffness = 380f)) { -it * 2 } + fadeIn(tween(180)) + scaleIn(initialScale = 0.9f),
-        exit = slideOutVertically(tween(260)) { -it } + fadeOut(tween(220)),
+        enter = slideInVertically(spring(dampingRatio = 0.62f, stiffness = 380f)) { -it * 2 } + scaleIn(initialScale = 0.9f),
+        exit = slideOutVertically(tween(260)) { -it },
     ) {
         val n = shown ?: return@AnimatedVisibility
         androidx.compose.runtime.key(n.id) {
-            NoticeCard(n, more = queue.size - 1, controller = controller)
+            Box(Modifier.pageFade(this@AnimatedVisibility, 180, 220)) {
+                NoticeCard(n, more = queue.size - 1, controller = controller)
+            }
         }
     }
 }
@@ -143,6 +143,7 @@ private fun NoticeCard(n: Notice, more: Int, controller: GhostlyController) {
             .graphicsLayer {
                 rotationZ = dx.value / 40f
                 alpha = 1f - ((abs(dx.value) + abs(dy.value)) / 700f).coerceIn(0f, 0.8f)
+                compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
             }
             .pointerInput(n.id) {
                 detectDragGestures(
@@ -231,7 +232,7 @@ private fun NoticeCard(n: Notice, more: Int, controller: GhostlyController) {
                                     .padding(horizontal = 14.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text(b.text.ifBlank { tr("Открыть") }, color = Color(0xFF150A2C), style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold))
+                                Text(b.text.ifBlank { tr("Открыть") }, color = Color(0xFF150A2C), style = MaterialTheme.typography.labelLarge.withDarkTextShadow().copy(fontWeight = FontWeight.SemiBold))
                                 Spacer(Modifier.width(6.dp))
                                 Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = Color(0xFF150A2C), modifier = Modifier.size(15.dp))
                             }
@@ -286,7 +287,7 @@ fun NoticeBell(controller: GhostlyController) {
             Box(
                 Modifier.align(Alignment.TopEnd).offset(2.dp, (-2).dp).size(18.dp).clip(CircleShape).background(c.bad),
                 contentAlignment = Alignment.Center,
-            ) { Text("${unread.size}", color = Color(0xFF1A0610), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp)) }
+            ) { Text("${unread.size}", color = Color(0xFF1A0610), style = MaterialTheme.typography.labelSmall.withDarkTextShadow().copy(fontWeight = FontWeight.Bold, fontSize = 10.sp)) }
         }
     }
     if (open) {

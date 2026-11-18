@@ -3,7 +3,7 @@ package app.ghostly.ui.screens
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.animateContentSize
+import app.ghostly.ui.components.pageFade
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
@@ -51,7 +51,7 @@ import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.SupportAgent
-import androidx.compose.material3.Icon
+import app.ghostly.ui.components.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -259,16 +259,20 @@ fun HomeDesktop(controller: GhostlyController, onAdd: () -> Unit, onServers: () 
     val m = rememberHome(controller)
     val c = Ghost.colors
     val density = LocalDensity.current
-    BoxWithConstraints(Modifier.fillMaxSize().padding(start = 28.dp, end = 24.dp, top = 22.dp, bottom = 22.dp)) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
         // The servers panel narrows first and hides when the main column would drop under 480 dp (they stay
         // one click away on the «Серверы» tab).
-        val panel = (maxWidth * 0.36f).coerceIn(320.dp, 400.dp)
-        val showPanel = maxWidth - panel - 22.dp >= 480.dp
-        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+        val contentWidth = maxWidth - 52.dp
+        val panel = (contentWidth * 0.36f).coerceIn(320.dp, 400.dp)
+        val showPanel = contentWidth - panel - 22.dp >= 480.dp
+        Row(Modifier.fillMaxSize()) {
             BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
                 var belowH by remember { mutableStateOf(250.dp) }
-                val skyH by animateDpAsState((maxHeight - belowH).coerceIn(250.dp, 430.dp), Motion.soft())
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                val skyH by animateDpAsState((maxHeight - 44.dp - belowH).coerceIn(250.dp, 430.dp), Motion.soft())
+                Column(
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                        .padding(start = 28.dp, end = if (showPanel) 22.dp else 24.dp, top = 22.dp, bottom = 22.dp),
+                ) {
                     Column(Modifier.fillMaxWidth().height(skyH).tabSky(Tab.HOME)) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
@@ -292,8 +296,8 @@ fun HomeDesktop(controller: GhostlyController, onAdd: () -> Unit, onServers: () 
                         StatusBlock(m, controller, Modifier.padding(start = 4.dp))
                         Spacer(Modifier.height(20.dp))
                         HomePlates(m, controller, onPickServer = onServers)
-                        AnimatedVisibility(m.orb == OrbState.CONNECTED, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-                            Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        AnimatedVisibility(m.orb == OrbState.CONNECTED, enter = expandVertically(clip = false), exit = shrinkVertically(clip = false)) {
+                            Row(Modifier.fillMaxWidth().pageFade(this, 220, 160).padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 SpeedPlate(tr("Загрузка"), Icons.Rounded.ArrowDownward, m.traffic.downSpeed, m.traffic.downTotal, m.down, c.ok, Modifier.weight(1f))
                                 SpeedPlate(tr("Отдача"), Icons.Rounded.ArrowUpward, m.traffic.upSpeed, m.traffic.upTotal, m.up, c.accent, Modifier.weight(1f))
                             }
@@ -306,7 +310,10 @@ fun HomeDesktop(controller: GhostlyController, onAdd: () -> Unit, onServers: () 
                     }
                 }
             }
-            if (showPanel) GlassCard(Modifier.width(panel).fillMaxHeight().appear(1), padding = 0.dp, strong = true) {
+            if (showPanel) GlassCard(
+                Modifier.padding(end = 24.dp, top = 22.dp, bottom = 22.dp).width(panel).fillMaxHeight().appear(1),
+                padding = 0.dp, strong = true,
+            ) {
                 Text(tr("Серверы"), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 20.dp, end = 12.dp, top = 18.dp))
                 ServersScreen(controller, PaddingValues(bottom = 12.dp), onAdd = onAdd, showHeader = false, compact = true)
             }
@@ -351,7 +358,7 @@ private fun StatusBlock(m: HomeModel, controller: GhostlyController, modifier: M
         OrbState.CONNECTED -> tr("Под защитой")
         OrbState.ERROR -> tr("Не удалось подключиться")
     }
-    Column(modifier.fillMaxWidth().animateContentSize(androidx.compose.animation.core.spring(dampingRatio = 0.9f, stiffness = 260f))) {
+    Column(modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             BoxWithConstraints(Modifier.weight(1f)) {
                 val room = maxWidth
@@ -368,19 +375,21 @@ private fun StatusBlock(m: HomeModel, controller: GhostlyController, modifier: M
             AnimatedContent(
                 kind,
                 transitionSpec = {
-                    (fadeIn(tween(220, delayMillis = 70)) + scaleIn(tween(380, easing = Motion.Ease), initialScale = 0.86f)) togetherWith
-                        (fadeOut(tween(120)) + scaleOut(tween(180), targetScale = 0.9f)) using SizeTransform(clip = false)
+                    scaleIn(tween(380, easing = Motion.Ease), initialScale = 0.86f) togetherWith
+                        scaleOut(tween(180), targetScale = 0.9f) using SizeTransform(clip = false)
                 },
                 contentAlignment = Alignment.CenterEnd,
                 label = "switch",
             ) { k ->
                 val go = { toggle(controller) }
-                when (k) {
-                    SwitchKind.DISCONNECT -> SoftButton(tr("Отключить"), go, icon = Icons.Rounded.PowerSettingsNew)
-                    SwitchKind.CANCEL -> SoftButton(tr("Отменить"), go, icon = Icons.Rounded.Close)
-                    SwitchKind.WAIT -> SoftButton(tr("Отключаю…"), {}, tint = c.ink3)
-                    SwitchKind.RETRY -> AccentButton(tr("Ещё раз"), go, icon = Icons.Rounded.Refresh)
-                    SwitchKind.CONNECT -> AccentButton(tr("Подключить"), go, icon = Icons.Rounded.PowerSettingsNew, enabled = m.server != null || m.mihomoGroups > 0)
+                Box(Modifier.pageFade(this, 220, 120)) {
+                    when (k) {
+                        SwitchKind.DISCONNECT -> SoftButton(tr("Отключить"), go, icon = Icons.Rounded.PowerSettingsNew)
+                        SwitchKind.CANCEL -> SoftButton(tr("Отменить"), go, icon = Icons.Rounded.Close)
+                        SwitchKind.WAIT -> SoftButton(tr("Отключаю…"), {}, tint = c.ink3)
+                        SwitchKind.RETRY -> AccentButton(tr("Ещё раз"), go, icon = Icons.Rounded.Refresh)
+                        SwitchKind.CONNECT -> AccentButton(tr("Подключить"), go, icon = Icons.Rounded.PowerSettingsNew, enabled = m.server != null || m.mihomoGroups > 0)
+                    }
                 }
             }
         }
@@ -498,11 +507,11 @@ private fun SwapText(text: String, style: TextStyle, color: Color = Color.Unspec
     AnimatedContent(
         text,
         transitionSpec = {
-            (fadeIn(tween(220, delayMillis = 60)) + slideInVertically(tween(300, easing = Motion.Ease)) { it / 3 }) togetherWith
-                fadeOut(tween(120)) using SizeTransform(clip = false)
+            slideInVertically(tween(300, easing = Motion.Ease)) { it / 3 } togetherWith
+                androidx.compose.animation.ExitTransition.None using SizeTransform(clip = false)
         },
         label = "swap",
-    ) { t -> Text(t, style = style, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+    ) { t -> Text(t, modifier = Modifier.pageFade(this, 220, 120), style = style, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis) }
 }
 
 /** "Нидерланды" for a server with a flag, otherwise its own title. */

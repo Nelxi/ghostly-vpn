@@ -6,7 +6,11 @@ import app.ghostly.core.mihomo.MihomoProfiles
 import app.ghostly.core.model.AppSettings
 import app.ghostly.core.model.CoreType
 import app.ghostly.core.model.Profile
+import app.ghostly.core.model.SplitMode
 import app.ghostly.core.sub.SubscriptionParser
+import app.ghostly.core.xray.Ingress
+import app.ghostly.core.xray.XrayConfigBuilder
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -116,6 +120,47 @@ class MihomoTest {
         val groups = (plan.config["proxy-groups"] as JsonArray).map { (it as JsonObject)["name"]!!.jsonPrimitive.content }
         assertEquals(listOf(MihomoConfigBuilder.MAIN_GROUP, MihomoConfigBuilder.AUTO_GROUP, MihomoConfigBuilder.FALLBACK_GROUP), groups)
         assertEquals(0, plan.picks.single().providerIndex)
+    }
+
+    @Test
+    fun customExecutablesUseExactPathsInBothCores() {
+        val first = """C:\Program Files\First\client.exe"""
+        val second = """C:\Tools (portable, x64)\client.exe"""
+        val excluded = """C:\Unchecked\client.exe"""
+        val server = app.ghostly.core.link.LinkParser.parse("trojan://pass@example.com:443?sni=example.com#Test", "m:0")!!
+        val settings = AppSettings(
+            splitMode = SplitMode.BYPASS_SELECTED,
+            splitApps = setOf(first, second, "legacy.exe", "com.example.android"),
+            customAppPaths = setOf(first, second, excluded),
+        )
+        val restored = Json.decodeFromString(AppSettings.serializer(), Json.encodeToString(AppSettings.serializer(), settings))
+        assertEquals(settings.customAppPaths, restored.customAppPaths)
+        assertEquals(settings.splitApps, restored.splitApps)
+
+        for (mode in SplitMode.entries) {
+            val config = restored.withSplitMode(mode)
+            val mihomo = MihomoConfigBuilder.build(server, null, config, MihomoIngress(9999, "x")).config
+            val rules = (mihomo["rules"] as JsonArray).map { it.jsonPrimitive.content }
+            val processRules = rules.filter { it.startsWith("PROCESS-") }
+
+            val xray = XrayConfigBuilder.build(server, config, Ingress.TunSystem(1500, "Ghostly"))
+            val xrayRules = (xray["routing"] as JsonObject)["rules"] as JsonArray
+            val processPaths = xrayRules.flatMap { (it as JsonObject)["process"] as? JsonArray ?: emptyList() }
+                .map { it.jsonPrimitive.content }
+
+            if (mode == SplitMode.OFF) {
+                assertTrue(processRules.isEmpty())
+                assertTrue(processPaths.isEmpty())
+            } else {
+                val target = if (mode == SplitMode.BYPASS_SELECTED) "DIRECT" else MihomoConfigBuilder.MAIN_GROUP
+                assertEquals(listOf(
+                    "PROCESS-PATH,$first,$target",
+                    """PROCESS-PATH-REGEX,^C:\\Tools \(portable\x2c x64\)\\client\.exe$,$target""",
+                    "PROCESS-NAME,legacy.exe,$target",
+                ), processRules)
+                assertEquals(listOf(first.replace('\\', '/'), second.replace('\\', '/'), "legacy.exe"), processPaths)
+            }
+        }
     }
 
     @Test

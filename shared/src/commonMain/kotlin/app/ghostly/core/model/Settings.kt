@@ -176,6 +176,8 @@ data class AppSettings(
     // --- per-app (Android): Russian apps go around the VPN out of the box (see [RuApps])
     val splitMode: SplitMode = SplitMode.BYPASS_SELECTED,
     val splitApps: Set<String> = RuApps.PACKAGES,
+    /** Executable paths pinned in Windows app routing, including unchecked entries. */
+    val customAppPaths: Set<String> = emptySet(),
     /** Set once 0.3.18 put [RuApps] around the VPN for everyone; later choices stick. */
     val ruAppsBypassApplied: Boolean = false,
     // --- desktop

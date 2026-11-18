@@ -872,5 +872,9 @@
  "Разморозить сейчас": "Hozir muzdan chiqarish",
  "Нажмите ещё раз: VPN выключится на {0} {1}": "Yana bosing: VPN {0} {1} o'chadi",
  "Заморозить на {0} {1}": "{0} {1} ga muzlatish",
- "Сейчас заморозить нельзя": "Hozir muzlatib bo'lmaydi"
+ "Сейчас заморозить нельзя": "Hozir muzlatib bo'lmaydi",
+ "Добавить приложение": "Ilova qo‘shish",
+ "Путь к файлу .exe": ".exe fayliga yo‘l",
+ "Укажи полный путь к существующему файлу .exe.": "Mavjud .exe faylining to‘liq yo‘lini kiriting.",
+ "Выбрать файл": "Faylni tanlash"
 }

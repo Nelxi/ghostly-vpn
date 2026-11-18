@@ -1,13 +1,9 @@
 package app.ghostly.ui.components
 
-import androidx.compose.ui.graphics.drawOutline
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.draw.dropShadow
-import androidx.compose.ui.draw.innerShadow
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -47,14 +43,17 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import app.ghostly.ui.theme.Ghost
 import app.ghostly.ui.theme.LocalReduceMotion
@@ -135,13 +134,10 @@ fun Modifier.plate(shape: Shape, strong: Boolean = false, lit: () -> Float = { 0
 private val PLATE_EDGE_GREY = Color(0x12FFFFFF)
 private val PLATE_EDGE_LIT = Color(0x26C8B4FF)
 
-/** A soft coloured glow under a lit control (the accent button), cut out of the shape like [softShadow]. */
-fun Modifier.glowShadow(shape: Shape, color: Color, weight: Float = 1f): Modifier = drawBehind {
-    if (weight <= 0.001f) return@drawBehind
-    val cut = androidx.compose.ui.graphics.Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawBehind)) }
-    clipPath(cut, androidx.compose.ui.graphics.ClipOp.Difference) {
-        softLayer(shape, radius = 22.dp.toPx(), dy = 10.dp.toPx(), alpha = 0.55f * weight, tint = color)
-    }
+/** A soft coloured glow under a lit control. */
+fun Modifier.glowShadow(shape: Shape, color: Color, weight: Float = 1f): Modifier {
+    if (weight <= 0f) return this
+    return outsideShadow(shape) { Shadow(17.dp, color.copy(alpha = 0.42f * weight), offset = DpOffset(0.dp, 5.dp)) }
 }
 
 /**
@@ -274,90 +270,37 @@ fun Hairline(modifier: Modifier = Modifier) {
 }
 
 
-/**
- * Heavy black shadow around [shape] that never shows through translucent content: the shadow is drawn with
- * the platform's blurred DropShadowPainter and the shape itself is cut out of it (ClipOp.Difference).
- * Three layers: a dense rim at the edge, a soft mid shadow, a wide heavy tail below.
- */
 /** Server-tunable shadow look (design.json `shadow` / `shadowSoft`); snapshot state, so a change redraws. */
 object ShadowLook {
     var strength by androidx.compose.runtime.mutableFloatStateOf(app.ghostly.core.design.DesignTokens().shadow)
     var spread by androidx.compose.runtime.mutableFloatStateOf(app.ghostly.core.design.DesignTokens().shadowSoft)
 }
 
-fun Modifier.outerShadow(shape: Shape, weight0: Float = 1f): Modifier = drawBehind {
-    val weight = weight0 * ShadowLook.strength
-    val s = ShadowLook.spread
-    if (weight <= 0.001f) return@drawBehind
-    // Blur-free soft shadow: each layer is the shape grown step by step with a falling alpha, so the sum
-    // fades smoothly like a gaussian. Pure geometry, no cached blur bitmaps: stable on every device
-    // (the blurred painter flickered on Android while it re-rendered its cache).
-    val cut = androidx.compose.ui.graphics.Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawBehind)) }
-    clipPath(cut, androidx.compose.ui.graphics.ClipOp.Difference) {
-        softLayer(shape, radius = 10.dp.toPx() * s, dy = 2.dp.toPx() * s, alpha = 0.5f * weight)
-        softLayer(shape, radius = 22.dp.toPx() * s, dy = 8.dp.toPx() * s, alpha = 0.45f * weight)
-        softLayer(shape, radius = 44.dp.toPx() * s, dy = 18.dp.toPx() * s, alpha = 0.5f * weight)
-    }
-}
-
-/**
- * One soft shadow under [shape], tinted like the night it falls on (never pure black): a short dense rim and
- * a gentle tail. Cut out of the shape like [outerShadow], so translucent content never shows it through.
- * Scaled by the server-tunable [ShadowLook] like the old heavy one.
- */
-fun Modifier.softShadow(shape: Shape, weight0: Float = 1f): Modifier = drawWithCache {
+/** Soft shadow for a plate, scaled by the server-tunable [ShadowLook]. */
+fun Modifier.softShadow(shape: Shape, weight0: Float = 1f): Modifier = outsideShadow(shape) {
     val weight = weight0 * ShadowLook.strength.coerceAtMost(1.2f)
     val s = ShadowLook.spread
-    // Built once per size (and look): the grown outlines are geometry, replayed on every draw.
+    Shadow(
+        radius = (11f * s).coerceAtMost(23f).dp,
+        color = Color(0xFF030207).copy(alpha = 0.5f * weight),
+        offset = DpOffset(0.dp, (3f * s).coerceAtMost(7f).dp),
+    )
+}
+
+/** Cache the blurred mask and draw it outside the outline so it never darkens translucent content. */
+private fun Modifier.outsideShadow(shape: Shape, shadow: () -> Shadow): Modifier = drawWithCache {
+    val style = shadow()
+    if (style.color.alpha <= 0.001f) return@drawWithCache onDrawBehind {}
     val cut = androidx.compose.ui.graphics.Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }
-    val layers = if (weight <= 0.001f) emptyList() else
-        shadowRings(shape, 6.dp.toPx() * s, 2.dp.toPx() * s, 0.35f * weight) + shadowRings(shape, 26.dp.toPx() * s, 12.dp.toPx() * s, 0.32f * weight)
+    val painter = obtainShadowContext().createDropShadowPainter(shape, style)
     onDrawBehind {
-        if (layers.isEmpty()) return@onDrawBehind
         clipPath(cut, androidx.compose.ui.graphics.ClipOp.Difference) {
-            layers.forEach { (outline, offset, color) -> translate(offset.x, offset.y) { drawOutline(outline, color) } }
+            with(painter) { draw(size) }
         }
     }
 }
 
-/** The rings of one soft layer: each the shape grown a step further with a falling alpha. */
-private fun androidx.compose.ui.draw.CacheDrawScope.shadowRings(shape: Shape, radius: Float, dy: Float, alpha: Float): List<Triple<androidx.compose.ui.graphics.Outline, Offset, Color>> {
-    // Few rings: the night behind the interface changes every frame, so the GPU redraws every shadow every
-    // frame too; 28 stacked rings per plate cost a phone a third of its frame time. On the dark scene 4 per
-    // layer look the same.
-    val steps = 4
-    return (steps downTo 1).mapNotNull { i ->
-        val k = i.toFloat() / steps
-        val grow = radius * k
-        val a = (alpha.coerceAtMost(0.95f) * (1f - k) * (1f - k) * 2.2f / steps).coerceIn(0f, 1f)
-        if (a <= 0.001f) null
-        else Triple(shape.createOutline(Size(size.width + grow * 2, size.height + grow * 2), layoutDirection, this), Offset(-grow, -grow + dy * k), SHADOW_TINT.copy(alpha = a))
-    }
-}
-
-private val SHADOW_TINT = Color(0xFF030207)
-
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.softLayer(shape: Shape, radius: Float, dy: Float, alpha: Float, tint: Color = Color.Black) {
-    val steps = 14
-    for (i in steps downTo 1) {
-        val k = i.toFloat() / steps
-        val grow = radius * k
-        // bell-ish falloff: dense near the edge, a long faint tail
-        val a = (alpha.coerceAtMost(0.95f) * (1f - k) * (1f - k) * 2.2f / steps).coerceIn(0f, 1f)
-        if (a <= 0.001f) continue
-        val outline = shape.createOutline(Size(size.width + grow * 2, size.height + grow * 2), layoutDirection, this)
-        translate(-grow, -grow + dy * k) {
-            drawOutline(outline, tint.copy(alpha = a))
-        }
-    }
-}
-
-
-/**
- * Fade of an AnimatedContent page drawn with ModulateAlpha. The built-in fadeIn/fadeOut render the page
- * into an offscreen buffer clipped to its bounds, which cuts the cards' shadows at the page edge during the
- * transition and makes them "blink" when it ends. Pair with transitions that have no fade of their own.
- */
+/** Fade the draw operations directly so their shadows can extend past the layout bounds. */
 @Composable
 fun Modifier.pageFade(scope: androidx.compose.animation.AnimatedVisibilityScope, inMs: Int, outMs: Int): Modifier {
     val a by scope.transition.animateFloat(
@@ -366,5 +309,8 @@ fun Modifier.pageFade(scope: androidx.compose.animation.AnimatedVisibilityScope,
         },
         label = "pageFade",
     ) { if (it == androidx.compose.animation.EnterExitState.Visible) 1f else 0f }
-    return graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha; alpha = a }
+    return graphicsLayer {
+        alpha = a
+        compositingStrategy = CompositingStrategy.ModulateAlpha
+    }
 }

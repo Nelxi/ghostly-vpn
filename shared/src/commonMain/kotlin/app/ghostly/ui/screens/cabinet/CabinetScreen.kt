@@ -1,6 +1,10 @@
 package app.ghostly.ui.screens.cabinet
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.SizeTransform
+import app.ghostly.ui.components.pageFade
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -53,7 +57,7 @@ import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
+import app.ghostly.ui.components.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -108,6 +112,7 @@ import app.ghostly.ui.components.appear
 import app.ghostly.ui.components.hoverSound
 import app.ghostly.ui.components.rub
 import app.ghostly.ui.theme.Ghost
+import app.ghostly.ui.theme.withDarkTextShadow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -161,11 +166,12 @@ fun CabinetScreen(controller: GhostlyController, contentPadding: PaddingValues, 
         AnimatedContent(
             targetState = ui,
             contentKey = { it::class },
-            transitionSpec = { (fadeIn(app.ghostly.ui.theme.Motion.quick(260)) togetherWith fadeOut(app.ghostly.ui.theme.Motion.quick(160))) },
+            transitionSpec = { EnterTransition.None togetherWith ExitTransition.None using SizeTransform(clip = false) },
             modifier = Modifier.fillMaxSize(),
         ) { u ->
             Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(contentPadding).padding(horizontal = 18.dp),
+                Modifier.fillMaxSize().pageFade(this, 260, 160)
+                    .verticalScroll(rememberScrollState()).padding(contentPadding).padding(horizontal = 18.dp),
             ) {
                 // Above the horizon: who is signed in, the ghost, the balance.
                 Column(Modifier.fillMaxWidth().tabSky(Tab.ACCOUNT)) {
@@ -538,8 +544,9 @@ private fun PillButton(text: String, onClick: () -> Unit, modifier: Modifier = M
             .padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
+        val style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp, fontWeight = if (primary) FontWeight.Bold else FontWeight.SemiBold)
         Text(
-            text, style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp, fontWeight = if (primary) FontWeight.Bold else FontWeight.SemiBold),
+            text, style = if (primary) style.withDarkTextShadow() else style,
             color = if (primary) c.accentInk else c.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
     }

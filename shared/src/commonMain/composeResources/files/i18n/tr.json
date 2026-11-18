@@ -872,5 +872,9 @@
  "Разморозить сейчас": "Şimdi çöz",
  "Нажмите ещё раз: VPN выключится на {0} {1}": "Tekrar dokun: VPN {0} {1} kapanacak",
  "Заморозить на {0} {1}": "{0} {1} dondur",
- "Сейчас заморозить нельзя": "Şu anda dondurulamıyor"
+ "Сейчас заморозить нельзя": "Şu anda dondurulamıyor",
+ "Добавить приложение": "Uygulama ekle",
+ "Путь к файлу .exe": ".exe dosyasının yolu",
+ "Укажи полный путь к существующему файлу .exe.": "Mevcut bir .exe dosyasının tam yolunu gir.",
+ "Выбрать файл": "Dosya seç"
 }

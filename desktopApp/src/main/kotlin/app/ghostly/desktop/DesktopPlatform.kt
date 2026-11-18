@@ -1,12 +1,23 @@
 package app.ghostly.desktop
 
 import app.ghostly.core.vpn.PlatformInfo
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.swing.Swing
+import kotlinx.coroutines.withContext
 import java.awt.Desktop
+import java.awt.Dialog
+import java.awt.FileDialog
+import java.awt.Frame
+import java.awt.KeyboardFocusManager
 import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.StringSelection
 import java.io.File
+import java.io.IOException
 import java.net.URI
+import java.nio.file.Files
+import java.nio.file.InvalidPathException
+import java.nio.file.Path
 import java.security.MessageDigest
 
 enum class HostOs { WINDOWS, MACOS, LINUX }
@@ -38,6 +49,38 @@ class DesktopPlatform : PlatformInfo {
     override val supportsPerAppSplit: Boolean get() = hostOs == HostOs.WINDOWS
     override suspend fun installedApps(): List<app.ghostly.core.vpn.AppEntry> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         WindowsApps.list()
+    }
+
+    override suspend fun pickAppFile(title: String): String? = withContext(Dispatchers.Swing) {
+        val owner = KeyboardFocusManager.getCurrentKeyboardFocusManager().activeWindow
+        val dialog = when (owner) {
+            is Dialog -> FileDialog(owner, title, FileDialog.LOAD)
+            else -> FileDialog(owner as? Frame, title, FileDialog.LOAD)
+        }
+        try {
+            dialog.file = "*.exe"
+            dialog.setFilenameFilter { _, name -> name.endsWith(".exe", ignoreCase = true) }
+            dialog.isVisible = true
+            dialog.files.firstOrNull()?.absolutePath
+        } finally {
+            dialog.dispose()
+        }
+    }
+
+    override suspend fun resolveAppPath(path: String): String? = withContext(Dispatchers.IO) {
+        if (!supportsPerAppSplit) return@withContext null
+        try {
+            val file = Path.of(path.trim().removeSurrounding("\""))
+            if (!file.isAbsolute || file.fileName?.toString()?.endsWith(".exe", ignoreCase = true) != true) return@withContext null
+            val realFile = file.toRealPath()
+            realFile.toString().takeIf { Files.isRegularFile(realFile) }
+        } catch (_: InvalidPathException) {
+            null
+        } catch (_: IOException) {
+            null
+        } catch (_: SecurityException) {
+            null
+        }
     }
 
     override val tcpTuning: app.ghostly.core.vpn.TcpTuning? = if (hostOs == HostOs.WINDOWS) WindowsTcpTuning else null

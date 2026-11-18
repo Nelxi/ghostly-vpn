@@ -221,6 +221,11 @@ object MihomoConfigBuilder {
         cfg["allow-lan"] = JsonPrimitive(settings.allowLan)
         cfg["bind-address"] = JsonPrimitive("*")
         cfg["ipv6"] = JsonPrimitive(settings.ipv6)
+        if (cfg["find-process-mode"] == JsonPrimitive("off") &&
+            settings.splitMode != SplitMode.OFF && settings.customAppPaths.any { it in settings.splitApps }
+        ) {
+            cfg["find-process-mode"] = JsonPrimitive("strict")
+        }
         cfg["log-level"] = JsonPrimitive(
             when (settings.mihomoLogLevel) {
                 "none" -> "silent"
@@ -349,15 +354,21 @@ object MihomoConfigBuilder {
 
     /** The user's switches and domain lists as mihomo rules; forced-proxy entries go to [proxyTarget]. */
     private fun userRules(settings: AppSettings, proxyTarget: String): List<String> = buildList {
-        val procApps = settings.splitApps.filter { it.endsWith(".exe", ignoreCase = true) || !it.contains(".") }
-        if (procApps.isNotEmpty()) {
+        val processRules = settings.splitApps.mapNotNull { app ->
+            when {
+                app in settings.customAppPaths -> processPathRule(app)
+                app.endsWith(".exe", ignoreCase = true) || !app.contains(".") -> "PROCESS-NAME,$app"
+                else -> null
+            }
+        }
+        if (processRules.isNotEmpty()) {
             when (settings.splitMode) {
                 SplitMode.ONLY_SELECTED -> {
-                    procApps.forEach { add("PROCESS-NAME,$it,$proxyTarget") }
+                    processRules.forEach { add("$it,$proxyTarget") }
                     add("MATCH,DIRECT")
                 }
                 SplitMode.BYPASS_SELECTED -> {
-                    procApps.forEach { add("PROCESS-NAME,$it,DIRECT") }
+                    processRules.forEach { add("$it,DIRECT") }
                 }
                 SplitMode.OFF -> {}
             }
@@ -367,6 +378,21 @@ object MihomoConfigBuilder {
         if (settings.blockQuic) add("AND,((NETWORK,UDP),(DST-PORT,443)),REJECT")
         settings.directDomains.mapNotNull { domainRule(it, "DIRECT") }.let(::addAll)
         settings.proxyDomains.mapNotNull { domainRule(it, proxyTarget) }.let(::addAll)
+    }
+
+    private fun processPathRule(path: String): String {
+        if (',' !in path) return "PROCESS-PATH,$path"
+        // Mihomo splits rule fields on commas, so encode them in an exact regex.
+        val escaped = buildString {
+            for (char in path) {
+                when (char) {
+                    ',' -> append("\\x2c")
+                    in "\\.^$|?*+()[]{}" -> append('\\').append(char)
+                    else -> append(char)
+                }
+            }
+        }
+        return "PROCESS-PATH-REGEX,^${escaped}$"
     }
 
     /** Our domain syntax (Xray style) → a mihomo rule. */

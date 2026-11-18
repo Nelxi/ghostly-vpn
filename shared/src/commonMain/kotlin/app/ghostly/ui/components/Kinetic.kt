@@ -1,6 +1,9 @@
 package app.ghostly.ui.components
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -11,8 +14,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -29,7 +30,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Campaign
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
@@ -67,8 +68,11 @@ import kotlinx.coroutines.delay
 @Composable
 fun KineticText(text: String, style: TextStyle, color: Color, modifier: Modifier = Modifier) {
     val reduce = LocalReduceMotion.current
-    AnimatedContent(text, modifier, transitionSpec = { fadeIn(tween(120)) togetherWith fadeOut(tween(160)) }) { t ->
-        Row {
+    AnimatedContent(
+        text, modifier,
+        transitionSpec = { EnterTransition.None togetherWith ExitTransition.None using SizeTransform(clip = false) },
+    ) { t ->
+        Row(Modifier.pageFade(this, 120, 160)) {
             t.forEachIndexed { i, ch ->
                 val p = remember { Animatable(if (reduce) 1f else 0f) }
                 LaunchedEffect(Unit) {
@@ -82,6 +86,7 @@ fun KineticText(text: String, style: TextStyle, color: Color, modifier: Modifier
                     modifier = Modifier.graphicsLayer {
                         val v = p.value
                         alpha = v.coerceIn(0f, 1f)
+                        compositingStrategy = CompositingStrategy.ModulateAlpha
                         translationY = (1f - v) * 16.dp.toPx()
                         rotationX = (1f - v) * -70f
                         cameraDistance = 10f * density
@@ -175,12 +180,12 @@ fun AnnouncementCard(controller: GhostlyController, modifier: Modifier = Modifie
     if (live != null) last = live
     androidx.compose.animation.AnimatedVisibility(
         live != null, modifier,
-        enter = fadeIn(tween(260, delayMillis = 60)) + androidx.compose.animation.expandVertically(tween(380, easing = Motion.Ease)),
-        exit = fadeOut(tween(160)) + androidx.compose.animation.shrinkVertically(tween(320, easing = Motion.Ease)),
+        enter = androidx.compose.animation.expandVertically(tween(380, easing = Motion.Ease), clip = false),
+        exit = androidx.compose.animation.shrinkVertically(tween(320, easing = Motion.Ease), clip = false),
     ) {
     val b = last ?: return@AnimatedVisibility
     GlassCard(
-        Modifier.fillMaxWidth(),
+        Modifier.fillMaxWidth().pageFade(this, 260, 160),
         padding = 14.dp, strong = true,
         onClick = b.url?.let { u -> { controller.openLink(u) } },
     ) {

@@ -74,6 +74,7 @@ private val SHOTS = listOf(
     Shot("move-on", "HOME", vpn = "connected", demo = "tabs:1500", settleMs = 2900, film = listOf(1600, 1800, 2000, 2300), scale = 1f),
     Shot("desktop-home", "HOME", widthDp = 1180, heightDp = 780, scale = 1.25f, desktop = true, vpn = "connected"),
     Shot("desktop-home-off", "HOME", widthDp = 1180, heightDp = 780, scale = 1.25f, desktop = true),
+    Shot("desktop-tab-return", "HOME", widthDp = 1180, heightDp = 780, scale = 1f, desktop = true, demo = "tabs:1600", settleMs = 6000),
     Shot("desktop-servers", "SERVERS", widthDp = 1180, heightDp = 780, scale = 1.25f, desktop = true, vpn = "connected"),
     Shot("desktop-settings", "SETTINGS", widthDp = 1180, heightDp = 780, scale = 1.25f, desktop = true),
     Shot("desktop-cabinet", "ACCOUNT", widthDp = 1180, heightDp = 900, scale = 1.25f, desktop = true, cabinet = CabinetUi.Ready(Samples.state)),

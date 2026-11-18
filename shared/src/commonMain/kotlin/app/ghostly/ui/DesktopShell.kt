@@ -7,8 +7,8 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.SizeTransform
 import app.ghostly.ui.components.hoverSound
-import app.ghostly.ui.components.outerShadow
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
@@ -16,11 +16,8 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
-import app.ghostly.ui.components.ambientFloat
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
@@ -43,7 +40,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountCircle
@@ -51,7 +47,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material3.Icon
+import app.ghostly.ui.components.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -238,7 +234,7 @@ private fun NavItem(icon: ImageVector, label: String, active: Boolean, tint: Col
     }
 }
 
-/** Compact connect toggle at the bottom of the sidebar, with a live pulse when protected. */
+/** Compact connect toggle at the bottom of the sidebar. */
 @Composable
 private fun StatusChip(state: VpnState, onClick: () -> Unit) {
     val c = Ghost.colors
@@ -253,7 +249,6 @@ private fun StatusChip(state: VpnState, onClick: () -> Unit) {
         },
         Motion.quick(),
     )
-    val pulse by ambientFloat(0f, 1f, 1600)
     val interaction = remember { MutableInteractionSource() }
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
@@ -264,14 +259,6 @@ private fun StatusChip(state: VpnState, onClick: () -> Unit) {
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            if (connected || busy) Box(
-                Modifier.size(10.dp).graphicsLayer { scaleX = 1f + pulse * 1.6f; scaleY = 1f + pulse * 1.6f; alpha = 1f - pulse }
-                    .clip(CircleShape).background(color),
-            )
-            Box(Modifier.size(10.dp).clip(CircleShape).background(color))
-        }
-        Spacer(Modifier.width(10.dp))
         AnimatedContent(
             when {
                 connected -> tr("Защищено") to tr("Нажми, чтобы отключить")
@@ -279,11 +266,13 @@ private fun StatusChip(state: VpnState, onClick: () -> Unit) {
                 state is VpnState.Failed -> tr("Ошибка") to tr("Нажми, чтобы подключить")
                 else -> tr("Выключено") to tr("Нажми, чтобы подключить")
             },
-            transitionSpec = { (fadeIn(tween(220, delayMillis = 60)) + slideInVertically(tween(300)) { it / 3 }) togetherWith fadeOut(tween(120)) },
+            transitionSpec = {
+                slideInVertically(tween(300)) { it / 3 } togetherWith ExitTransition.None using SizeTransform(clip = false)
+            },
             modifier = Modifier.weight(1f),
             label = "chip",
         ) { (head, hint) ->
-            Column {
+            Column(Modifier.pageFade(this, 220, 120)) {
                 Text(head, style = MaterialTheme.typography.labelLarge, color = c.ink)
                 Text(hint, style = MaterialTheme.typography.bodySmall)
             }

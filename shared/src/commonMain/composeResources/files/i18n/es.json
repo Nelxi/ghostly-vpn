@@ -872,5 +872,9 @@
  "Разморозить сейчас": "Descongelar ahora",
  "Нажмите ещё раз: VPN выключится на {0} {1}": "Toca otra vez: el VPN se apaga por {0} {1}",
  "Заморозить на {0} {1}": "Congelar por {0} {1}",
- "Сейчас заморозить нельзя": "Ahora no se puede congelar"
+ "Сейчас заморозить нельзя": "Ahora no se puede congelar",
+ "Добавить приложение": "Añadir aplicación",
+ "Путь к файлу .exe": "Ruta al archivo .exe",
+ "Укажи полный путь к существующему файлу .exe.": "Introduce la ruta completa a un archivo .exe existente.",
+ "Выбрать файл": "Elegir archivo"
 }

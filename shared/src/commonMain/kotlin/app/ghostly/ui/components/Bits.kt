@@ -32,7 +32,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -55,6 +54,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.ghostly.ui.theme.Ghost
+import app.ghostly.ui.theme.withDarkTextShadow
 import app.ghostly.ui.theme.Motion
 import androidx.compose.material3.MaterialTheme
 import app.ghostly.i18n.tr
@@ -132,7 +132,7 @@ fun AccentButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifie
         verticalAlignment = Alignment.CenterVertically,
     ) {
         icon?.let { Icon(it, null, tint = c.accentInk, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)) }
-        Text(text, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = c.accentInk, maxLines = 1)
+        Text(text, style = MaterialTheme.typography.labelLarge.withDarkTextShadow().copy(fontWeight = FontWeight.Bold), color = c.accentInk, maxLines = 1)
     }
 }
 
@@ -175,7 +175,7 @@ fun IconBubble(icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modi
             .hoverSound().clickable(interaction, null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, null, tint = if (active || hovered) c.accent else tint, modifier = Modifier.size(size * 0.45f).graphicsLayer { rotationZ = tilt })
+        Icon(icon, null, tint = if (active || hovered) c.accent else tint, modifier = Modifier.size(size * 0.45f).graphicsLayer { rotationZ = tilt }, shadow = false)
     }
 }
 
@@ -228,7 +228,7 @@ fun SettingRow(
                     .background(c.accent.copy(alpha = 0.13f + 0.1f * lift)),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(icon, null, tint = c.accent, modifier = Modifier.size(18.dp))
+                Icon(icon, null, tint = c.accent, modifier = Modifier.size(18.dp), shadow = false)
             }
             Spacer(Modifier.width(13.dp))
         }
@@ -259,7 +259,7 @@ fun <T> Segmented(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> 
     ) {
         val segW = maxWidth / options.size
         Box(
-            Modifier.offset(x = segW * pos).width(segW).fillMaxHeight().softShadow(RoundedCornerShape(11.dp), 0.5f).clip(RoundedCornerShape(11.dp))
+            Modifier.offset(x = segW * pos).width(segW).fillMaxHeight().clip(RoundedCornerShape(11.dp))
                 .background(androidx.compose.ui.graphics.lerp(c.surface1, c.accent, 0.2f))
                 .border(1.dp, c.accent.copy(alpha = 0.4f), RoundedCornerShape(11.dp)),
         )
