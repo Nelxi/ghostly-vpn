@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 from tempfile import TemporaryDirectory
 
@@ -21,6 +22,8 @@ ASSETS = (
     "Ghostly-Windows.exe",
     "Ghostly-Windows-Portable.zip",
 )
+RANGE_THRESHOLD = 128 * 1024 * 1024
+RANGE_BYTES = 16 * 1024 * 1024
 
 
 def sha256(path):
@@ -37,15 +40,44 @@ def version_key(value):
     return tuple(map(int, value.split(".")))
 
 
-def fetch(url, destination):
-    subprocess.run(
-        [
-            "curl", "--fail", "--silent", "--show-error", "--location",
-            "--retry", "3", "--connect-timeout", "10", "--max-time", "180",
-            "--output", str(destination), url,
-        ],
-        check=True,
+def fetch(url, destination, bounds=None):
+    command = [
+        "curl", "--fail", "--silent", "--show-error", "--location",
+        "--retry", "3", "--connect-timeout", "10", "--max-time", "180",
+        "--output", str(destination),
+    ]
+    if bounds is None:
+        subprocess.run([*command, url], check=True)
+        return
+    start, end = bounds
+    length = end - start + 1
+    status = subprocess.check_output(
+        [*command, "--range", f"{start}-{end}", "--max-filesize", str(length), "--write-out", "%{http_code}", url],
+        text=True,
     )
+    if status != "206" or destination.stat().st_size != length:
+        raise ValueError(f"Invalid HTTP range {start}-{end}")
+
+
+def fetch_asset(url, path, size):
+    if size < RANGE_THRESHOLD:
+        fetch(url, path)
+        return
+
+    # A single GitHub CDN connection can throttle a large APK. Smaller ranges retry independently.
+    ranges = [(start, min(start + RANGE_BYTES, size) - 1) for start in range(0, size, RANGE_BYTES)]
+    with TemporaryDirectory(prefix=".parts-", dir=path.parent) as directory:
+        def download(bounds):
+            part = Path(directory) / str(bounds[0])
+            fetch(url, part, bounds)
+            return part
+
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            parts = list(pool.map(download, ranges))
+        with path.open("wb") as sink:
+            for part in parts:
+                with part.open("rb") as stream:
+                    shutil.copyfileobj(stream, sink)
 
 
 def verify(path, metadata):
@@ -90,7 +122,7 @@ def mirror(root, version, manifest_hash):
         else:
             def download(name):
                 path = stage / name
-                fetch(f"{release_url}/{name}", path)
+                fetch_asset(f"{release_url}/{name}", path, files[name]["size"])
                 verify(path, files[name])
                 print(f"Verified {name}", flush=True)
 
