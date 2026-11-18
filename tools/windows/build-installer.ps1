@@ -1,18 +1,26 @@
 ﻿# Builds build/release/Ghostly-Windows.exe (Inno Setup installer) and
 # build/release/Ghostly-Windows-Portable.zip (unzip & run, data stays in the folder).
-param([string]$Iscc = "$env:ISCC")
+# Use -ReuseAppImage to package an already tested :desktopApp:createDistributable image.
+param([string]$Iscc = "$env:ISCC", [switch]$ReuseAppImage)
 $ErrorActionPreference = "Stop"
 $root = Resolve-Path "$PSScriptRoot\..\.."
 Push-Location $root
 try {
-    & .\gradlew.bat :desktopApp:createDistributable --console=plain
+    $app = "desktopApp\build\compose\binaries\main\app\Ghostly"
+    $version = (Select-String -Path desktopApp\build.gradle.kts -Pattern 'val ghostlyVersion = "(.+)"').Matches[0].Groups[1].Value
+    if ($ReuseAppImage) {
+        $imageVersion = (Get-Item -LiteralPath "$app\Ghostly.exe").VersionInfo.ProductVersion
+        if ($imageVersion -ne $version) { throw "App image version $imageVersion does not match $version" }
+    } else {
+        & .\gradlew.bat :desktopApp:createDistributable --console=plain
+        if ($LASTEXITCODE -ne 0) { throw "Desktop app image build failed" }
+    }
     if (-not $Iscc) { $Iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source }
     if (-not $Iscc) { $Iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
-    $version = (Select-String -Path desktopApp\build.gradle.kts -Pattern 'val ghostlyVersion = "(.+)"').Matches[0].Groups[1].Value
     & $Iscc "/DAppVersion=$version" tools\windows\ghostly.iss
+    if ($LASTEXITCODE -ne 0) { throw "Windows installer build failed" }
 
     # Portable: same app image + a "portable" marker (switches data to .\data, no registry/autostart/updates)
-    $app = "desktopApp\build\compose\binaries\main\app\Ghostly"
     $stage = "build\portable\Ghostly"
     if (Test-Path "build\portable") { Remove-Item "build\portable" -Recurse -Force }
     New-Item -ItemType Directory -Force $stage | Out-Null
