@@ -106,7 +106,7 @@ data class ServerTitle(val flag: String?, val title: String, val subtitle: Strin
 fun Server.title(): ServerTitle {
     var n = name.trim()
     // The row's icon is the FIRST flag anywhere in the name (like Happ): "Автовыбор 🇪🇺 🤝🇷🇺" → EU.
-    val flag = FLAG_ANYWHERE.find(n)?.value
+    val flag = countryFlag()
     if (flag != null) n = n.replaceFirst(flag, " ").replace(Regex("\\s+"), " ").trim()
     // Names come from the subscription in Russian; each part is translated if the dictionary knows it.
     val parts = n.split(" · ", " | ", " - ").map { it.trim() }.filter { it.isNotEmpty() }.map { tr(it) }
@@ -120,7 +120,9 @@ fun Server.title(): ServerTitle {
  */
 data class ServerSection(val flag: String, val lte: Boolean)
 
-fun Server.section(): ServerSection? = title().flag?.let { ServerSection(it, isWhitelist) }
+fun Server.section(): ServerSection? = countryFlag()?.let { ServerSection(it, isWhitelist) }
+
+fun Server.countryFlag(): String? = FLAG_ANYWHERE.find(name)?.value
 
 /** Under an «LTE» header the rows don't repeat it: "LTE · Резерв" → "Резерв". */
 fun ServerTitle.withoutLte(): ServerTitle {

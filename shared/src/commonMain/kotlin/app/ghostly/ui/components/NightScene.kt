@@ -391,6 +391,7 @@ private val CURTAINS: List<Curtain> = listOf(
 private const val DEPTH_STARS = 0.22f
 private const val DEPTH_MOON = 0.3f
 private const val DEPTH_AURORA = 0.5f
+private const val AURORA_PAD = 0.4f
 private const val DEPTH_FAR_ISLES = 0.78f
 private const val DEPTH_NEAR_ISLES = 1f
 
@@ -403,7 +404,9 @@ private val STARS: List<Star> = Random(11).let { r ->
 }
 
 /** Crisp rays along the front curtains: world x, width (dp), height share, phase. */
-private class Ray(val curtain: Curtain, val x: Float, val width: Float, val tall: Float, val ph: Float)
+private class Ray(val curtain: Curtain, val x: Float, val width: Float, val tall: Float, val ph: Float) {
+    val envelope = curtain.envelope(x)
+}
 
 private val RAYS: List<Ray> = Random(5).let { r ->
     CURTAINS.filter { it.rays }.flatMap { cu ->
@@ -606,7 +609,9 @@ private class Camera {
     var pending = false
 }
 
-/** The aurora's small offscreen picture. */
+private class CurtainSpan(val curtain: Curtain, val start: Int, val envelope: FloatArray)
+
+/** The aurora's small offscreen picture and the columns each curtain can cover. */
 private class AuroraBuffer {
     var image: ImageBitmap? = null
     var canvas: Canvas? = null
@@ -614,6 +619,27 @@ private class AuroraBuffer {
     var ms = Long.MIN_VALUE
     var yaw = 0f
     var palette: NightPalette? = null
+    private var screenWidth = 0f
+    private var columnScale = 0f
+    private var columnYaw = Float.NaN
+    var worldX = FloatArray(0)
+        private set
+    var spans = emptyList<CurtainSpan>()
+        private set
+
+    fun prepareColumns(width: Int, screen: Float, scale: Float, yaw: Float) {
+        if (worldX.size == width && screenWidth == screen && columnScale == scale && columnYaw == yaw) return
+        screenWidth = screen
+        columnScale = scale
+        columnYaw = yaw
+        worldX = FloatArray(width) { (it + 0.5f) * scale / screen + yaw - AURORA_PAD }
+        spans = CURTAINS.mapNotNull { curtain ->
+            val first = worldX.binarySearch(curtain.x0).let { if (it < 0) -it - 1 else it }
+            val end = worldX.binarySearch(curtain.x1).let { if (it < 0) -it - 1 else it + 1 }
+            if (end <= first) null
+            else CurtainSpan(curtain, first, FloatArray(end - first) { curtain.envelope(worldX[first + it]) })
+        }
+    }
 }
 
 // ============================================================================ the scene
@@ -704,6 +730,7 @@ fun NightScene(
     // The real local time: sampled now and then, carried forward by the ambient clock in between.
     val skyClock = remember { LongArray(2) { Long.MIN_VALUE } } // [ambient ms at sample, wall-clock ms]
     val birdPath = remember { Path() }
+    val crescent = remember { Path() }
 
     Box(
         modifier.fillMaxSize().background(OFF_WATER_BOTTOM)
@@ -842,6 +869,8 @@ fun NightScene(
 
             // ---- snow: one depth at a time (far before the water, middle before the ghost, near on top)
             val snowTint = lerp(Color.White, palette.light, 0.28f * e)
+            val snowFilter = if (snowAmt > 0f && e > 0.05f) ColorFilter.tint(snowTint, BlendMode.Modulate) else null
+            val crystalSize = IntSize(crystal.width, crystal.height)
             val wind = (0.6f * wave(41_000) + 0.4f * wave(17_000, 0.3f)) * motion
             fun snow(layer: Int) {
                 val n = (SNOW_COUNT[layer] * snowAmt).toInt().coerceIn(0, SNOW[layer].size)
@@ -850,10 +879,12 @@ fun NightScene(
                 val bottom = if (layer == 0) hz else h
                 if (bottom <= 0f) return
                 val top = -12.dp.toPx()
+                val fall = bottom - top + 12.dp.toPx()
+                val base = if (layer == 1) 0.62f else 0.42f
                 for (i in 0 until n) {
                     val f = SNOW[layer][i]
                     val q = (loop(f.fallMs) + f.ph) % 1f
-                    val y = top + q * (bottom - top + 12.dp.toPx())
+                    val y = top + q * fall
                     var u = ((f.x - yaw * depth + wind * 0.05f * q * depth) % SNOW_TILE + SNOW_TILE) % SNOW_TILE
                     if (u > 1.3f) u -= SNOW_TILE
                     val x = cx + (u - 0.5f) * w * zoom + wave(f.swayMs, f.swayPh) * f.sway.dp.toPx() * motion
@@ -861,7 +892,6 @@ fun NightScene(
                     // far flakes melt into the sea just above the horizon; all of them fade in at the top
                     val melt = if (layer == 0) smooth((hz - y) / 26.dp.toPx()) else 1f
                     val fadeIn = smooth((y - top) / 40.dp.toPx())
-                    val base = when (layer) { 0 -> 0.42f; 1 -> 0.62f; else -> 0.42f }
                     val a = (base * melt * fadeIn * (0.75f + 0.25f * wave(2_600, f.swayPh))).coerceIn(0f, 1f)
                     if (a <= 0.01f) continue
                     val r = f.r.dp.toPx() * (0.8f + 0.2f * zoom)
@@ -876,9 +906,9 @@ fun NightScene(
                         val d = r * 2f / 0.72f
                         withTransform({ rotate(f.spin * (now % 360_000L) / 1000f, Offset(x, y)) }) {
                             drawImage(
-                                crystal, IntOffset.Zero, IntSize(crystal.width, crystal.height),
+                                crystal, IntOffset.Zero, crystalSize,
                                 IntOffset((x - d / 2f).toInt(), (y - d / 2f).toInt()), IntSize(d.toInt().coerceAtLeast(1), d.toInt().coerceAtLeast(1)),
-                                alpha = a, colorFilter = if (e > 0.05f) androidx.compose.ui.graphics.ColorFilter.tint(snowTint, BlendMode.Modulate) else null,
+                                alpha = a, colorFilter = snowFilter,
                                 filterQuality = FilterQuality.Low,
                             )
                         }
@@ -1028,7 +1058,8 @@ fun NightScene(
                 }
                 val glow = 64.dp.toPx() * zoom
                 drawCircle(Brush.radialGradient(listOf(moonTint.copy(alpha = 0.26f * moonPower), Color.Transparent), Offset(mx, my), glow), glow, Offset(mx, my))
-                val crescent = Path().apply {
+                crescent.apply {
+                    reset()
                     moveTo(mx, my - mr)
                     arcTo(Rect(Offset(mx, my), mr), -90f, -180f, false)
                     val ix = mr * 11f / 15f
@@ -1063,41 +1094,43 @@ fun NightScene(
             val ph5 = loop(5_300)
             val sc = max(2f, floor(3.dp.toPx()))
             // Aurora beyond each side of the screen: a camera that stands back (zoom < 1) sees more than one screen
-            val pad = 0.4f
-            val bw = ceil(w * (1f + 2f * pad) / sc).toInt().coerceAtLeast(1)
+            val bw = ceil(w * (1f + 2f * AURORA_PAD) / sc).toInt().coerceAtLeast(1)
             val bh = ceil(skyH * 1.05f / sc).toInt().coerceAtLeast(1)
-            val showAurora = e > 0.003f && hz > 0f
+            val showAurora = e > 0.003f && hz > 0f && w > 0f
             if (showAurora) {
                 // Re-paint about 30 times a second (and right away when the colours change).
                 if (buffer.image?.width != bw || buffer.image?.height != bh) {
                     buffer.image = ImageBitmap(bw, bh).also { buffer.canvas = Canvas(it) }
                     buffer.ms = Long.MIN_VALUE
                 }
-                if (now - buffer.ms >= 33 || buffer.palette !== palette) {
+                if (buffer.ms == Long.MIN_VALUE || now < buffer.ms || now - buffer.ms >= 33 || buffer.palette !== palette) {
                     buffer.ms = now
                     buffer.yaw = yawA
                     buffer.palette = palette
+                    buffer.prepareColumns(bw, w, sc, yawA)
                     // ghost position in the picture's own (unzoomed) coordinates, for the spreading colour
-                    val gxu = (cx + (gx - cx) / zoom + pad * w) / sc
+                    val gxu = (cx + (gx - cx) / zoom + AURORA_PAD * w) / sc
                     val gyu = (skyH * 1.05f - (hz - gy) / zoom) / sc
                     val dMaxB = dMax / zoom / sc
                     val baseY = skyH * 1.05f / sc
                     val skyB = skyH / sc
                     buffer.scope.draw(Density(1f), LayoutDirection.Ltr, buffer.canvas!!, Size(bw.toFloat(), bh.toFloat())) {
                         drawRect(Color.Transparent, blendMode = BlendMode.Clear)
-                        CURTAINS.forEach { cu ->
+                        buffer.spans.forEach { span ->
+                            val cu = span.curtain
                             val brush = cu.pick(palette)
-                            for (bx in 0 until bw) {
-                                val xw = (bx + 0.5f) * sc / w + yawA - pad
-                                if (xw < cu.x0 || xw > cu.x1) continue
-                                val env = cu.envelope(xw)
+                            for (column in span.envelope.indices) {
+                                val env = span.envelope[column]
                                 if (env <= 0.01f) continue
+                                val bx = span.start + column
+                                val xw = buffer.worldX[bx]
                                 val yb = baseY - (cu.lift + cu.amp * cu.edge(xw, ph1, ph2)) * skyB
+                                val litB = smooth((e * (1f + band) - hypot(bx - gxu, yb - gyu) / dMaxB) / band)
+                                if (litB <= 0f) continue
                                 val tall = cu.height * skyB * (0.70f + 0.30f * (0.5f + 0.5f * sin(TAU * (xw * 3.3f + ph3) + cu.seed * 5f)))
                                 val ray = 0.5f + 0.5f * sin(TAU * (xw * 23f + 0.6f * sin(TAU * (xw * 3.1f + ph4)) + ph1 * 2f) + cu.seed * 11f)
                                 val fine = 0.5f + 0.5f * sin(TAU * (xw * 9f - ph5) + cu.seed)
                                 val bright = env * (0.40f + 0.45f * ray * ray + 0.15f * fine)
-                                val litB = smooth((e * (1f + band) - hypot(bx - gxu, yb - gyu) / dMaxB) / band)
                                 val a = (cu.alpha * bright * litB * glowK).coerceIn(0f, 1f)
                                 if (a <= 0.004f) continue
                                 withTransform({ translate(bx.toFloat(), yb - tall); scale(1f, tall * 1.08f, Offset.Zero) }) {
@@ -1115,18 +1148,16 @@ fun NightScene(
                 clipRect(0f, 0f, w, hz) {
                     withTransform({
                         scale(zoom, zoom, Offset(cx, hz))
-                        translate(shift - parX - pad * w, hz - skyH * 1.05f - parY)
+                        translate(shift - parX - AURORA_PAD * w, hz - skyH * 1.05f - parY)
                         scale(sc, sc, Offset.Zero)
                     }) {
                         drawImage(img, IntOffset.Zero, IntSize(bw, bh), IntOffset.Zero, IntSize(bw, bh), filterQuality = FilterQuality.Low)
                     }
-                }
-                // crisp rays
-                clipRect(0f, 0f, w, hz) {
+                    // crisp rays
                     RAYS.forEach { r ->
                         val x = sx(r.x, DEPTH_AURORA) - par.x * 5.dp.toPx()
                         if (x < -4f || x > w + 4f) return@forEach
-                        val env = r.curtain.envelope(r.x)
+                        val env = r.envelope
                         if (env <= 0.02f) return@forEach
                         val bottom = sy(r.curtain.lift + r.curtain.amp * r.curtain.edge(r.x, ph1, ph2)) + 5.dp.toPx() * zoom
                         val tall = r.tall * r.curtain.height * skyH * zoom
@@ -1344,7 +1375,7 @@ fun NightScene(
                             translate(0f, 2f * hz)
                             scale(1f, -1f, Offset.Zero)
                             scale(zoom, zoom, Offset(cx, hz))
-                            translate(shift - pad * w, hz - skyH * 1.05f)
+                            translate(shift - AURORA_PAD * w, hz - skyH * 1.05f)
                             scale(sc, sc, Offset.Zero)
                         }) {
                             drawImage(img, IntOffset.Zero, IntSize(bw, bh), IntOffset.Zero, IntSize(bw, bh), alpha = 0.30f, filterQuality = FilterQuality.Low)
@@ -1483,7 +1514,7 @@ fun NightScene(
                     if (showAurora) RAYS.forEach { r ->
                         val x = sx(r.x, DEPTH_AURORA)
                         if (x < -4f || x > w + 4f) return@forEach
-                        val env = r.curtain.envelope(r.x)
+                        val env = r.envelope
                         val bottom = sy(r.curtain.lift + r.curtain.amp * r.curtain.edge(r.x, ph1, ph2))
                         val tall = r.tall * r.curtain.height * skyH * zoom
                         val a = (0.12f * env * lit(x, bottom) * glowK).coerceIn(0f, 1f)

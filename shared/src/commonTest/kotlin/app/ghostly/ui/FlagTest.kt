@@ -12,6 +12,8 @@ class FlagTest {
         assertEquals("RU", flagCode("\uD83C\uDDF7\uD83C\uDDFA"))
         assertEquals("EU", flagCode("\uD83C\uDDEA\uD83C\uDDFA"))
         assertEquals("NL", flagCode("nl"))
+        assertEquals("HK", flagCode("🇭🇰"))
+        assertEquals("AU", flagCode("🇦🇺"))
         assertNull(flagCode("\uD83D\uDC7B"))
         assertNull(flagCode(null))
     }

@@ -71,8 +71,12 @@ const val POOL_WL = "wl"
  */
 const val POOL_WL2 = "wl2"
 
-/** Regular servers (everything that is not a white list). */
+/** Regular servers. */
 const val POOL_REG = "reg"
+
+const val POOL_RESERVE = "reserve"
+private val publicReserveName = Regex("""(?:^|\s)Резерв\s+\d+\s*·\s*Может не работать$""", RegexOption.IGNORE_CASE)
+private val lteName = Regex("""\bLTE\b""", RegexOption.IGNORE_CASE)
 
 /** A traffic pool: [POOL_WL], [POOL_WL2] or [POOL_REG]. Bytes; total 0 = unlimited. */
 @Serializable
@@ -111,7 +115,7 @@ data class Server(
     val config: JsonObject? = null,
     /** Original share link, if the server came from one (for "copy link"). */
     val link: String? = null,
-    /** Traffic pool: [POOL_WL] / [POOL_WL2] / [POOL_REG]; from the provider's meta or guessed by name. */
+    /** Traffic pool from the provider's meta or guessed by name. */
     val pool: String? = null,
     /** Proxy entry of a Clash/mihomo YAML subscription (the config itself is [Profile.mihomo]). */
     val mihomo: JsonObject? = null,
@@ -120,7 +124,13 @@ data class Server(
     /** A balancer is measured through its main proxy; a whole mihomo profile has no single endpoint. */
     val canPing: Boolean get() = protocol != MIHOMO_PROFILE
     /** A white list, either pool: the tunnel is only used where normal traffic is blocked. */
-    val isWhitelist: Boolean get() = pool == POOL_WL || pool == POOL_WL2
+    val isWhitelist: Boolean get() = pool == POOL_WL || pool == POOL_WL2 || (pool == null && lteName.containsMatchIn(name))
+    val isPublicReserve: Boolean get() = pool == POOL_RESERVE || publicReserveName.containsMatchIn(name)
+    val autoPriority: Int get() = when {
+        isPublicReserve -> 2
+        isWhitelist -> 1
+        else -> 0
+    }
     /**
      * «Белые списки 2» — the white list that runs on Hysteria2. The Ghostly server sends it as
      * plain [POOL_WL] (older apps only know that one), so the protocol tells the two apart.
@@ -135,8 +145,9 @@ const val MIHOMO_PROFILE = "mihomo"
 
 /** Guess the pool of a server from its name when the provider doesn't say. */
 fun guessPool(name: String): String? {
+    if (publicReserveName.containsMatchIn(name)) return POOL_RESERVE
     val n = name.lowercase()
-    val whitelist = ("бел" in n && "спис" in n) || "whitelist" in n || "white list" in n
+    val whitelist = ("бел" in n && "спис" in n) || "whitelist" in n || "white list" in n || lteName.containsMatchIn(n)
     if (!whitelist) return null
     // «Белые списки 2» is the Hysteria2 white list the provider ships next to the CDN route; the name
     // check needs the protocol in it, otherwise the CDN «Белые списки 2» would be mistaken for it.

@@ -49,7 +49,7 @@ data class MihomoPlan(val config: JsonObject, val links: String?, val picks: Lis
  * A Clash/mihomo subscription is kept as the provider made it (groups, rules, DNS) — only the
  * listeners, the controller, TUN and the user's own rules are put on top. Plain links get our own
  * template: a provider with every server of the profile, groups «Ghostly» (manual pick),
- * «Авто» (fastest) and «Резерв» (first alive), and the smart Russian routing.
+ * «Авто» and «Резерв», and the smart Russian routing.
  */
 object MihomoConfigBuilder {
 
@@ -58,6 +58,9 @@ object MihomoConfigBuilder {
     const val FALLBACK_GROUP = "🛟 Резерв"
     const val LINKS_PROVIDER = "ghostly"
     const val LINKS_FILE = "ghostly-links.txt"
+
+    private fun orderedLinks(servers: List<Server>): List<Server> =
+        servers.filter { it.link != null && it.config == null }.sortedBy { it.autoPriority }
 
     /** Does this server run on mihomo with these settings? */
     fun wants(server: Server, profile: Profile?, settings: AppSettings): Boolean = when {
@@ -87,7 +90,7 @@ object MihomoConfigBuilder {
             provided != null && server.mihomo != null ->
                 MihomoProfiles.selectPath(provided, server.name).map { (g, c) -> MihomoPick(g, c) }.ifEmpty { null }
             provided == null && server.link != null && profile != null -> {
-                val index = profile.servers.filter { it.link != null && it.config == null }.indexOfFirst { it.id == server.id }
+                val index = orderedLinks(profile.servers).indexOfFirst { it.id == server.id }
                 if (index < 0) null else listOf(MihomoPick(MAIN_GROUP, provider = LINKS_PROVIDER, providerIndex = index))
             }
             else -> null
@@ -136,8 +139,9 @@ object MihomoConfigBuilder {
     // ------------------------------------------------------------------ link template
 
     private fun fromLinks(server: Server, profile: Profile?, settings: AppSettings, ingress: MihomoIngress, linksPath: String, stored: Map<String, String>): MihomoPlan {
-        val linkServers = (profile?.servers ?: listOf(server)).filter { it.link != null && it.config == null }
+        val linkServers = orderedLinks(profile?.servers ?: listOf(server))
             .ifEmpty { listOf(server) }
+        val orderedAuto = linkServers.first().autoPriority != linkServers.last().autoPriority
         val links = linkServers.mapNotNull { it.link }.joinToString("\n")
         // A saved «Ghostly» choice (a server, «Авто» or «Резерв») wins over the selected server.
         val storedChoice = stored[MAIN_GROUP]
@@ -178,11 +182,11 @@ object MihomoConfigBuilder {
             })
             add(buildJsonObject {
                 put("name", AUTO_GROUP)
-                put("type", "url-test")
+                put("type", if (orderedAuto) "fallback" else "url-test")
                 putJsonArray("use") { add(JsonPrimitive(LINKS_PROVIDER)) }
                 put("url", settings.mihomoPingUrl)
                 put("interval", 300)
-                put("tolerance", 50)
+                if (!orderedAuto) put("tolerance", 50)
                 put("lazy", true)
             })
             add(buildJsonObject {

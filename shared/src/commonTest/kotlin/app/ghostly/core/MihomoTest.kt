@@ -123,6 +123,19 @@ class MihomoTest {
     }
 
     @Test
+    fun mixedLinksUseOrderedFallbackAndKeepManualPicksAligned() {
+        val regular = app.ghostly.core.link.LinkParser.parse("trojan://pass@example.com:443#Regular", "m:0")!!
+        val lte = regular.copy(id = "m:1", name = "LTE", link = "trojan://pass@lte.example.com:443#LTE")
+        val reserve = regular.copy(id = "m:2", name = "Резерв 08 · Может не работать", link = "trojan://pass@reserve.example.com:443#Reserve")
+        val profile = Profile("m", "Test", servers = listOf(reserve, lte, regular))
+        val plan = MihomoConfigBuilder.build(reserve, profile, AppSettings(), MihomoIngress(9999, "x"))
+        assertEquals(listOf(regular.link, lte.link, reserve.link).joinToString("\n"), plan.links)
+        assertEquals("fallback", MihomoProfiles.groups(plan.config).getValue(MihomoConfigBuilder.AUTO_GROUP).type)
+        assertEquals(2, plan.picks.single().providerIndex)
+        assertEquals(plan.picks, MihomoConfigBuilder.picksFor(reserve, profile))
+    }
+
+    @Test
     fun customExecutablesUseExactPathsInBothCores() {
         val first = """C:\Program Files\First\client.exe"""
         val second = """C:\Tools (portable, x64)\client.exe"""

@@ -585,7 +585,7 @@ class GhostlyController(
      * regular servers in [profiles] (white-list ones sit behind someone else's CDN). See [app.ghostly.core.sub.GhostlyDomains.doorsOf].
      */
     private fun nodeHosts(profiles: List<Profile>): List<String> =
-        profiles.flatMap { it.servers }.filter { !it.isAuto && !it.isWhitelist }.mapNotNull { it.host }.distinct()
+        profiles.flatMap { it.servers }.filter { !it.isAuto && it.autoPriority == 0 }.mapNotNull { it.host }.distinct()
 
     fun refresh(profileId: String, manual: Boolean = false) {
         val profile = _profiles.value.firstOrNull { it.id == profileId } ?: return
@@ -866,7 +866,7 @@ class GhostlyController(
             }
         }
         // Link profiles: the template's groups. Shown only for the profile the selection is in (they all look alike).
-        val links = profile.servers.filter { it.link != null && it.config == null }
+        val links = profile.servers.filter { it.link != null && it.config == null }.sortedBy { it.autoPriority }
         if (links.isEmpty()) return emptyList()
         val owner = groupOwner(app.ghostly.core.mihomo.MihomoConfigBuilder.MAIN_GROUP)
         if (owner?.id != profile.id) return emptyList()
@@ -877,7 +877,7 @@ class GhostlyController(
             ?: links.firstOrNull { it.id == selected }?.name ?: names.firstOrNull()
         return listOf(
             app.ghostly.core.mihomo.ProxyGroupInfo(app.ghostly.core.mihomo.MihomoConfigBuilder.MAIN_GROUP, "Selector", now, listOf(auto, fallback) + names, delays, setOf(auto, fallback)),
-            app.ghostly.core.mihomo.ProxyGroupInfo(auto, "URLTest", null, names, delays, emptySet()),
+            app.ghostly.core.mihomo.ProxyGroupInfo(auto, if (links.first().autoPriority == links.last().autoPriority) "URLTest" else "Fallback", null, names, delays, emptySet()),
             app.ghostly.core.mihomo.ProxyGroupInfo(fallback, "Fallback", null, names, delays, emptySet()),
         )
     }
@@ -889,7 +889,7 @@ class GhostlyController(
 
     /**
      * The server to recommend (the «Лучший сейчас» card, failover): among those that answer, regular
-     * servers before white lists (the scarce pool), the lowest ping inside the pool. No protocol or
+     * servers before white lists and public reserves, the lowest ping inside the pool. No protocol or
      * country is favoured: the measured ping is the only thing that ranks servers. One that failed a
      * moment ago is not recommended, whatever its last ping said.
      */
@@ -897,8 +897,7 @@ class GhostlyController(
         val p = _pings.value
         val boxed = penalised()
         val alive = allServers().filter { !it.isAuto && it.id !in exclude && it.id !in boxed && p[it.id]?.ok == true }
-        val regular = alive.filter { !it.isWhitelist }
-        return regular.ifEmpty { alive }.minByOrNull { p[it.id]!!.ms }
+        return alive.minWithOrNull(compareBy({ it.autoPriority }, { p[it.id]!!.ms }))
     }
 
     // ------------------------------------------------------------------ ping
@@ -1204,7 +1203,8 @@ class GhostlyController(
             val pick = cur?.let { pickReplacement(it, others) }
             // Measured and nobody answers: hopping onto a dead server only hides the real error.
             val next = pick?.server ?: if (pick?.measured == true) null
-                else bestServer(exclude = setOfNotNull(current)) ?: others.firstOrNull { it.id !in penalised() }
+                else bestServer(exclude = setOfNotNull(current))
+                    ?: others.filter { !it.isPublicReserve && it.id !in penalised() }.minByOrNull { it.autoPriority }
             if (next == null) {
                 _events.emit(failure.message)
                 return@launch
@@ -1413,7 +1413,7 @@ class GhostlyController(
     }
 
     private fun whitelistServers() = allServers().filter { !it.isAuto && it.isWhitelist }
-    private fun regularServers() = allServers().filter { !it.isAuto && !it.isWhitelist }
+    private fun regularServers() = allServers().filter { !it.isAuto && it.autoPriority == 0 }
     private fun hasWhitelistServers() = whitelistServers().isNotEmpty()
 
     /** The regular server to move to: the lowest ping among those that answer. */
@@ -1490,7 +1490,7 @@ class GhostlyController(
 
     /** Direct TCP to a few regular servers: does the network let normal VPN traffic through? */
     private suspend fun regularReachable(): Boolean {
-        val regular = allServers().filter { !it.isAuto && !it.isWhitelist && it.protocol != "hysteria" && it.host != null && it.port > 0 }
+        val regular = regularServers().filter { it.protocol != "hysteria" && it.host != null && it.port > 0 }
             .distinctBy { it.host to it.port }.take(3)
         if (regular.isEmpty()) return false
         return regular.any { platform.tcpPing(it.host!!, it.port, 2500) > 0 }
@@ -1527,10 +1527,9 @@ class GhostlyController(
             .ifEmpty { app.ghostly.core.vpn.Failover.rank(candidates, cur, _pings.value, emptyMap(), now()) }
         if (ranked.isEmpty()) return Pick(null, measured = false)
         val url = _settings.value.let { it.pingUrlOf(it.core) }
-        val deadline = now() + FAILOVER_BUDGET_MS
         var measured = false
-        for (batch in ranked.chunked(app.ghostly.core.vpn.Failover.BATCH)) {
-            if (now() > deadline) break
+        val batches = ranked.groupBy { it.autoPriority }.values.flatMap { it.chunked(app.ghostly.core.vpn.Failover.BATCH) }
+        for (batch in batches) {
             val got = MutableStateFlow<Map<String, Long>>(emptyMap())
             val ids = batch.map { it.id }
             _pinging.update { it + ids }
@@ -1581,25 +1580,16 @@ class GhostlyController(
             NetMode.OPEN -> !regularReachable()
             else -> platform.networkType() == NetType.CELLULAR || !regularReachable()
         }
-        val pool = if (whitelistMode) others.filter { it.isWhitelist } else others.filter { !it.isWhitelist }.ifEmpty { others }
-        val pick = pickReplacement(cur, pool)
+        val pick = pickReplacement(cur, others)
         var next = pick.server
-        var toWhitelist = whitelistMode
-        if (next == null && whitelistMode) {
-            // Probes through the CDN can fail where the tunnel itself works: on white lists another LTE
-            // entry is the only way out anyway, so take the best-ranked one.
-            next = app.ghostly.core.vpn.Failover.rank(pool.filter { it.name != cur.name }, cur, _pings.value, failedAt.value, now()).firstOrNull()
-        }
-        if (next == null && !whitelistMode && pick.measured && backend.directProbesBypassTunnel) {
-            // Every regular server is dead from here: the ISP cuts our addresses, the CDN route may still pass.
-            val lte = others.filter { it.isWhitelist }
-            if (lte.isNotEmpty()) {
-                next = pickReplacement(cur, lte).server
-                toWhitelist = next != null
-            }
-        }
-        if (next == null && !pick.measured) {
-            next = (if (whitelistMode) preferredWhitelist(pool.filter { it.name != cur.name }) else preferredRegular(pool.filter { it.name != cur.name }))
+        if (next == null) {
+            val owned = others.filter { !it.isPublicReserve && it.name != cur.name }
+            // LTE probes can fail on white lists even when the tunnel passes user traffic.
+            if (whitelistMode) next = app.ghostly.core.vpn.Failover.rank(
+                owned.filter { it.isWhitelist }, cur, _pings.value, failedAt.value, now(),
+            ).firstOrNull()
+            if (next == null && !pick.measured) next =
+                preferredRegular(owned.filter { !it.isWhitelist }) ?: preferredWhitelist(owned.filter { it.isWhitelist })
         }
         if (next == null) {
             noneAnsweredAt = now()
@@ -1612,8 +1602,8 @@ class GhostlyController(
         noneAnsweredAt = 0L
         _events.emit(
             when {
-                toWhitelist && whitelistMode && mode != NetMode.OPEN -> tr("Похоже, включились белые списки — перешла на «{0}»", next.name)
-                toWhitelist -> tr("Обычные серверы не отвечают в этой сети — перешла на «{0}»", next.name)
+                next.isWhitelist && whitelistMode && mode != NetMode.OPEN -> tr("Похоже, включились белые списки — перешла на «{0}»", next.name)
+                next.isWhitelist -> tr("Обычные серверы не отвечают в этой сети — перешла на «{0}»", next.name)
                 else -> tr("«{0}» перестал пропускать трафик — перешла на «{1}»", cur.name, next.name)
             },
         )
@@ -1812,9 +1802,6 @@ class GhostlyController(
 
         /** Failover: after the first candidate that works, the others of the batch get this long to beat it. */
         private const val FAILOVER_GRACE_MS = 1_500L
-
-        /** Failover: the whole search for a working server stops after this. */
-        private const val FAILOVER_BUDGET_MS = 40_000L
 
         /** «Nothing answers, staying» is said at most this often during one outage. */
         private const val NONE_ANSWERED_REPEAT_MS = 3 * 60_000L

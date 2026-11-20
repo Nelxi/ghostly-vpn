@@ -16,13 +16,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.inset
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import app.ghostly.ui.theme.Ghost
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * Country flags drawn by the app itself. Windows' emoji font has no flags (🇫🇮 shows up as "FI"),
@@ -177,6 +184,51 @@ private fun nordic(bg: Long, cross: Long, border: Long? = null): FlagPainter = {
     drawRect(Color(cross), Offset(0f, hgt / 2 - t / 2), Size(w, t))
 }
 
+private val unionJack: FlagPainter = {
+    drawRect(Color(0xFF012169))
+    val w = size.width
+    val hgt = size.height
+    drawLine(Color.White, Offset(0f, 0f), Offset(w, hgt), hgt * 0.2f)
+    drawLine(Color.White, Offset(w, 0f), Offset(0f, hgt), hgt * 0.2f)
+    drawLine(Color(0xFFC8102E), Offset(0f, 0f), Offset(w, hgt), hgt * 0.07f)
+    drawLine(Color(0xFFC8102E), Offset(w, 0f), Offset(0f, hgt), hgt * 0.07f)
+    drawRect(Color.White, Offset(w / 2 - hgt * 0.17f, 0f), Size(hgt * 0.34f, hgt))
+    drawRect(Color.White, Offset(0f, hgt / 2 - hgt * 0.17f), Size(w, hgt * 0.34f))
+    drawRect(Color(0xFFC8102E), Offset(w / 2 - hgt * 0.1f, 0f), Size(hgt * 0.2f, hgt))
+    drawRect(Color(0xFFC8102E), Offset(0f, hgt / 2 - hgt * 0.1f), Size(w, hgt * 0.2f))
+}
+
+private val bauhiniaPetal by lazy {
+    Path().apply {
+        moveTo(0f, 0f)
+        cubicTo(-0.15f, -0.08f, -0.15f, -0.30f, 0.08f, -0.29f)
+        cubicTo(0f, -0.21f, 0.12f, -0.13f, 0.05f, -0.06f)
+        cubicTo(0.03f, -0.04f, 0.01f, -0.03f, 0f, 0f)
+        close()
+    }
+}
+
+private fun star(points: Int): Path = Path().apply {
+    for (i in 0 until 2 * points) {
+        val angle = PI * (i.toDouble() / points - 0.5)
+        val radius = if (i % 2 == 0) 1f else 0.42f
+        val x = radius * cos(angle).toFloat()
+        val y = radius * sin(angle).toFloat()
+        if (i == 0) moveTo(x, y) else lineTo(x, y)
+    }
+    close()
+}
+
+private val fivePointStar by lazy { star(5) }
+private val sevenPointStar by lazy { star(7) }
+
+private fun DrawScope.drawFlagStar(x: Float, y: Float, radius: Float, path: Path = sevenPointStar) {
+    val r = size.height * radius
+    withTransform({ translate(size.width * x, size.height * y); scale(r, r, Offset.Zero) }) {
+        drawPath(path, Color.White)
+    }
+}
+
 private val FLAGS: Map<String, FlagPainter> = mapOf(
     "RU" to h(0xFFFFFFFF, 0xFF0039A6, 0xFFD52B1E),
     "NL" to h(0xFFAE1C28, 0xFFFFFFFF, 0xFF21468B),
@@ -288,17 +340,30 @@ private val FLAGS: Map<String, FlagPainter> = mapOf(
             )
         }
     },
-    "GB" to {
-        drawRect(Color(0xFF012169))
-        val w = size.width
+    "GB" to unionJack,
+    "AU" to {
+        drawRect(Color(0xFF00008B))
+        inset(0f, 0f, size.width / 2f, size.height / 2f) {
+            clipRect { unionJack() }
+        }
+        drawFlagStar(0.25f, 0.75f, 0.14f)
+        drawFlagStar(0.75f, 0.17f, 0.085f)
+        drawFlagStar(0.625f, 0.46f, 0.085f)
+        drawFlagStar(0.86f, 0.39f, 0.085f)
+        drawFlagStar(0.80f, 0.58f, 0.05f, fivePointStar)
+        drawFlagStar(0.75f, 0.83f, 0.085f)
+    },
+    "HK" to {
+        val red = Color(0xFFDE2910)
+        drawRect(red)
         val hgt = size.height
-        drawLine(Color.White, Offset(0f, 0f), Offset(w, hgt), hgt * 0.2f)
-        drawLine(Color.White, Offset(w, 0f), Offset(0f, hgt), hgt * 0.2f)
-        drawLine(Color(0xFFC8102E), Offset(0f, 0f), Offset(w, hgt), hgt * 0.07f)
-        drawLine(Color(0xFFC8102E), Offset(w, 0f), Offset(0f, hgt), hgt * 0.07f)
-        drawRect(Color.White, Offset(w / 2 - hgt * 0.17f, 0f), Size(hgt * 0.34f, hgt))
-        drawRect(Color.White, Offset(0f, hgt / 2 - hgt * 0.17f), Size(w, hgt * 0.34f))
-        drawRect(Color(0xFFC8102E), Offset(w / 2 - hgt * 0.1f, 0f), Size(hgt * 0.2f, hgt))
-        drawRect(Color(0xFFC8102E), Offset(0f, hgt / 2 - hgt * 0.1f), Size(w, hgt * 0.2f))
+        withTransform({ translate(center.x, center.y); scale(hgt, hgt, Offset.Zero) }) {
+            repeat(5) { i ->
+                rotate(i * 72f, Offset.Zero) {
+                    drawPath(bauhiniaPetal, Color.White)
+                    drawLine(red, Offset(-0.009f, -0.047f), Offset(-0.036f, -0.17f), strokeWidth = 0.013f)
+                }
+            }
+        }
     },
 )

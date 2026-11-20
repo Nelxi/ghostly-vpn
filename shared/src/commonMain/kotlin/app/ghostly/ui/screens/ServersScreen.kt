@@ -46,6 +46,7 @@ import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.SupportAgent
 import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import app.ghostly.ui.components.Icon
@@ -55,6 +56,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -81,7 +83,9 @@ import app.ghostly.core.GhostlyController
 import app.ghostly.core.model.Ping
 import app.ghostly.core.model.Profile
 import app.ghostly.core.model.Server
+import app.ghostly.core.mihomo.ProxyGroupInfo
 import app.ghostly.ui.Format
+import app.ghostly.ui.countryFlag
 import app.ghostly.ui.components.GhostMark
 import app.ghostly.ui.components.IconBubble
 import app.ghostly.ui.components.PingPill
@@ -213,8 +217,9 @@ private fun ServersList(
         val favs = profiles.flatMap { it.servers }.filter { it.id in favorites && matches(it) && it.name !in inGroups }
         if (favs.isNotEmpty()) {
             item { GroupLabel(tr("Избранное"), Icons.Rounded.Star) }
-            items(sorted(favs), key = { "fav:" + it.id }) { s ->
-                ServerRow(s, s.id == selected, pings[s.id], s.id in pinging, true, controller, Modifier.animateItem()) { pick(s) }
+            items(sorted(favs), key = { "fav:" + it.id }, contentType = { "server" }) { s ->
+                val ping by remember(s.id) { derivedStateOf { pings[s.id] } }
+                ServerRow(s, s.id == selected, ping, s.id in pinging, true, controller, Modifier.animateItem()) { pick(s) }
             }
         }
 
@@ -223,9 +228,11 @@ private fun ServersList(
             val active = profile.id == activeId
             val groups = if (active) mihomoGroups else groupsByProfile[profile.id].orEmpty()
             val groupMembers = if (query.isBlank()) groups.flatMap { it.members }.toSet() else emptySet()
+            val (reserves, otherServers) = profile.servers.partition { it.isPublicReserve }
+            val reserveCountries = sorted(reserves.filter(::matches)).groupBy { it.countryFlag() }
             val testing = (if (active) liveTesting else emptySet()) +
                 groups.map { it.name }.filter { controller.groupTestKey(profile.id, it) in staticTesting }
-            val list = sorted(profile.servers.filter { matches(it) && it.name !in groupMembers })
+            val list = sorted(otherServers.filter { matches(it) && it.name !in groupMembers })
             item(key = "profile:" + profile.id) {
                 ProfileHeader(profile, profile.id in collapsed, profile.id in refreshing, controller) {
                     collapsed = if (profile.id in collapsed) collapsed - profile.id else collapsed + profile.id
@@ -234,7 +241,7 @@ private fun ServersList(
             if (profile.id !in collapsed && query.isBlank()) {
                 val prefix = profile.id + "\u0000"
                 proxyGroups(
-                    groups, openGroups.filter { it.startsWith(prefix) }.map { it.removePrefix(prefix) }.toSet(), testing, listPad,
+                    groups.withoutReserveRows(reserves.map { it.name }.toSet()), openGroups.filter { it.startsWith(prefix) }.map { it.removePrefix(prefix) }.toSet(), testing, listPad,
                     onToggle = { g -> (prefix + g).let { k -> openGroups = if (k in openGroups) openGroups - k else openGroups + k } },
                     onSelect = { g, m -> controller.haptic(); controller.pickGroup(g, m, profile.id) },
                     onTest = { g -> controller.haptic(app.ghostly.core.vpn.Haptic.TICK); controller.testGroup(g, profile.id) },
@@ -250,27 +257,60 @@ private fun ServersList(
                 // One section per country and kind (order of first appearance; the provider's order inside
                 // it), so a torrent server at the end doesn't split "Финляндия" into two sections.
                 val rows = if (byCountry) {
-                    val order = list.mapNotNull { it.title().flag }.distinct()
-                    list.sortedWith(compareBy({ srv -> srv.title().flag?.let { order.indexOf(it) } ?: -1 }, { it.section()?.lte == true }))
+                    val order = list.mapNotNull { it.countryFlag() }.distinct()
+                    list.sortedWith(compareBy({ srv -> srv.countryFlag()?.let { order.indexOf(it) } ?: -1 }, Server::isWhitelist))
                 } else list
                 val sections = rows.map { it.section() }
                 rows.forEachIndexed { i, s ->
                     val section = sections[i]
                     if (byCountry && section != null && (i == 0 || sections[i - 1] != section)) {
-                        item(key = "country:" + profile.id + ":" + i) { CountryHeader(section, Modifier.animateItem()) }
+                        item(key = "country:${profile.id}:${section.flag}:${section.lte}", contentType = "country") {
+                            CountryHeader(section, Modifier.animateItem())
+                        }
                     }
-                    item(key = s.id) {
+                    item(key = s.id, contentType = "server") {
                         val animate = remember(s.id) { seen.add(s.id) && i < 12 }
+                        val ping by remember(s.id) { derivedStateOf { pings[s.id] } }
                         ServerRow(
-                            s, s.id == selected, pings[s.id], s.id in pinging, s.id in favorites, controller, Modifier.appear(i, enabled = animate).animateItem(),
+                            s, s.id == selected, ping, s.id in pinging, s.id in favorites, controller, Modifier.appear(i, enabled = animate).animateItem(),
                             showFlag = !(byCountry && section != null), underLte = byCountry && section?.lte == true,
                         ) { pick(s) }
+                    }
+                }
+                if (reserveCountries.isNotEmpty()) {
+                    item(key = "reserves:" + profile.id, contentType = "section") {
+                        GroupLabel(tr("Публичные резервы"), Icons.Rounded.WarningAmber, Modifier.animateItem())
+                    }
+                    reserveCountries.forEach { (flag, servers) ->
+                        if (flag != null) {
+                            item(key = "reserve-country:" + profile.id + ":" + flag, contentType = "country") {
+                                CountryHeader(app.ghostly.ui.ServerSection(flag, lte = false), Modifier.animateItem())
+                            }
+                        }
+                        items(servers, key = { it.id }, contentType = { "server" }) { s ->
+                            val ping by remember(s.id) { derivedStateOf { pings[s.id] } }
+                            ServerRow(
+                                s, s.id == selected, ping, s.id in pinging, s.id in favorites, controller,
+                                Modifier.animateItem(), showFlag = false,
+                            ) { pick(s) }
+                        }
                     }
                 }
             }
         }
         if (profiles.isNotEmpty() && query.isBlank()) item(key = "add") { AddSubscriptionRow(onAdd) }
         item { Spacer(Modifier.height(24.dp)) }
+    }
+}
+
+/** Reserve rows stay under their own country headers; the core still uses its full group tree. */
+private fun List<ProxyGroupInfo>.withoutReserveRows(reserves: Set<String>): List<ProxyGroupInfo> {
+    if (reserves.isEmpty()) return this
+    val reserveSelectors = filter { it.selectable && it.members.isNotEmpty() && reserves.containsAll(it.members) }
+        .mapTo(mutableSetOf()) { it.name }
+    return filterNot { it.name in reserveSelectors }.map { group ->
+        val members = group.members.filterNot { it in reserves || it in reserveSelectors }
+        if (members.size == group.members.size) group else group.copy(members = members)
     }
 }
 
@@ -311,9 +351,9 @@ private fun CountryHeader(section: app.ghostly.ui.ServerSection, modifier: Modif
 }
 
 @Composable
-private fun GroupLabel(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+private fun GroupLabel(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier = Modifier) {
     val c = Ghost.colors
-    Row(Modifier.padding(start = 24.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.padding(start = LocalListPad.current + 6.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, tint = c.warn, modifier = Modifier.size(14.dp))
         Spacer(Modifier.width(6.dp))
         Text(text.uppercase(), style = MaterialTheme.typography.labelSmall, color = c.ink3)
@@ -466,7 +506,7 @@ private fun ServerRow(
         ServerGlyph(server, showFlag)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            val t = server.title().let { if (underLte) it.withoutLte() else it }
+            val t by remember(server.name, underLte) { derivedStateOf { server.title().let { if (underLte) it.withoutLte() else it } } }
             Row(verticalAlignment = Alignment.Bottom) {
                 // The name stays whole; the variant ("Стабильный", "Резерв") is what gets ellipsized.
                 app.ghostly.ui.components.FlagText(t.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
@@ -516,7 +556,7 @@ private fun ServerRow(
 @Composable
 private fun ServerGlyph(server: Server, showFlag: Boolean = true) {
     val c = Ghost.colors
-    val flag = server.title().flag?.takeIf { showFlag }
+    val flag = if (showFlag) server.countryFlag() else null
     Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
         when {
             flag != null -> app.ghostly.ui.components.FlagIcon(flag, 15.dp)

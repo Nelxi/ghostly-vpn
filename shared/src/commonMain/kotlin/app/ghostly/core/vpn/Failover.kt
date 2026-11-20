@@ -11,7 +11,8 @@ import app.ghostly.core.model.Server
  * server by an old ping bounced people from «🇫🇮 Торрент» to «🇫🇮 XHTTP» and back while all of Finland was
  * cut. So:
  * - a server that just failed sits out [PENALTY_MS] (picking it by hand forgives it);
- * - servers of another country on another address come first, the failed one's siblings last;
+ * - try regular servers, then LTE, then public reserves;
+ * - within a pool, servers of another country on another address come first;
  * - inside a group: a fresh working ping (lowest first), an older working one, none, a fresh failure.
  * The controller then measures the candidates in this order, [BATCH] at a time, and moves only to one that
  * answers right now.
@@ -67,6 +68,7 @@ object Failover {
             .filter { it.id !in boxed && it.id != failed?.id && !it.isAuto }
             .sortedWith(
                 compareBy<Server>(
+                    { it.autoPriority },
                     { s -> (if (entry(s)?.let { it in deadEntries } == true) 1 else 0) + (if (country(s)?.let { it in deadCountries } == true) 1 else 0) },
                     { s -> health(pings[s.id], now) },
                     { s -> pings[s.id]?.takeIf { it.ok }?.ms ?: Long.MAX_VALUE },

@@ -74,6 +74,21 @@ class FailoverTest {
     }
 
     @Test
+    fun publicReservesStayBehindBothOwnedPoolsEvenWithBetterPings() {
+        val lte = server("lte", "🇫🇮 LTE · Резерв", "192.0.2.1")
+        val reserve = server("reserve", "🇫🇷 ⚠️ Резерв 08 · Может не работать", "192.0.2.2")
+        val taggedReserve = server("tagged", "Public node", "192.0.2.3").copy(pool = "reserve")
+        val pings = mapOf(
+            "fi-vision" to Ping(300, now),
+            "lte" to Ping(200, now),
+            "reserve" to Ping(10, now),
+            "tagged" to Ping(20, now),
+        )
+        val order = Failover.rank(listOf(reserve, taggedReserve, lte, fiVision), fiTorrent, pings, emptyMap(), now)
+        assertEquals(listOf(fiVision, lte, reserve, taggedReserve), order)
+    }
+
+    @Test
     fun theFailedServerAndBalancersAreNeverCandidates() {
         val auto = Server(id = "auto", name = "Авто", protocol = "balancer")
         val order = Failover.rank(listOf(fiTorrent, auto, nlVision), fiTorrent, emptyMap(), emptyMap(), now)
