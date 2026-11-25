@@ -211,13 +211,13 @@ class GhostlyDomainsTest {
     fun mirrorsCoverEveryOwnDomain() {
         val d = app.ghostly.core.sub.GhostlyDomains
         // A link on the previous domain is tried on the current one too…
-        val all = listOf("https://ghostlynex.fun/sub/abc", "https://ghostlyvpn.com/sub/abc", "https://frameloft.online/media/stream/manifest/abc")
+        val all = listOf("https://ghostlynex.fun/sub/abc", "https://ghostlyvpn.com/sub/abc", "https://v.frameloft.online/media/stream/manifest/abc")
         kotlin.test.assertEquals(all, d.mirrorsOf("https://ghostlinknex.online/sub/abc"))
         kotlin.test.assertEquals(all, d.mirrorsOf("https://srv.ghostlinknex.online/sub/abc"))
         // …and the current one falls back to the brand domain (Cloudflare) and the white-list CDN name (its media
         // path; it passes mobile white lists), never to the previous domain. Suffixes like /notices ride along.
         kotlin.test.assertEquals(
-            listOf("https://ghostlyvpn.com/sub/x?y=1", "https://frameloft.online/media/stream/manifest/x?y=1"),
+            listOf("https://ghostlyvpn.com/sub/x?y=1", "https://v.frameloft.online/media/stream/manifest/x?y=1"),
             d.mirrorsOf("https://ghostlynex.fun/sub/x?y=1"),
         )
         // A link on the brand domain stays there and falls back to the main one.
@@ -226,7 +226,7 @@ class GhostlyDomainsTest {
         kotlin.test.assertTrue(d.isLegacy("https://www.ghostlinknex.online/sub/x"))
         kotlin.test.assertTrue(!d.isLegacy("https://ghostlynex.fun/sub/x"))
         kotlin.test.assertEquals(
-            "https://frameloft.online/media/stream/manifest/sub_1/notices",
+            "https://v.frameloft.online/media/stream/manifest/sub_1/notices",
             d.mirrorsOf("https://ghostlynex.fun/sub/sub_1/notices").last(),
         )
         kotlin.test.assertTrue(d.mirrorsOf("https://example.com/sub/abc").isEmpty())

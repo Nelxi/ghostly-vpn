@@ -22,11 +22,11 @@ object GhostlyDomains {
      * this app). A refresh mirror only: a link is never saved on it ([current] maps it back), so the CDN can change
      * freely.
      */
-    const val LTE = "frameloft.online"
+    const val LTE = "v.frameloft.online"
     const val LTE_PATH = "/media/stream/manifest/"
 
     /** The previous white-list CDN name: recognised as ours, never tried again. */
-    private const val LTE_OLD = "v.frameloft.online"
+    private const val LTE_OLD = "frameloft.online"
 
     /** The previous domain's names: still ours (saved links are moved off them), never contacted. */
     private val LEGACY = listOf("ghostlinknex.online", "srv.ghostlinknex.online")

@@ -9,7 +9,7 @@ try {
     $app = "desktopApp\build\compose\binaries\main\app\Ghostly"
     $version = (Select-String -Path desktopApp\build.gradle.kts -Pattern 'val ghostlyVersion = "(.+)"').Matches[0].Groups[1].Value
     if ($ReuseAppImage) {
-        $imageVersion = (Get-Item -LiteralPath "$app\Ghostly.exe").VersionInfo.ProductVersion
+        $imageVersion = (Select-String -LiteralPath "$app\app\Ghostly.cfg" -Pattern '^java-options=-Djpackage\.app-version=(.+)$').Matches[0].Groups[1].Value
         if ($imageVersion -ne $version) { throw "App image version $imageVersion does not match $version" }
     } else {
         & .\gradlew.bat :desktopApp:createDistributable --console=plain
