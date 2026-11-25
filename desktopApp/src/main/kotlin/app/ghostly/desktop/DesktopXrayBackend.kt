@@ -129,15 +129,8 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
 
                 apiPort = freePort()
                 val config = withStatsApi(DohResolver.pin(XrayConfigBuilder.build(server, settings, ingress)), apiPort)
-                val file = File(platform.dataDir, "run").apply { mkdirs() }.resolve("config.json")
-                file.writeText(JsonX.encodeToString(JsonObject.serializer(), config))
-
                 val started = try {
-                    ProcessBuilder(exe.absolutePath, "run", "-c", file.absolutePath)
-                        .directory(coreDir)
-                        .redirectErrorStream(true)
-                        .apply { environment()["XRAY_LOCATION_ASSET"] = coreDir.absolutePath }
-                        .start()
+                    startCore(config)
                 } catch (e: Exception) {
                     _state.value = VpnState.Failed(tr("Не удалось запустить ядро: {0}", e.message))
                     return@withContext
@@ -187,6 +180,25 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
             _state.value = VpnState.Disconnecting
             stopBlocking()
             _state.value = VpnState.Idle
+        }
+    }
+
+    private fun startCore(config: JsonObject, discardOutput: Boolean = false): Process {
+        val builder = ProcessBuilder(exe.absolutePath, "run", "-c", "stdin:")
+            .directory(coreDir).redirectErrorStream(true)
+            .apply { environment()["XRAY_LOCATION_ASSET"] = coreDir.absolutePath }
+        if (discardOutput) builder.redirectOutput(ProcessBuilder.Redirect.DISCARD)
+        val child = builder.start()
+        try {
+            child.outputStream.bufferedWriter(Charsets.UTF_8).use {
+                it.write(JsonX.encodeToString(JsonObject.serializer(), config))
+            }
+            // Remove a configuration left by an earlier build after the new core accepted stdin.
+            File(platform.dataDir, "run/config.json").delete()
+            return child
+        } catch (error: Exception) {
+            child.destroyForcibly()
+            throw error
         }
     }
 
@@ -297,18 +309,12 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
         val config = JsonObject(
             base + ("inbounds" to JsonArray(listOf(XrayConfigBuilder.pingInbound(port)))),
         )
-        val file = File.createTempFile("ghostly-ping", ".json")
-        file.writeText(JsonX.encodeToString(JsonObject.serializer(), config))
-        val p = ProcessBuilder(exe.absolutePath, "run", "-c", file.absolutePath)
-            .directory(coreDir).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD)
-            .apply { environment()["XRAY_LOCATION_ASSET"] = coreDir.absolutePath }
-            .start()
+        val p = startCore(config, discardOutput = true)
         try {
             if (!waitForPort(port, 4000)) return@withContext -1L
             measure(port, url)
         } finally {
             p.destroyForcibly()
-            file.delete()
         }
     }
 
@@ -342,12 +348,7 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
                 }))
             }
         }
-        val file = File.createTempFile("ghostly-ping", ".json")
-        file.writeText(JsonX.encodeToString(JsonObject.serializer(), DohResolver.pin(config)))
-        val p = ProcessBuilder(exe.absolutePath, "run", "-c", file.absolutePath)
-            .directory(coreDir).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD)
-            .apply { environment()["XRAY_LOCATION_ASSET"] = coreDir.absolutePath }
-            .start()
+        val p = startCore(DohResolver.pin(config), discardOutput = true)
         try {
             if (!waitForPort(ports.last(), 5000) { p.isAlive }) {
                 batch.forEach { onResult(it.first.id, -1) }
@@ -370,7 +371,6 @@ class DesktopXrayBackend(private val platform: DesktopPlatform) : VpnBackend {
             }
         } finally {
             p.destroyForcibly()
-            file.delete()
         }
     }
 

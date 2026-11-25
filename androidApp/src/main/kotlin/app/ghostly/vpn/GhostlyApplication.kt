@@ -83,6 +83,7 @@ class AndroidPlatform(private val context: Context) : PlatformInfo {
 
     override val appVersion: String = BuildConfig.VERSION_NAME
     override val dataDir: String = context.filesDir.absolutePath
+    override val profileProtector = AndroidProfileProtection
     override val supportsPerAppSplit = true
 
     /** Set by the visible activity: QR scanner needs an activity to launch from. */

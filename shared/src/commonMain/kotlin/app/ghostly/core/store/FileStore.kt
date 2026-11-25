@@ -23,11 +23,14 @@ class FileStore(private val dir: String) {
     }.getOrNull()
 
     fun <T> save(name: String, serializer: KSerializer<T>, value: T) {
-        runCatching {
-            val tmp = Path(dir, "$name.tmp")
-            SystemFileSystem.sink(tmp).buffered().use { it.writeString(JsonX.encodeToString(serializer, value)) }
-            SystemFileSystem.atomicMove(tmp, Path(dir, name))
-        }
+        runCatching { saveRequired(name, serializer, value) }
+    }
+
+    /** Credentials must not silently retain an unprotected legacy file after a failed migration. */
+    fun <T> saveRequired(name: String, serializer: KSerializer<T>, value: T) {
+        val tmp = Path(dir, "$name.tmp")
+        SystemFileSystem.sink(tmp).buffered().use { it.writeString(JsonX.encodeToString(serializer, value)) }
+        SystemFileSystem.atomicMove(tmp, Path(dir, name))
     }
 
     fun readText(name: String): String? = runCatching {

@@ -31,6 +31,8 @@ val hostOs: HostOs = System.getProperty("os.name").lowercase().let {
 }
 
 class DesktopPlatform : PlatformInfo {
+    override val profileProtector: app.ghostly.core.store.ProfileProtector? =
+        if (hostOs == HostOs.WINDOWS) WindowsProfileProtection else null
     /** Folder of Ghostly.exe; a file named `portable` next to it switches on portable mode. */
     private val exeDir: File? = ProcessHandle.current().info().command().orElse(null)?.let { File(it).parentFile }
 

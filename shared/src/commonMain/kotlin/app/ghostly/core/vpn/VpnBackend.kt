@@ -99,6 +99,7 @@ interface PlatformInfo {
     val hwid: String
     val appVersion: String
     val dataDir: String
+    val profileProtector: app.ghostly.core.store.ProfileProtector? get() = null
     val supportsPerAppSplit: Boolean get() = false
 
     /**

@@ -60,9 +60,10 @@ class GhostlyController(
     val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) {
     private val store = FileStore(platform.dataDir)
+    private val profileStore = app.ghostly.core.store.ProfileStore(store, platform.profileProtector)
     private val subs = SubscriptionClient(platform)
 
-    private val _profiles = MutableStateFlow(store.load(PROFILES, ListSerializer(Profile.serializer())) ?: emptyList())
+    private val _profiles = MutableStateFlow(profileStore.loadOrRecover() ?: emptyList())
     /** Profiles for the chosen core only (see [app.ghostly.core.mihomo.visibleFor]). */
     val profiles: StateFlow<List<Profile>> by lazy {
         kotlinx.coroutines.flow.combine(_profiles, _settings) { list, s -> list.mapNotNull { it.visibleFor(s.core) } }
@@ -1693,16 +1694,19 @@ class GhostlyController(
 
     // ------------------------------------------------------------------ export
 
-    fun shareLink(serverId: String): String? = server(serverId)?.let { s -> s.link ?: s.config?.let { JsonPretty.encodeToString(JsonObject.serializer(), it) } }
+    private fun protectedServer(serverId: String): Boolean =
+        profileOf(serverId)?.url?.let { app.ghostly.core.sub.GhostlyDomains.isOurs(it) } == true
 
-    fun exportConfig(serverId: String): String? = server(serverId)?.let {
+    fun shareLink(serverId: String): String? = if (protectedServer(serverId)) null else server(serverId)?.let { s -> s.link ?: s.config?.let { JsonPretty.encodeToString(JsonObject.serializer(), it) } }
+
+    fun exportConfig(serverId: String): String? = if (protectedServer(serverId)) null else server(serverId)?.let {
         JsonPretty.encodeToString(JsonObject.serializer(), app.ghostly.core.xray.XrayConfigBuilder.build(it, _settings.value, app.ghostly.core.xray.Ingress.Proxy(app.ghostly.core.xray.XrayConfigBuilder.localProxy(_settings.value), 0)))
     }
 
     // ------------------------------------------------------------------ persistence
 
     private fun saveProfiles() {
-        store.save(PROFILES, ListSerializer(Profile.serializer()), _profiles.value)
+        profileStore.save(_profiles.value)
         syncExtraProxies()
     }
 
