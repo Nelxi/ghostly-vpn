@@ -1,0 +1,14 @@
+[Unit]
+Description=MSK malformed TCP packet filter and trusted node access
+After=network-pre.target vds-fw.service ghostly-scanner-block.service
+Before=nginx.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh /etc/ghostly/msk-guard/apply.sh start
+ExecReload=/bin/sh /etc/ghostly/msk-guard/apply.sh start
+ExecStop=/bin/sh /etc/ghostly/msk-guard/apply.sh stop
+
+[Install]
+WantedBy=multi-user.target
