@@ -1,0 +1,13 @@
+[Unit]
+Description=Restore all subscription countries and Hysteria through MSK
+After=local-fs.target
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/sbin/ghostly-msk-restore.py
+Restart=on-failure
+RestartSec=30s
+TimeoutStartSec=60s
+UMask=0077
