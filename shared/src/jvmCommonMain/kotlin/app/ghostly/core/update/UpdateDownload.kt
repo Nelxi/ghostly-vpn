@@ -5,6 +5,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -25,7 +26,7 @@ suspend fun downloadVerifiedTo(
     target: File, urls: List<String>, sha256: String, size: Long, onProgress: (Float) -> Unit,
 ): String = withContext(Dispatchers.IO) {
     val want = sha256.trim().lowercase()
-    target.parentFile?.mkdirs()
+    ensureParentDirectory(target)
     if (target.isFile && (size <= 0 || target.length() == size) && sha256Of(target) == want) {
         onProgress(1f)
         return@withContext target.path
@@ -38,7 +39,14 @@ suspend fun downloadVerifiedTo(
     var last: Exception? = null
     for (url in urls) {
         try {
-            fetchInto(part, url, want, size, onProgress)
+            try {
+                fetchInto(part, url, want, size, onProgress)
+            } catch (e: FileNotFoundException) {
+                // Android may evict a cache directory while we await a response. A resumed part
+                // can disappear too: retry this mirror once, recalculating its Range from disk.
+                if (part.exists()) throw e
+                fetchInto(part, url, want, size, onProgress)
+            }
             target.delete()
             if (!part.renameTo(target)) throw IOException(tr("Не удалось сохранить файл обновления"))
             onProgress(1f)
@@ -47,7 +55,7 @@ suspend fun downloadVerifiedTo(
             throw e
         } catch (e: Exception) {
             // Next mirror: it continues the same part, and the result is verified against the same hash.
-            last = e
+            last = if (e is FileNotFoundException) IOException(tr("Не удалось сохранить файл обновления"), e) else e
         }
     }
     throw last ?: IOException(tr("Не удалось скачать обновление"))
@@ -59,6 +67,7 @@ suspend fun downloadVerifiedTo(
  * try; anything that shows the part itself is wrong deletes it, so a bad part can never block updates.
  */
 private fun fetchInto(part: File, url: String, want: String, size: Long, onProgress: (Float) -> Unit) {
+    ensureParentDirectory(part)
     var have = if (part.isFile) part.length() else 0L
     if (size > 0 && have >= size) {
         // Everything arrived last time and only the rename is missing — or it is not our file at all.
@@ -93,6 +102,9 @@ private fun fetchInto(part: File, url: String, want: String, size: Long, onProgr
         val resumeProgress = if (total > 0) (done.toFloat() / total).coerceIn(0f, 0.99f) else 0f
         if (resumeProgress > 0f) onProgress(resumeProgress)
         c.inputStream.use { input ->
+            // mkdirs at the beginning of a download is too early: connecting can take seconds.
+            ensureParentDirectory(part)
+            if (continued && (!part.isFile || part.length() != have)) throw FileNotFoundException(part.path)
             FileOutputStream(part, continued).use { out ->
                 val buf = ByteArray(1 shl 16)
                 while (true) {
@@ -108,6 +120,12 @@ private fun fetchInto(part: File, url: String, want: String, size: Long, onProgr
         }
         // A connection closed early does not always raise an error: count the bytes ourselves.
         if (total > 0 && done < total) throw IOException(tr("Не удалось скачать обновление"))
+        // The streamed digest includes a resumed prefix. If that file was evicted before opening
+        // the output stream, never mistake the downloaded suffix for the complete verified APK.
+        if (part.length() != done) {
+            part.delete()
+            throw FileNotFoundException(part.path)
+        }
         val got = md.digest().joinToString("") { "%02x".format(it) }
         if (got != want) {
             part.delete()
@@ -115,6 +133,13 @@ private fun fetchInto(part: File, url: String, want: String, size: Long, onProgr
         }
     } finally {
         c.disconnect()
+    }
+}
+
+private fun ensureParentDirectory(file: File) {
+    val parent = file.parentFile ?: return
+    if (!parent.isDirectory && !parent.mkdirs() && !parent.isDirectory) {
+        throw IOException(tr("Не удалось сохранить файл обновления"))
     }
 }
 

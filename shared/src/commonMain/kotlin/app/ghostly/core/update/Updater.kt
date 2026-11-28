@@ -115,7 +115,7 @@ class Updater(
         val newer = compareVersions(latest, platform.appVersion) > 0
         // Up to date: the installer that got us here (66–180 MB) has done its job. While an update is
         // still pending it stays, so a failed install is retried without downloading it again.
-        if (!newer) runCatching { platform.clearDownloadedUpdate() }
+        if (!newer) clearObsoleteDownload()
         // offer.version also picks the download folder (/dl/<version>/, GitHub v<version>): a reused file lives in its own.
         val offer = if (newer && (force || !isDismissed(latest))) UpdateOffer(latest, asset, file.sha256, file.size, file.notes) else null
         _offer.value = offer
@@ -161,6 +161,20 @@ class Updater(
     /** One download / hand-over at a time, whoever asked (the background loop or a tap). */
     private val busy = Mutex()
 
+    /** A stale/in-flight manifest check must never remove an active download or a staged installer. */
+    internal fun clearObsoleteDownload() {
+        if (!busy.tryLock()) return
+        try {
+            val pending = preparedVersion ?: lastTry()?.version
+            if (pending != null && compareVersions(pending, platform.appVersion) > 0) return
+            runCatching { platform.clearDownloadedUpdate() }
+        } finally {
+            busy.unlock()
+        }
+    }
+
+    private var preparedVersion: String? = null
+
     /**
      * Downloads [offer] (or takes the file that is already there), verifies it and starts the installer.
      * [auto] = asked by the background loop rather than by a tap: the installer is then started only if
@@ -196,6 +210,7 @@ class Updater(
                 _step.value = UpdateStep.Failed(e.message ?: tr("Не удалось скачать обновление"))
                 return
             }
+            preparedVersion = offer.version
             // The download may have taken minutes and the app may have left the screen meanwhile: the
             // verified file stays where it is, and the installer starts when the app is opened again.
             if (auto && !(platform.canAutoInstall() && mayAutoInstall(offer.version))) {

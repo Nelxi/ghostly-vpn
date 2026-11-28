@@ -42,6 +42,8 @@ class UpdateDownloadTest {
 
         @Volatile
         var ranges = true
+        @Volatile
+        var beforeResponse: () -> Unit = {}
         val server: HttpServer = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         val base get() = "http://127.0.0.1:${server.address.port}"
 
@@ -50,6 +52,7 @@ class UpdateDownloadTest {
                 val range = ex.requestHeaders.getFirst("Range")
                 val path = ex.requestURI.path
                 requests += path + (range?.let { " $it" } ?: "")
+                beforeResponse()
                 if (path.startsWith("/missing")) {
                     ex.sendResponseHeaders(404, -1)
                     ex.close()
@@ -88,6 +91,51 @@ class UpdateDownloadTest {
         assertEquals(1f, seen.last())
         assertEquals(seen.sorted(), seen)
         assertFalse(part.exists())
+    }
+
+    @Test
+    fun cacheDirectoryRemovedWhileWaitingForResponseIsRecreated() {
+        site.beforeResponse = { assertTrue(dir.deleteRecursively()) }
+        fetch(site.base + "/dl/app.apk")
+        assertContentEquals(body, target.readBytes())
+        assertFalse(part.exists())
+    }
+
+    @Test
+    fun cacheDirectoryRemovedByFailedMirrorDoesNotBreakFallback() {
+        site.beforeResponse = {
+            if (site.requests.last().startsWith("/missing")) assertTrue(dir.deleteRecursively())
+        }
+        fetch(site.base + "/missing/app.apk", site.base + "/dl/app.apk")
+        assertContentEquals(body, target.readBytes())
+        assertEquals(2, site.requests.size)
+    }
+
+    @Test
+    fun evictedResumePartRestartsTheSameMirrorWithoutRange() {
+        part.writeBytes(body.copyOfRange(0, 50_000))
+        site.beforeResponse = {
+            assertTrue(dir.deleteRecursively())
+            site.beforeResponse = {}
+        }
+        fetch(site.base + "/dl/app.apk")
+        assertContentEquals(body, target.readBytes())
+        assertEquals(listOf("/dl/app.apk bytes=50000-", "/dl/app.apk"), site.requests)
+    }
+
+    @Test
+    fun aPrefixEvictedAfterHashingCannotBecomeATruncatedVerifiedApk() {
+        part.writeBytes(body.copyOfRange(0, 50_000))
+        var evicted = false
+        fetch(site.base + "/dl/app.apk") {
+            if (!evicted) {
+                assertTrue(dir.deleteRecursively())
+                evicted = true
+            }
+        }
+        assertTrue(evicted)
+        assertContentEquals(body, target.readBytes())
+        assertEquals(listOf("/dl/app.apk bytes=50000-", "/dl/app.apk"), site.requests)
     }
 
     @Test
