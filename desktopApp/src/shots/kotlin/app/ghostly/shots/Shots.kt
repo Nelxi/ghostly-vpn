@@ -2,6 +2,7 @@ package app.ghostly.shots
 
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import app.ghostly.core.GhostlyController
 import app.ghostly.core.account.CabinetState
 import app.ghostly.core.account.CabinetUi
@@ -81,6 +82,10 @@ private val SHOTS = listOf(
 )
 
 fun main(args: Array<String>) {
+    if (args.firstOrNull() == "--performance") {
+        performancePreview(args.getOrNull(1) ?: "build/performance", args.getOrNull(2)?.toIntOrNull() ?: 25)
+        return
+    }
     val out = File(args.firstOrNull() ?: "build/shots").apply { mkdirs() }
     val only = args.drop(1).flatMap { it.split(',') }.filter { it.isNotBlank() }.toSet()
     runBlocking { app.ghostly.i18n.L10n.load("ru") }
@@ -88,6 +93,57 @@ fun main(args: Array<String>) {
         if (only.isNotEmpty() && shot.name !in only) continue
         runCatching { render(shot, out) }.onFailure { System.err.println("${shot.name}: ${it.stackTraceToString()}") }
     }
+    exitProcess(0)
+}
+
+/** Real GPU window, isolated fake VPN/data; records frame pacing after a five-second warm-up. */
+private fun performancePreview(output: String, seconds: Int) {
+    // Same renderer defaults as the application, without touching the real instance or its VPN.
+    app.ghostly.desktop.configureDesktopRendering()
+    val out = File(output).apply { mkdirs() }
+    val dir = Files.createTempDirectory("ghostly-perf-").toFile()
+    val shot = Shot("performance", "HOME", desktop = true, vpn = "connected", demo = if (seconds <= 0) "tab:HOME" else "tabs:2000")
+    seed(dir, shot)
+    runBlocking { app.ghostly.i18n.L10n.load("ru") }
+    val controller = GhostlyController(ShotPlatform(dir.absolutePath, shot.demo, true), ShotBackend(shot.vpn))
+    val intervals = ArrayList<Double>()
+    val os = java.lang.management.ManagementFactory.getOperatingSystemMXBean() as com.sun.management.OperatingSystemMXBean
+    androidx.compose.ui.window.application {
+        androidx.compose.ui.window.Window(
+            onCloseRequest = ::exitApplication,
+            title = "Ghostly performance preview",
+            state = androidx.compose.ui.window.rememberWindowState(width = 1180.dp, height = 780.dp),
+        ) {
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                if (seconds <= 0) return@LaunchedEffect // Keep the interactive preview open until closed.
+                val start = System.nanoTime()
+                var last = 0L
+                var cpuStart = 0L
+                while (System.nanoTime() - start < seconds.coerceAtLeast(10) * 1_000_000_000L) {
+                    androidx.compose.runtime.withFrameNanos { now ->
+                        if (System.nanoTime() - start >= 5_000_000_000L) {
+                            if (cpuStart == 0L) cpuStart = os.processCpuTime
+                            if (last != 0L) intervals.add((now - last) / 1_000_000.0)
+                            last = now
+                        }
+                    }
+                }
+                val sorted = intervals.sorted()
+                fun percentile(p: Double) = sorted[((sorted.size - 1) * p).toInt()]
+                val report = "frames=${sorted.size} meanMs=${intervals.average()} " +
+                    "p50Ms=${percentile(0.50)} p95Ms=${percentile(0.95)} p99Ms=${percentile(0.99)} " +
+                    "over25ms=${intervals.count { it > 25 }} over50ms=${intervals.count { it > 50 }} " +
+                    "cpuSeconds=${(os.processCpuTime - cpuStart) / 1e9}"
+                File(out, "frames.txt").writeText(report)
+                println(report)
+                val bounds = window.bounds
+                javax.imageio.ImageIO.write(java.awt.Robot().createScreenCapture(bounds), "png", File(out, "preview.png"))
+                exitApplication()
+            }
+            GhostlyApp(controller)
+        }
+    }
+    dir.deleteRecursively()
     exitProcess(0)
 }
 

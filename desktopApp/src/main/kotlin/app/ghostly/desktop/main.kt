@@ -16,18 +16,22 @@ import app.ghostly.core.GhostlyController
 import app.ghostly.core.vpn.VpnState
 import app.ghostly.ui.GhostlyApp
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 import javax.imageio.ImageIO
 import app.ghostly.i18n.tr
 
 fun main(args: Array<String>) {
+    configureDesktopRendering()
     app.ghostly.core.vpn.LoopbackAuthenticator.install()
     val platform = DesktopPlatform()
     var controller: GhostlyController? = null
     val raise = androidx.compose.runtime.mutableIntStateOf(0)
     // Second launch (e.g. a ghostly:// link) → hand the link to the running Ghostly and quit.
     val first = SingleInstance.acquire(platform.dataDir, args) { forwarded ->
-        forwarded.firstOrNull { !it.startsWith("--") }?.let { link -> controller?.import(link) }
-        raise.intValue++
+        javax.swing.SwingUtilities.invokeLater {
+            forwarded.firstOrNull { !it.startsWith("--") }?.let { link -> controller?.import(link) }
+            raise.intValue++
+        }
     }
     if (!first) return
     if (!platform.portable) SingleInstance.registerUrlScheme()
@@ -89,15 +93,23 @@ fun main(args: Array<String>) {
             }
         }
         var trayHintShown by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+        val scope = androidx.compose.runtime.rememberCoroutineScope()
+        var quitting by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
         fun quit() {
-            runBlocking { c.disconnect() }
-            exitApplication()
+            if (quitting) return
+            quitting = true
+            scope.launch {
+                try {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { c.disconnect() }
+                } finally {
+                    exitApplication()
+                }
+            }
         }
 
         fun show() {
-            visible = true
-            windowState.isMinimized = false
+            raise.intValue++
         }
 
         // ✕ keeps Ghostly (and the VPN) running in the tray, like other VPN clients.
@@ -150,8 +162,9 @@ fun main(args: Array<String>) {
                 if (raise.intValue > 0) {
                     visible = true
                     windowState.isMinimized = false
-                    window.toFront()
-                    window.requestFocus()
+                    // Let Compose apply visibility and de-iconification before asking the OS for focus.
+                    androidx.compose.runtime.withFrameNanos { }
+                    activateWindow(window)
                 }
             }
             // Looping decorations stop while the window is in the tray or minimized (see Ambient.kt).

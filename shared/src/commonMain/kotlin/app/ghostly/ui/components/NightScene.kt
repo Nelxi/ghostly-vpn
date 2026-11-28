@@ -35,7 +35,6 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
@@ -45,8 +44,9 @@ import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Vertices
+import androidx.compose.ui.graphics.VertexMode
 import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -69,10 +69,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import app.ghostly.ui.theme.Ghost
 import app.ghostly.ui.theme.LocalDesign
@@ -611,11 +609,38 @@ private class Camera {
 
 private class CurtainSpan(val curtain: Curtain, val start: Int, val envelope: FloatArray)
 
+/** Independent textured strips in one GPU submission per curtain, instead of one draw per column. */
+private class AuroraMesh {
+    private val points = ArrayList<Offset>()
+    private val textures = ArrayList<Offset>()
+    private val colors = ArrayList<Color>()
+    private val indices = ArrayList<Int>()
+    private val paint = Paint()
+
+    fun clear() { points.clear(); textures.clear(); colors.clear(); indices.clear() }
+
+    fun column(x: Float, top: Float, height: Float, alpha: Float) {
+        val i = points.size
+        points.add(Offset(x, top)); points.add(Offset(x + 1f, top))
+        points.add(Offset(x + 1f, top + height)); points.add(Offset(x, top + height))
+        textures.add(Offset.Zero); textures.add(Offset(1f, 0f))
+        textures.add(Offset(1f, 1f)); textures.add(Offset(0f, 1f))
+        val color = Color.White.copy(alpha = alpha)
+        repeat(4) { colors.add(color) }
+        indices.add(i); indices.add(i + 1); indices.add(i + 2)
+        indices.add(i); indices.add(i + 2); indices.add(i + 3)
+    }
+
+    fun draw(canvas: androidx.compose.ui.graphics.Canvas, brush: Brush) {
+        if (points.isEmpty()) return
+        brush.applyTo(Size(1f, 1f), paint, 1f)
+        canvas.drawVertices(Vertices(VertexMode.Triangles, points, textures, colors, indices), BlendMode.Modulate, paint)
+    }
+}
+
 /** The aurora's small offscreen picture and the columns each curtain can cover. */
 private class AuroraBuffer {
-    var image: ImageBitmap? = null
-    var canvas: Canvas? = null
-    val scope = CanvasDrawScope()
+    val mesh = AuroraMesh()
     var ms = Long.MIN_VALUE
     var yaw = 0f
     var palette: NightPalette? = null
@@ -720,6 +745,10 @@ fun NightScene(
 
     var origin by remember { mutableStateOf(Offset.Zero) }
     val buffer = remember { AuroraBuffer() }
+    // Keep the small aurora surface on the renderer: no software bitmap painting, texture uploads or
+    // fresh native bitmaps for every pixel of a camera/resize animation. Compose owns their lifetime.
+    val auroraLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+    val auroraMirror = androidx.compose.ui.graphics.rememberGraphicsLayer()
     // The ghost and its reflection are dozens of fresh curves a frame, re-tessellated by the GPU each time:
     // on a phone that was more than half of every frame. They are recorded into layers ~30 times a second
     // and those are replayed in between; floating, leaning and pressing move the layer at full rate.
@@ -1099,11 +1128,7 @@ fun NightScene(
             val showAurora = e > 0.003f && hz > 0f && w > 0f
             if (showAurora) {
                 // Re-paint about 30 times a second (and right away when the colours change).
-                if (buffer.image?.width != bw || buffer.image?.height != bh) {
-                    buffer.image = ImageBitmap(bw, bh).also { buffer.canvas = Canvas(it) }
-                    buffer.ms = Long.MIN_VALUE
-                }
-                if (buffer.ms == Long.MIN_VALUE || now < buffer.ms || now - buffer.ms >= 33 || buffer.palette !== palette) {
+                if (buffer.ms == Long.MIN_VALUE || now < buffer.ms || now - buffer.ms >= 33 || buffer.palette !== palette || auroraLayer.size != IntSize(bw, bh)) {
                     buffer.ms = now
                     buffer.yaw = yawA
                     buffer.palette = palette
@@ -1114,11 +1139,12 @@ fun NightScene(
                     val dMaxB = dMax / zoom / sc
                     val baseY = skyH * 1.05f / sc
                     val skyB = skyH / sc
-                    buffer.scope.draw(Density(1f), LayoutDirection.Ltr, buffer.canvas!!, Size(bw.toFloat(), bh.toFloat())) {
-                        drawRect(Color.Transparent, blendMode = BlendMode.Clear)
+                    auroraLayer.compositingStrategy = androidx.compose.ui.graphics.layer.CompositingStrategy.Offscreen
+                    auroraLayer.record(this, layoutDirection, IntSize(bw, bh)) {
                         buffer.spans.forEach { span ->
                             val cu = span.curtain
                             val brush = cu.pick(palette)
+                            buffer.mesh.clear()
                             for (column in span.envelope.indices) {
                                 val env = span.envelope[column]
                                 if (env <= 0.01f) continue
@@ -1133,14 +1159,14 @@ fun NightScene(
                                 val bright = env * (0.40f + 0.45f * ray * ray + 0.15f * fine)
                                 val a = (cu.alpha * bright * litB * glowK).coerceIn(0f, 1f)
                                 if (a <= 0.004f) continue
-                                withTransform({ translate(bx.toFloat(), yb - tall); scale(1f, tall * 1.08f, Offset.Zero) }) {
-                                    drawRect(brush, size = Size(1f, 1f), alpha = a)
-                                }
+                                buffer.mesh.column(bx.toFloat(), yb - tall, tall * 1.08f, a)
                             }
+                            buffer.mesh.draw(drawContext.canvas, brush)
                         }
                     }
+                    auroraMirror.alpha = 0.30f
+                    auroraMirror.record(this, layoutDirection, IntSize(bw, bh)) { drawLayer(auroraLayer) }
                 }
-                val img = buffer.image!!
                 // the camera turned since the picture was painted: shift it the rest of the way
                 val shift = -(yawA - buffer.yaw) * w
                 val parX = par.x * 5.dp.toPx()
@@ -1151,7 +1177,7 @@ fun NightScene(
                         translate(shift - parX - AURORA_PAD * w, hz - skyH * 1.05f - parY)
                         scale(sc, sc, Offset.Zero)
                     }) {
-                        drawImage(img, IntOffset.Zero, IntSize(bw, bh), IntOffset.Zero, IntSize(bw, bh), filterQuality = FilterQuality.Low)
+                        drawLayer(auroraLayer)
                     }
                     // crisp rays
                     RAYS.forEach { r ->
@@ -1369,7 +1395,6 @@ fun NightScene(
                     val lineColor = lerp(OFF_LIGHT, palette.light, e)
                     // the aurora, mirrored and faded
                     if (showAurora) {
-                        val img = buffer.image!!
                         val shift = -(yawA - buffer.yaw) * w
                         withTransform({
                             translate(0f, 2f * hz)
@@ -1378,7 +1403,7 @@ fun NightScene(
                             translate(shift - AURORA_PAD * w, hz - skyH * 1.05f)
                             scale(sc, sc, Offset.Zero)
                         }) {
-                            drawImage(img, IntOffset.Zero, IntSize(bw, bh), IntOffset.Zero, IntSize(bw, bh), alpha = 0.30f, filterQuality = FilterQuality.Low)
+                            drawLayer(auroraMirror)
                         }
                     }
                     // islands mirrored, dark

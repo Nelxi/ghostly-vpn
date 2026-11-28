@@ -11,7 +11,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.time.TimeSource
 
@@ -19,13 +18,9 @@ import kotlin.time.TimeSource
  * Ambient motion: the looping decorations (aurora, orb breathing, orbit lights, pulses) run off one shared
  * clock instead of `rememberInfiniteTransition`.
  *
- * An infinite transition asks for a frame on every refresh of the screen as long as it is composed — on a
- * 165 Hz monitor that redrew the whole window 165 times a second even when nothing else happened (≈80 % of
- * a core at rest). The shared clock ticks about every 16 ms and stops completely while the window is hidden
- * or minimized, so an idle window costs a fraction of that. The loops compute exactly what the transitions
- * did (same duration, easing and repeat mode); only the number of frames they get differs, and a slow
- * breathing or drifting loop looks the same at 60 frames as at 165. Touch, hover and scrolling keep their
- * own full-rate animations.
+ * One display-synchronized clock drives all decorations. Reading it in drawing/layer lambdas keeps their
+ * frames out of composition and layout. It stops completely while hidden or minimized. A free-running
+ * delay(16) drifts against the monitor and creates uneven motion, even when rendering itself is fast.
  */
 object AmbientMotion {
     /** The app is on screen (window shown and not minimized, activity started). Set by the platform shell. */
@@ -80,22 +75,16 @@ fun rememberAmbientClock(frameSync: Boolean = false): State<Long> {
         AmbientMotion.reelClock?.let { clock ->
             while (true) androidx.compose.runtime.withFrameMillis { time.longValue = clock() }
         }
-        if (frameSync) {
-            // Phones: tick on the display's frames (at most ~60 a second), so motion steps evenly with the
-            // screen instead of drifting against a 90/120 Hz refresh and stuttering.
-            var last = 0L
-            while (true) {
-                androidx.compose.runtime.withFrameMillis { }
+        var last = 0L
+        while (true) {
+            androidx.compose.runtime.withFrameNanos {
                 val now = start.elapsedNow().inWholeMilliseconds
-                if (now - last >= AmbientMotion.STEP_MS - 2) {
+                // Preserve the mobile energy budget; desktop follows every monitor frame.
+                if (!frameSync || now - last >= AmbientMotion.STEP_MS - 2) {
                     last = now
                     time.longValue = now
                 }
             }
-        }
-        while (true) {
-            time.longValue = start.elapsedNow().inWholeMilliseconds
-            delay(AmbientMotion.STEP_MS)
         }
     }
     return time
