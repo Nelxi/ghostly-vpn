@@ -35,6 +35,7 @@ class UpdaterTest {
         var onScreen = true
         var downloads = 0
         var launches = 0
+        var cleanups = 0
         var download: suspend () -> Unit = {}
         var launch: () -> Unit = {}
 
@@ -52,6 +53,8 @@ class UpdaterTest {
             launch()
             launches++
         }
+
+        override fun clearDownloadedUpdate() { cleanups++ }
     }
 
     private class Rig {
@@ -69,6 +72,36 @@ class UpdaterTest {
     }
 
     private val hour = 3600_000L
+
+    @Test
+    fun cleanupCannotDeleteAnActiveDownloadOrPreparedInstaller() = runTest {
+        val r = Rig()
+        r.updater.clearObsoleteDownload()
+        assertEquals(1, r.platform.cleanups)
+        val ready = CompletableDeferred<Unit>()
+        val proceed = CompletableDeferred<Unit>()
+        r.platform.download = { ready.complete(Unit); proceed.await() }
+        val job = launch { r.updater.install(r.offer) }
+        ready.await()
+        r.updater.clearObsoleteDownload()
+        assertEquals(1, r.platform.cleanups)
+        proceed.complete(Unit)
+        job.join()
+        r.updater.clearObsoleteDownload()
+        assertEquals(1, r.platform.cleanups)
+        assertEquals(1, r.platform.launches)
+    }
+
+    @Test
+    fun cleanupPreservesAnInstallerHandedOverInAPreviousRun() = runTest {
+        val r = Rig()
+        r.stored = InstallTry("1.1.0", 1, r.now)
+        r.updater.clearObsoleteDownload()
+        assertEquals(0, r.platform.cleanups)
+        r.stored = InstallTry("1.0.0", 1, r.now)
+        r.updater.clearObsoleteDownload()
+        assertEquals(1, r.platform.cleanups)
+    }
 
     @Test
     fun cellularWaitsButManualDownloadStillWorks() = runTest {
