@@ -139,7 +139,7 @@ private fun performancePreview(output: String, seconds: Int) {
         ))
     }
     val intervals = ArrayList<Double>()
-    val os = java.lang.management.ManagementFactory.getOperatingSystemMXBean() as com.sun.management.OperatingSystemMXBean
+    fun cpuTimeNanos() = ProcessHandle.current().info().totalCpuDuration().orElse(java.time.Duration.ZERO).toNanos()
     androidx.compose.ui.window.application {
         androidx.compose.ui.window.Window(
             onCloseRequest = ::exitApplication,
@@ -155,7 +155,7 @@ private fun performancePreview(output: String, seconds: Int) {
                 while (System.nanoTime() - start < seconds.coerceAtLeast(10) * 1_000_000_000L) {
                     androidx.compose.runtime.withFrameNanos { now ->
                         if (System.nanoTime() - start >= 5_000_000_000L) {
-                            if (cpuStart == 0L) cpuStart = os.processCpuTime
+                            if (cpuStart == 0L) cpuStart = cpuTimeNanos()
                             if (last != 0L) intervals.add((now - last) / 1_000_000.0)
                             last = now
                         }
@@ -166,7 +166,7 @@ private fun performancePreview(output: String, seconds: Int) {
                 val report = "frames=${sorted.size} meanMs=${intervals.average()} " +
                     "p50Ms=${percentile(0.50)} p95Ms=${percentile(0.95)} p99Ms=${percentile(0.99)} " +
                     "over25ms=${intervals.count { it > 25 }} over50ms=${intervals.count { it > 50 }} " +
-                    "cpuSeconds=${(os.processCpuTime - cpuStart) / 1e9}"
+                    "cpuSeconds=${(cpuTimeNanos() - cpuStart) / 1e9}"
                 File(out, "frames.txt").writeText(report)
                 println(report)
                 val bounds = window.bounds
