@@ -28,6 +28,7 @@ import app.ghostly.ui.components.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -38,6 +39,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.isPrimaryPressed
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isMetaPressed
+import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -46,6 +55,7 @@ import app.ghostly.core.model.CoreType
 import app.ghostly.core.model.ExtraProxy
 import app.ghostly.core.model.ExtraProxyType
 import app.ghostly.core.model.Server
+import app.ghostly.core.model.address
 import app.ghostly.ui.components.FlagIcon
 import app.ghostly.ui.components.GhostSwitch
 import app.ghostly.ui.components.GlassCard
@@ -56,6 +66,11 @@ import app.ghostly.ui.components.ToggleRow
 import app.ghostly.ui.components.hoverSound
 import app.ghostly.ui.theme.Ghost
 import app.ghostly.ui.title
+import app.ghostly.ui.countryFlag
+import app.ghostly.ui.countryName
+import app.ghostly.ui.matchesQuery
+import app.ghostly.ui.components.SoftButton
+import androidx.compose.material3.Checkbox
 import app.ghostly.i18n.tr
 
 /**
@@ -63,11 +78,15 @@ import app.ghostly.i18n.tr
  * port, login and server. They run next to the main connection; auto-switching only moves the main one.
  */
 @Composable
+@OptIn(ExperimentalComposeUiApi::class)
 internal fun ExtraProxiesSection(controller: GhostlyController, host: String) {
     val s by controller.settings.collectAsState()
     val profiles by controller.profiles.collectAsState()
     val c = Ghost.colors
     val servers = remember(profiles) { controller.extraProxyServers() }
+    var selection by remember { mutableStateOf(ProxySelection()) }
+    val order = s.extraProxies.map { it.id }
+    LaunchedEffect(order) { selection = selection.retain(order) }
 
     SectionTitle(tr("Дополнительные прокси"))
     Text(
@@ -81,10 +100,64 @@ internal fun ExtraProxiesSection(controller: GhostlyController, host: String) {
     )
     // A port may be used once: by the main proxy or by one additional proxy.
     val mainPorts = setOf(s.socksPort, s.httpPort)
+    if (order.isNotEmpty()) {
+        Text(tr("Выбрано: {0}", selection.ids.size), style = MaterialTheme.typography.labelLarge)
+        Row(Modifier.fillMaxWidth()) {
+            SoftButton(tr("Выбрать все"), { selection = ProxySelection(order.toSet(), order.firstOrNull()) }, Modifier.weight(1f))
+            SoftButton(tr("Снять выделение"), { selection = ProxySelection() }, Modifier.weight(1f))
+        }
+        if (controller.platform.isDesktop) Text(tr("Ctrl — выбрать несколько, Shift — диапазон"), style = MaterialTheme.typography.bodySmall, color = c.ink3)
+        if (selection.ids.isNotEmpty()) {
+            var countriesOpen by remember { mutableStateOf(false) }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) {
+                    SoftButton(tr("Сменить страну"), { countriesOpen = true }, Modifier.fillMaxWidth())
+                    DropdownMenu(countriesOpen, { countriesOpen = false }, modifier = Modifier.heightIn(max = 360.dp)) {
+                        servers.mapNotNull { it.countryFlag() }.distinct().forEach { flag ->
+                            DropdownMenuItem(text = { Text(countryName(flag)) }, leadingIcon = { FlagIcon(flag, 14.dp) }, onClick = {
+                                countriesOpen = false
+                                controller.bindExtraProxyCountry(selection.ids, flag)
+                            })
+                        }
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                ServerPicker(null, tr("Сменить сервер"), servers, Modifier.weight(1f)) { controller.bindExtraProxies(selection.ids, it.id) }
+            }
+            Row {
+                SoftButton(tr("Включить"), { controller.enableExtraProxies(selection.ids, true) })
+                SoftButton(tr("Выключить"), { controller.enableExtraProxies(selection.ids, false) })
+            }
+            SoftButton(tr("Скопировать адреса"), {
+                controller.platform.copyToClipboard(s.extraProxies.filter { it.id in selection.ids }.joinToString("\n") { it.address(host) })
+                controller.toast(tr("Скопировано"))
+            }, Modifier.fillMaxWidth())
+        }
+        Spacer(Modifier.height(10.dp))
+    }
     s.extraProxies.forEach { x ->
         key(x.id) {
-            val clash = x.port in mainPorts || s.extraProxies.any { it.id != x.id && it.port == x.port }
-            ExtraProxyCard(x, controller, servers, host, clash)
+            val clash = x.enabled && (x.port in mainPorts || s.extraProxies.any { it.enabled && it.id != x.id && it.port == x.port })
+            val m = Modifier.pointerInput(order) {
+                awaitPointerEventScope {
+                    var selecting = false
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val keys = event.keyboardModifiers
+                        if (event.type == PointerEventType.Press && event.buttons.isPrimaryPressed && (keys.isCtrlPressed || keys.isMetaPressed || keys.isShiftPressed)) {
+                            selection = selection.click(x.id, order, keys.isCtrlPressed || keys.isMetaPressed, keys.isShiftPressed)
+                            selecting = true
+                        }
+                        if (selecting) {
+                            event.changes.forEach { it.consume() }
+                            if (event.type == PointerEventType.Release || event.changes.none { it.pressed }) selecting = false
+                        }
+                    }
+                }
+            }
+            ExtraProxyCard(x, controller, servers, host, clash, x.id in selection.ids, {
+                selection = selection.click(x.id, order, toggle = true, range = false)
+            }, m)
             Spacer(Modifier.height(10.dp))
         }
     }
@@ -102,12 +175,13 @@ internal fun ExtraProxiesSection(controller: GhostlyController, host: String) {
 }
 
 @Composable
-private fun ExtraProxyCard(x: ExtraProxy, controller: GhostlyController, servers: List<Server>, host: String, portClash: Boolean) {
+private fun ExtraProxyCard(x: ExtraProxy, controller: GhostlyController, servers: List<Server>, host: String, portClash: Boolean, selected: Boolean, onSelect: () -> Unit, modifier: Modifier) {
     val c = Ghost.colors
     val update = { f: (ExtraProxy) -> ExtraProxy -> controller.updateExtraProxy(x.id, f) }
     val server = controller.extraProxyServer(x)
-    GlassCard(Modifier.fillMaxWidth(), padding = 12.dp) {
+    GlassCard(modifier.fillMaxWidth().then(if (selected) Modifier.border(1.dp, c.accent, RoundedCornerShape(app.ghostly.ui.components.Radius.card)) else Modifier), padding = 12.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(selected, { onSelect() })
             ServerPicker(server, x.serverName, servers, Modifier.weight(1f)) { picked -> controller.haptic(); controller.bindExtraProxy(x.id, picked.id) }
             Spacer(Modifier.width(10.dp))
             Box(Modifier.clip(RoundedCornerShape(14.dp)).hoverSound().clickable { controller.haptic(); update { it.copy(enabled = !it.enabled) } }.padding(4.dp)) {
@@ -138,9 +212,8 @@ private fun ExtraProxyCard(x: ExtraProxy, controller: GhostlyController, servers
             CredentialField(tr("Пароль"), x.pass, controller, secret = true) { v -> update { it.copy(pass = v) } }
         }
         Spacer(Modifier.height(10.dp))
-        val creds = if (x.auth) "${x.user}:${x.pass}@" else ""
-        val link = "${x.type.scheme}://$creds$host:${x.port}"
-        val shown = if (x.auth) "${x.type.scheme}://${x.user}:••••••@$host:${x.port}" else link
+        val link = x.address(host)
+        val shown = x.address(host, maskPassword = true)
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.Black.copy(alpha = 0.22f)).border(1.dp, c.line, RoundedCornerShape(14.dp))
                 .hoverSound().clickable { controller.haptic(); controller.platform.copyToClipboard(link); controller.toast(tr("Адрес прокси скопирован")) }
@@ -161,6 +234,7 @@ private fun ExtraProxyCard(x: ExtraProxy, controller: GhostlyController, servers
 private fun ServerPicker(server: Server?, lostName: String?, servers: List<Server>, modifier: Modifier, onPick: (Server) -> Unit) {
     val c = Ghost.colors
     var open by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
     Box(modifier) {
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(app.ghostly.ui.components.Radius.tile)).background(c.surface3).border(1.dp, c.hairline, RoundedCornerShape(app.ghostly.ui.components.Radius.tile))
@@ -178,7 +252,8 @@ private fun ServerPicker(server: Server?, lostName: String?, servers: List<Serve
             Icon(Icons.Rounded.ExpandMore, null, tint = c.ink3, modifier = Modifier.size(18.dp))
         }
         DropdownMenu(open, { open = false }, modifier = Modifier.heightIn(max = 420.dp)) {
-            servers.forEach { srv ->
+            androidx.compose.material3.OutlinedTextField(query, { query = it }, placeholder = { Text(tr("Поиск")) }, singleLine = true, modifier = Modifier.padding(horizontal = 8.dp))
+            servers.filter { it.matchesQuery(query) }.forEach { srv ->
                 val t = srv.title()
                 DropdownMenuItem(
                     text = { Text(listOfNotNull(t.title, t.subtitle).joinToString(" · "), maxLines = 1, overflow = TextOverflow.Ellipsis) },

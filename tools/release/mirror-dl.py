@@ -40,6 +40,14 @@ def version_key(value):
     return tuple(map(int, value.split(".")))
 
 
+def asset_version(metadata, release_version):
+    """An unchanged platform keeps its last build/version instead of triggering another download."""
+    value = metadata.get("version", release_version)
+    if version_key(value) > version_key(release_version):
+        raise ValueError("An asset cannot be newer than its release")
+    return value
+
+
 def fetch(url, destination, bounds=None):
     command = [
         "curl", "--fail", "--silent", "--show-error", "--location",
@@ -109,7 +117,8 @@ def mirror(root, version, manifest_hash):
         files = manifest["files"]
         for name in ASSETS:
             entry = files[name]
-            if entry["version"] != version or type(entry["size"]) is not int or entry["size"] <= 0:
+            asset_version(entry, version)
+            if type(entry["size"]) is not int or entry["size"] <= 0:
                 raise ValueError(f"Invalid metadata for {name}")
             if not re.fullmatch("[0-9a-f]{64}", entry["sha256"]):
                 raise ValueError(f"Invalid SHA-256 for {name}")
@@ -122,7 +131,8 @@ def mirror(root, version, manifest_hash):
         else:
             def download(name):
                 path = stage / name
-                fetch_asset(f"{release_url}/{name}", path, files[name]["size"])
+                source = f"{RELEASES}/v{asset_version(files[name], version)}/{name}"
+                fetch_asset(source, path, files[name]["size"])
                 verify(path, files[name])
                 print(f"Verified {name}", flush=True)
 

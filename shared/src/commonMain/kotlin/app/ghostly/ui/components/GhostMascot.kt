@@ -7,6 +7,11 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -386,7 +391,7 @@ private fun DrawScope.face(
     }
 }
 
-/** Stage outfit: sunglasses falling onto the eyes and an arm rising with a microphone. */
+/** Classic sunglasses with translucent lenses and a detailed metal stage microphone. */
 private fun DrawScope.stage(t: Float, sing: Float, lk: Offset, tone: Color) {
     val ox = lk.x * 3.5f
     val al = t.coerceIn(0f, 1f)
@@ -402,7 +407,7 @@ private fun DrawScope.stage(t: Float, sing: Float, lk: Offset, tone: Color) {
             quadraticTo(lx - lw * 0.04f, y + lh * 1.02f, lx, y)
             close()
         }
-        drawPath(lens, Brush.verticalGradient(listOf(Color(0xFF221237), Color(0xFF07040D)), startY = y, endY = y + lh), alpha = al)
+        drawPath(lens, Brush.verticalGradient(listOf(Color(0xFF221237).copy(alpha = 0.30f), Color(0xFF07040D).copy(alpha = 0.45f)), startY = y, endY = y + lh), alpha = al)
         drawPath(lens, lerp(tone, Color.White, 0.3f).copy(alpha = 0.55f * al), style = Stroke(1.6f))
         val gx = lx + lw * (0.25f + 0.35f * ((lk.x + 1f) / 2f))
         drawLine(Color.White.copy(alpha = 0.55f * al), Offset(gx, y + lh * 0.2f), Offset(gx - lw * 0.18f, y + lh * 0.72f), strokeWidth = 2f, cap = StrokeCap.Round)
@@ -421,11 +426,47 @@ private fun DrawScope.stage(t: Float, sing: Float, lk: Offset, tone: Color) {
     val armP = Path().apply { moveTo(shoulder.x, shoulder.y); quadraticTo(shoulder.x + 12f, (shoulder.y + hand.y) / 2 + 8f, hand.x, hand.y) }
     drawPath(armP, bodyWhite, style = Stroke(11f, cap = StrokeCap.Round))
     drawPath(armP, tone.copy(alpha = 0.18f), style = Stroke(11f, cap = StrokeCap.Round))
-    val head = Offset(hand.x - 13f, hand.y - 12f)
-    drawLine(Brush.linearGradient(listOf(Color(0xFF3A3150), Color(0xFF16101F)), hand, head), Offset(hand.x + 3f, hand.y + 5f), head, strokeWidth = 6.5f, cap = StrokeCap.Round)
-    val hr = 8.5f * (1f + 0.1f * sing)
-    drawCircle(Brush.radialGradient(listOf(Color(0xFFF4F1FF), Color(0xFF9C93B8), Color(0xFF4E4666)), head - Offset(hr * 0.35f, hr * 0.35f), hr * 1.6f), hr, head)
-    drawCircle(tone.copy(alpha = 0.35f + 0.4f * sing), hr, head, style = Stroke(1.4f))
-    drawCircle(bodyWhite, 7.5f, hand)
-    drawCircle(tone.copy(alpha = 0.12f), 7.5f, hand)
+    val head = Offset(hand.x - 15f, hand.y - 21f)
+    withTransform({ translate(head.x, head.y); rotate(-36f, Offset.Zero) }) {
+        val image = STAGE_MICROPHONE
+        drawImage(image, IntOffset.Zero, IntSize(image.width, image.height), IntOffset(-16, -14), IntSize(32, 70), filterQuality = FilterQuality.Medium)
+        drawCircle(Color(0xFF8FEEDB).copy(alpha = 0.35f + 0.45f * sing), 0.8f, Offset(1f, 18f))
+    }
+    drawCircle(bodyWhite, 6.5f, hand)
+    drawCircle(tone.copy(alpha = 0.10f), 6.5f, hand)
+}
+
+/** Detailed, round woven grille is rasterized once; all scene frames reuse the same small texture. */
+private val STAGE_MICROPHONE: ImageBitmap by lazy {
+    ImageBitmap(96, 210).also { image ->
+        CanvasDrawScope().draw(androidx.compose.ui.unit.Density(1f), androidx.compose.ui.unit.LayoutDirection.Ltr,
+            androidx.compose.ui.graphics.Canvas(image), Size(96f, 210f)) {
+            withTransform({ scale(3f, 3f, Offset.Zero); translate(16f, 14f) }) {
+                val metal = Brush.horizontalGradient(0f to Color(0xFF10131B), 0.18f to Color(0xFF6A788C),
+                    0.34f to Color(0xFF303848), 0.8f to Color(0xFF10151D), 1f to Color(0xFF75859C), startX = -4.4f, endX = 4.4f)
+                drawRoundRect(metal, Offset(-4.4f, 8f), Size(8.8f, 42f), androidx.compose.ui.geometry.CornerRadius(2.6f))
+                drawLine(Color.White.copy(alpha = 0.35f), Offset(-2.7f, 14f), Offset(-2.7f, 45f), 0.65f)
+                for (yy in floatArrayOf(9f, 12f, 46f, 49f)) {
+                    drawLine(Color(0xFF0A0D14), Offset(-4.4f, yy + 0.5f), Offset(4.4f, yy + 0.5f), 1.3f)
+                    drawLine(Color(0xFFC0CDDD), Offset(-4.3f, yy), Offset(4.3f, yy), 0.8f)
+                }
+                drawCircle(Color.Black.copy(alpha = 0.25f), 11.8f, Offset(0f, 0.8f))
+                drawCircle(Brush.radialGradient(0f to Color(0xFFF9FCFF), 0.35f to Color(0xFFC2CFDD),
+                    0.7f to Color(0xFF6F8197), 1f to Color(0xFF222D40), center = Offset(-4f, -5f), radius = 21f), 11.4f, Offset.Zero)
+                // Staggered perforations wrap around the spherical head instead of reading as flat comb teeth.
+                for (row in -9..9) for (col in -9..9) {
+                    val y = row * 1.12f
+                    val x = col * 1.17f + if (row % 2 == 0) 0f else 0.58f
+                    val rr = x * x + y * y
+                    if (rr > 112f) continue
+                    val edge = (1f - rr / 140f).coerceAtLeast(0.15f)
+                    drawCircle(Color(0xFF101A28).copy(alpha = 0.55f * edge), 0.34f + 0.07f * edge, Offset(x, y))
+                    drawCircle(Color.White.copy(alpha = 0.5f * edge), 0.13f, Offset(x - 0.18f, y - 0.2f))
+                }
+                drawCircle(Color(0xFFE7F0FB).copy(alpha = 0.65f), 11.2f, Offset.Zero, style = Stroke(0.55f))
+                drawLine(Color(0xFF29374A).copy(alpha = 0.75f), Offset(-8.7f, 7f), Offset(8.7f, 7f), 1f)
+                drawLine(Color(0xFFEAF4FF).copy(alpha = 0.55f), Offset(-8.5f, 6.3f), Offset(8.5f, 6.3f), 0.45f)
+            }
+        }
+    }
 }

@@ -877,5 +877,19 @@
  "Добавить приложение": "Tambahkan aplikasi",
  "Путь к файлу .exe": "Jalur ke file .exe",
  "Укажи полный путь к существующему файлу .exe.": "Masukkan jalur lengkap ke file .exe yang ada.",
- "Выбрать файл": "Pilih file"
+ "Выбрать файл": "Pilih file",
+ "Что нового": "Yang baru",
+ "Автообновление только по Wi-Fi": "Pembaruan otomatis hanya lewat Wi-Fi",
+ "На мобильном интернете можно скачать обновление вручную": "Dengan data seluler, pembaruan dapat diunduh secara manual",
+ "Скопировать диагностику": "Salin diagnostik",
+ "Версия, сеть и состояние VPN — без ссылок подписки и ключей": "Versi, jaringan dan status VPN — tanpa tautan langganan atau kunci",
+ "Диагностика скопирована": "Diagnostik disalin",
+ "Выбрано: {0}": "Dipilih: {0}",
+ "Выбрать все": "Pilih semua",
+ "Снять выделение": "Hapus pilihan",
+ "Ctrl — выбрать несколько, Shift — диапазон": "Ctrl — pilih beberapa, Shift — pilih rentang",
+ "Сменить страну": "Ganti negara",
+ "Сменить сервер": "Ganti server",
+ "Выключить": "Nonaktifkan",
+ "Скопировать адреса": "Salin alamat"
 }

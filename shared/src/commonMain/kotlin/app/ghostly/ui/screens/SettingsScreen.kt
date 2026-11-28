@@ -63,6 +63,7 @@ import androidx.compose.material.icons.rounded.Cable
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material.icons.rounded.RocketLaunch
 import androidx.compose.material.icons.rounded.Savings
 import androidx.compose.material.icons.rounded.Shield
@@ -343,6 +344,11 @@ private fun MainSettings(controller: GhostlyController, contentPadding: PaddingV
                     else tr("Скачается само и откроет окно установки"),
                     s.autoInstallUpdates, Icons.Rounded.RocketLaunch,
                 ) { v -> set { it.copy(autoInstallUpdates = v) } }
+                if (!controller.platform.isDesktop) {
+                    ToggleRow(tr("Автообновление только по Wi-Fi"), tr("На мобильном интернете можно скачать обновление вручную"), s.autoUpdateWifiOnly, Icons.Rounded.Wifi) { v ->
+                        set { it.copy(autoUpdateWifiOnly = v) }
+                    }
+                }
             }
             controller.platform.killSwitch?.let { ks ->
                 // Asking the firewall spawns netsh — do it off the UI thread, once per screen.
@@ -996,6 +1002,10 @@ private fun AboutPage(controller: GhostlyController, contentPadding: PaddingValu
         app.ghostly.ui.components.UpdateBanner(controller, Modifier.padding(bottom = 12.dp))
         Group {
             SettingRow(tr("Ядро"), controller.backend.coreVersion(), Icons.Rounded.Speed)
+            SettingRow(
+                tr("Скопировать диагностику"), tr("Версия, сеть и состояние VPN — без ссылок подписки и ключей"), Icons.Rounded.ContentCopy,
+                onClick = { controller.haptic(); controller.copyDiagnostics() },
+            ) { Chevron() }
             SettingRow(
                 tr("Журнал ядра"), tr("Скопировать журнал последнего запуска для поддержки"), Icons.Rounded.ContentCopy,
                 onClick = { controller.haptic(); controller.exportLogs(controller.settings.value.core, share = false) },

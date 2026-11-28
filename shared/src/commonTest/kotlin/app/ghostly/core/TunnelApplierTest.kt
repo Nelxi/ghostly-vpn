@@ -3,6 +3,8 @@ package app.ghostly.core
 import app.ghostly.core.vpn.TunnelApplier
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -84,5 +86,44 @@ class TunnelApplierTest {
         r.mode = "global"; r.applier.request()
         settle()
         assertEquals(emptyList(), r.connects)
+    }
+
+    @Test
+    fun settingsWaitForTheLastEditWithoutSlowingOrdinaryServerPicks() = runTest {
+        val r = Rig(this)
+        repeat(4) { i ->
+            r.mode = "setting-$i"
+            r.applier.request(quietMs = 900)
+            advanceTimeBy(500)
+        }
+        assertEquals(emptyList(), r.connects)
+        advanceTimeBy(399)
+        runCurrent()
+        assertEquals("smart", r.applier.applied)
+        settle()
+        assertEquals(listOf("setting-3"), r.connects)
+    }
+
+    @Test
+    fun failedConnectDoesNotMarkUnappliedSettingsAsApplied() = runTest {
+        val r = Rig(this)
+        try { r.applier.connect("broken") { error("failed") } } catch (_: IllegalStateException) { }
+        assertEquals("smart", r.applier.applied)
+    }
+
+    @Test
+    fun queuedConnectReadsTheCurrentConfigOnlyAfterThePreviousConnectFinishes() = runTest {
+        val r = Rig(this)
+        val gate = CompletableDeferred<Unit>()
+        val first = launch { r.applier.connect("old") { gate.await() } }
+        runCurrent()
+        var config = "before-edit"
+        val second = launch { r.applier.connectSnapshot({ config to config }) { r.connects += it } }
+        runCurrent()
+        config = "latest-edit"
+        gate.complete(Unit)
+        first.join(); second.join()
+        assertEquals(listOf("latest-edit"), r.connects)
+        assertEquals("latest-edit", r.applier.applied)
     }
 }

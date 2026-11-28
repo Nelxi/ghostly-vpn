@@ -877,5 +877,19 @@
  "Добавить приложение": "Uygulama ekle",
  "Путь к файлу .exe": ".exe dosyasının yolu",
  "Укажи полный путь к существующему файлу .exe.": "Mevcut bir .exe dosyasının tam yolunu gir.",
- "Выбрать файл": "Dosya seç"
+ "Выбрать файл": "Dosya seç",
+ "Что нового": "Yenilikler",
+ "Автообновление только по Wi-Fi": "Yalnızca Wi-Fi üzerinden otomatik güncelle",
+ "На мобильном интернете можно скачать обновление вручную": "Mobil veride güncellemeyi elle indirebilirsiniz",
+ "Скопировать диагностику": "Tanı bilgilerini kopyala",
+ "Версия, сеть и состояние VPN — без ссылок подписки и ключей": "Sürüm, ağ ve VPN durumu — abonelik bağlantıları veya anahtarlar olmadan",
+ "Диагностика скопирована": "Tanı bilgileri kopyalandı",
+ "Выбрано: {0}": "Seçilen: {0}",
+ "Выбрать все": "Tümünü seç",
+ "Снять выделение": "Seçimi temizle",
+ "Ctrl — выбрать несколько, Shift — диапазон": "Ctrl — çoklu seçim, Shift — aralık seçimi",
+ "Сменить страну": "Ülkeyi değiştir",
+ "Сменить сервер": "Sunucuyu değiştir",
+ "Выключить": "Devre dışı bırak",
+ "Скопировать адреса": "Adresleri kopyala"
 }

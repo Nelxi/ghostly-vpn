@@ -27,7 +27,8 @@ data class ExtraProxy(
     val pass: String = "",
     val profileId: String? = null,
     val serverName: String? = null,
-    /** The chosen server's outbound, kept in step with the subscription by the controller; null = no such server now. */
+    /** Runtime only: rebuilt from the protected profile store, never duplicated into settings.json. */
+    @kotlinx.serialization.Transient
     val outbound: JsonObject? = null,
 ) {
     /** Up when the tunnel is: switched on, a valid port and a server that still exists. */
@@ -214,6 +215,8 @@ data class AppSettings(
     val autoCheckUpdates: Boolean = true,
     /** Download and install a found update by itself (desktop: silent + relaunch; Android: opens the installer). */
     val autoInstallUpdates: Boolean = true,
+    /** Manual downloads always work; automatic mobile downloads wait for Wi-Fi/Ethernet. */
+    val autoUpdateWifiOnly: Boolean = true,
     // Ping and log settings are kept per core: [pingUrl]/[pingMethod]/[logLevel] are Xray's.
     val pingUrl: String = "https://www.gstatic.com/generate_204",
     val pingMethod: PingMethod = PingMethod.PROXY_GET,

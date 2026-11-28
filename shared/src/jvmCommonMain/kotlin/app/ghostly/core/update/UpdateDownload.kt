@@ -90,8 +90,8 @@ private fun fetchInto(part: File, url: String, want: String, size: Long, onProgr
         val body = c.contentLengthLong
         val total = if (size > 0) size else if (body > 0) have + body else 0L
         var done = have
-        var lastReport = if (total > 0) (done.toFloat() / total).coerceIn(0f, 0.99f) else 0f
-        if (lastReport > 0f) onProgress(lastReport)
+        val resumeProgress = if (total > 0) (done.toFloat() / total).coerceIn(0f, 0.99f) else 0f
+        if (resumeProgress > 0f) onProgress(resumeProgress)
         c.inputStream.use { input ->
             FileOutputStream(part, continued).use { out ->
                 val buf = ByteArray(1 shl 16)
@@ -101,10 +101,8 @@ private fun fetchInto(part: File, url: String, want: String, size: Long, onProgr
                     out.write(buf, 0, n)
                     md.update(buf, 0, n)
                     done += n
-                    if (total > 0) {
-                        val p = (done.toFloat() / total).coerceIn(0f, 0.99f)
-                        if (p - lastReport >= 0.01f) { lastReport = p; onProgress(p) }
-                    }
+                    // Also checks cancellation/network policy on slow or unknown-length transfers.
+                    onProgress(if (total > 0) (done.toFloat() / total).coerceIn(0f, 0.99f) else 0f)
                 }
             }
         }

@@ -2,6 +2,10 @@ package app.ghostly.shots
 
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.foundation.layout.fillMaxSize
+import app.ghostly.ui.components.drawMascot
 import app.ghostly.core.GhostlyController
 import app.ghostly.core.account.CabinetState
 import app.ghostly.core.account.CabinetUi
@@ -49,6 +53,7 @@ private data class Shot(
     val settleMs: Long = 2600,
     /** Extra pictures at these milliseconds (a filmstrip of a transition): <name>-<ms>.png. */
     val film: List<Long> = emptyList(),
+    val features: Boolean = false,
 )
 
 private val SHOTS = listOf(
@@ -73,6 +78,7 @@ private val SHOTS = listOf(
     Shot("move", "HOME", demo = "tabs:1500", settleMs = 2900, film = listOf(1500, 1600, 1700, 1800, 1950, 2150, 2400), scale = 1f),
     Shot("move-on", "HOME", vpn = "connected", demo = "tabs:1500", settleMs = 2900, film = listOf(1600, 1800, 2000, 2300), scale = 1f),
     Shot("desktop-home", "HOME", widthDp = 1180, heightDp = 780, scale = 1.25f, desktop = true, vpn = "connected"),
+    Shot("desktop-stage", "HOME", widthDp = 1180, heightDp = 780, scale = 1.25f, desktop = true, vpn = "connected", features = true),
     Shot("desktop-home-off", "HOME", widthDp = 1180, heightDp = 780, scale = 1.25f, desktop = true),
     Shot("desktop-tab-return", "HOME", widthDp = 1180, heightDp = 780, scale = 1f, desktop = true, demo = "tabs:1600", settleMs = 6000),
     Shot("desktop-servers", "SERVERS", widthDp = 1180, heightDp = 780, scale = 1.25f, desktop = true, vpn = "connected"),
@@ -81,6 +87,27 @@ private val SHOTS = listOf(
 )
 
 fun main(args: Array<String>) {
+    if (args.firstOrNull() == "--accessories") {
+        val out = File(args.getOrNull(1) ?: "build/shots/accessories.png")
+        out.parentFile.mkdirs()
+        val scene = ImageComposeScene(1000, 1000) {
+            androidx.compose.foundation.Canvas(androidx.compose.ui.Modifier.fillMaxSize()) {
+                drawRect(androidx.compose.ui.graphics.Color(0xFF100C20))
+                val s = 820f
+                withTransform({ translate((size.width - s) / 2, (size.height - s) / 2) }) {
+                    drawMascot(s, 1f, 1f, 0f, androidx.compose.ui.graphics.Color(0xFFA88DFF), 0f, showtime = 1f, sing = 0.55f)
+                }
+            }
+        }
+        try {
+            scene.render(0).encodeToData(EncodedImageFormat.PNG)!!.use { out.writeBytes(it.bytes) }
+        } finally { scene.close() }
+        exitProcess(0)
+    }
+    if (args.firstOrNull() == "--performance") {
+        performancePreview(args.getOrNull(1) ?: "build/performance", args.getOrNull(2)?.toIntOrNull() ?: 25)
+        return
+    }
     val out = File(args.firstOrNull() ?: "build/shots").apply { mkdirs() }
     val only = args.drop(1).flatMap { it.split(',') }.filter { it.isNotBlank() }.toSet()
     runBlocking { app.ghostly.i18n.L10n.load("ru") }
@@ -91,10 +118,72 @@ fun main(args: Array<String>) {
     exitProcess(0)
 }
 
+/** Real GPU window, isolated fake VPN/data; records frame pacing after a five-second warm-up. */
+private fun performancePreview(output: String, seconds: Int) {
+    // Same renderer defaults as the application, without touching the real instance or its VPN.
+    app.ghostly.desktop.configureDesktopRendering()
+    val out = File(output).apply { mkdirs() }
+    val dir = Files.createTempDirectory("ghostly-perf-").toFile()
+    val shot = Shot("performance", "HOME", desktop = true, vpn = "connected", demo = if (seconds <= 0) "tab:HOME" else "tabs:2000", features = seconds <= 0)
+    seed(dir, shot)
+    runBlocking { app.ghostly.i18n.L10n.load("ru") }
+    val controller = GhostlyController(ShotPlatform(dir.absolutePath, shot.demo, true, if (shot.features) DemoStage() else null), ShotBackend(shot.vpn))
+    if (shot.features) {
+        controller.cabinet.preview(CabinetUi.Ready(Samples.state))
+        @Suppress("UNCHECKED_CAST")
+        val offer = controller.updater.javaClass.getDeclaredField("_offer").apply { isAccessible = true }.get(controller.updater) as MutableStateFlow<app.ghostly.core.update.UpdateOffer?>
+        offer.value = app.ghostly.core.update.UpdateOffer("0.3.63-demo", "demo", "00", 68_000_000, listOf(
+            "Групповая смена страны и сервера локальных прокси — Ctrl/Shift и флажки.",
+            "Быстрые изменения настроек применяются одним переподключением.",
+            "Прозрачные очки Y2K, хром и новый металлический микрофон.",
+        ))
+    }
+    val intervals = ArrayList<Double>()
+    val os = java.lang.management.ManagementFactory.getOperatingSystemMXBean() as com.sun.management.OperatingSystemMXBean
+    androidx.compose.ui.window.application {
+        androidx.compose.ui.window.Window(
+            onCloseRequest = ::exitApplication,
+            title = if (shot.features) "Ghostly demo — test VPN and proxies" else "Ghostly performance preview",
+            state = androidx.compose.ui.window.rememberWindowState(width = 1180.dp, height = 780.dp),
+        ) {
+            if (app.ghostly.desktop.hostOs == app.ghostly.desktop.HostOs.WINDOWS) app.ghostly.desktop.WindowsChrome.darkTitleBar(window)
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                if (seconds <= 0) return@LaunchedEffect // Keep the interactive preview open until closed.
+                val start = System.nanoTime()
+                var last = 0L
+                var cpuStart = 0L
+                while (System.nanoTime() - start < seconds.coerceAtLeast(10) * 1_000_000_000L) {
+                    androidx.compose.runtime.withFrameNanos { now ->
+                        if (System.nanoTime() - start >= 5_000_000_000L) {
+                            if (cpuStart == 0L) cpuStart = os.processCpuTime
+                            if (last != 0L) intervals.add((now - last) / 1_000_000.0)
+                            last = now
+                        }
+                    }
+                }
+                val sorted = intervals.sorted()
+                fun percentile(p: Double) = sorted[((sorted.size - 1) * p).toInt()]
+                val report = "frames=${sorted.size} meanMs=${intervals.average()} " +
+                    "p50Ms=${percentile(0.50)} p95Ms=${percentile(0.95)} p99Ms=${percentile(0.99)} " +
+                    "over25ms=${intervals.count { it > 25 }} over50ms=${intervals.count { it > 50 }} " +
+                    "cpuSeconds=${(os.processCpuTime - cpuStart) / 1e9}"
+                File(out, "frames.txt").writeText(report)
+                println(report)
+                val bounds = window.bounds
+                javax.imageio.ImageIO.write(java.awt.Robot().createScreenCapture(bounds), "png", File(out, "preview.png"))
+                exitApplication()
+            }
+            GhostlyApp(controller)
+        }
+    }
+    dir.deleteRecursively()
+    exitProcess(0)
+}
+
 private fun render(shot: Shot, out: File) {
     val dir = Files.createTempDirectory("ghostly-shot-").toFile()
     seed(dir, shot)
-    val platform = ShotPlatform(dir.absolutePath, shot.demo ?: ("tab:" + shot.tab), shot.desktop)
+    val platform = ShotPlatform(dir.absolutePath, shot.demo ?: ("tab:" + shot.tab), shot.desktop, if (shot.features) DemoStage() else null)
     val controller = GhostlyController(platform, ShotBackend(shot.vpn))
     shot.cabinet?.let { controller.cabinet.preview(it) }
     val w = (shot.widthDp * shot.scale).toInt()
@@ -127,7 +216,7 @@ private fun seed(dir: File, shot: Shot) {
     val store = FileStore(dir.absolutePath)
     store.save(
         "settings.json", AppSettings.serializer(),
-        AppSettings(autoUpdateSubs = false, autoCheckUpdates = false, autoInstallUpdates = false, autoConnect = false, stageMode = false, language = "ru"),
+        AppSettings(autoUpdateSubs = false, autoCheckUpdates = false, autoInstallUpdates = false, autoConnect = false, stageMode = shot.features, language = "ru"),
     )
     if (!shot.onboarded) return
     val now = System.currentTimeMillis()
@@ -157,18 +246,34 @@ private fun seed(dir: File, shot: Shot) {
         updatedAt = now - 7 * 60_000, servers = servers,
     )
     store.save("profiles.json", ListSerializer(Profile.serializer()), listOf(profile))
+    if (shot.features) {
+        val initial = store.load("settings.json", AppSettings.serializer()) ?: AppSettings()
+        val entries = List(6) { i ->
+            val srv = servers[1 + i % 5]
+            app.ghostly.core.model.ExtraProxy("demo-proxy-$i", port = 11080 + i, profileId = profile.id, serverName = srv.name,
+                outbound = app.ghostly.core.xray.XrayConfigBuilder.proxyOutbound(srv))
+        }
+        store.save("settings.json", AppSettings.serializer(), initial.copy(extraProxies = entries))
+    }
 }
 
-private class ShotPlatform(override val dataDir: String, override val demo: String?, private val desktop: Boolean) : PlatformInfo {
+private class ShotPlatform(override val dataDir: String, override val demo: String?, private val desktop: Boolean, override val stage: app.ghostly.core.stage.StageSource? = null) : PlatformInfo {
     override val os = if (desktop) "Windows" else "Android"
     override val osVersion = if (desktop) "11" else "16"
     override val deviceModel = if (desktop) "Desktop" else "Nothing A059"
     override val hwid = "shot-device-0001"
-    override val appVersion = "0.3.39"
+    override val appVersion = "0.3.62-preview"
+    override val updateAsset = if (desktop) "Ghostly-Windows.exe" else "Ghostly-Android.apk"
     override val isDesktop: Boolean get() = desktop
     override fun openUrl(url: String) {}
-    override fun copyToClipboard(text: String) {}
+    override fun copyToClipboard(text: String) { java.awt.Toolkit.getDefaultToolkit().systemClipboard.setContents(java.awt.datatransfer.StringSelection(text), null) }
     override fun readClipboard(): String? = null
+    override fun networkType() = app.ghostly.core.vpn.NetType.WIFI
+    override suspend fun downloadVerified(urls: List<String>, sha256: String, size: Long, onProgress: (Float) -> Unit): String {
+        repeat(50) { kotlinx.coroutines.delay(100); onProgress((it + 1) / 50f) }
+        return "demo-update-no-installer"
+    }
+    override fun installUpdate(path: String) {} // Never launch a real installer from a demo.
 }
 
 private class ShotBackend(vpn: String) : VpnBackend {
@@ -181,8 +286,12 @@ private class ShotBackend(vpn: String) : VpnBackend {
         },
     )
     override val traffic = MutableStateFlow(if (vpn == "connected") Traffic(180_000, 2_400_000, 34_000_000, 812_000_000) else Traffic())
-    override suspend fun connect(server: Server, settings: AppSettings) {}
-    override suspend fun disconnect() {}
+    override suspend fun connect(server: Server, settings: AppSettings) {
+        state.value = VpnState.Connecting
+        kotlinx.coroutines.delay(250)
+        state.value = VpnState.Connected(System.currentTimeMillis(), server.id)
+    }
+    override suspend fun disconnect() { state.value = VpnState.Idle }
     override suspend fun ping(server: Server, url: String): Long = 84
     override fun coreVersion(): String = "26.9.9"
 }

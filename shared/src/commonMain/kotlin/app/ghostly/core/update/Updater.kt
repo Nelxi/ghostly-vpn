@@ -27,13 +27,15 @@ data class ReleaseFile(
      * would offer that same file forever. Absent in manifests before 0.2.7 → the release version.
      */
     val version: String? = null,
+    /** Publisher-authored changes for this platform, shown before the user starts an update. */
+    val notes: List<String> = emptyList(),
 )
 
 /** `/dl/latest.json`, published next to every release. */
 @Serializable
 data class ReleaseManifest(val version: String, val files: Map<String, ReleaseFile> = emptyMap(), val github: String? = null)
 
-data class UpdateOffer(val version: String, val file: String, val sha256: String, val size: Long)
+data class UpdateOffer(val version: String, val file: String, val sha256: String, val size: Long, val notes: List<String> = emptyList())
 
 /**
  * The latest hand-over of [version] to the system installer: [count] of them were started by the app
@@ -60,6 +62,7 @@ class Updater(
     private val lastTry: () -> InstallTry? = { null },
     private val saveTry: (InstallTry?) -> Unit = {},
     private val nowMs: () -> Long = { kotlin.time.Clock.System.now().toEpochMilliseconds() },
+    private val autoDownloadAllowed: () -> Boolean = { true },
     private val isDismissed: (String) -> Boolean,
 ) {
 
@@ -114,7 +117,7 @@ class Updater(
         // still pending it stays, so a failed install is retried without downloading it again.
         if (!newer) runCatching { platform.clearDownloadedUpdate() }
         // offer.version also picks the download folder (/dl/<version>/, GitHub v<version>): a reused file lives in its own.
-        val offer = if (newer && (force || !isDismissed(latest))) UpdateOffer(latest, asset, file.sha256, file.size) else null
+        val offer = if (newer && (force || !isDismissed(latest))) UpdateOffer(latest, asset, file.sha256, file.size, file.notes) else null
         _offer.value = offer
         return offer
     }
@@ -144,6 +147,17 @@ class Updater(
      */
     fun mayAutoInstall(version: String): Boolean = !gaveUp(version) && autoAllowed(version, lastTry(), nowMs())
 
+    @kotlin.concurrent.Volatile
+    private var pausedVersion: String? = null
+
+    /** Keep the verified/partial download; a manual tap resumes it, without an immediate automatic retry. */
+    fun pauseDownload() { pausedVersion = downloadingVersion ?: _offer.value?.version }
+
+    @kotlin.concurrent.Volatile
+    private var downloadingVersion: String? = null
+
+    fun mayAutoDownload(version: String): Boolean = pausedVersion != version && autoDownloadAllowed() && mayAutoInstall(version)
+
     /** One download / hand-over at a time, whoever asked (the background loop or a tap). */
     private val busy = Mutex()
 
@@ -153,16 +167,26 @@ class Updater(
      * the platform still allows it once the file is ready, and the try is counted.
      */
     suspend fun install(offer: UpdateOffer, auto: Boolean = false) {
+        if (auto && !mayAutoDownload(offer.version)) return
         if (!busy.tryLock()) return
+        if (!auto) pausedVersion = null
+        downloadingVersion = offer.version
         var handedOver = false
         try {
             _step.value = UpdateStep.Downloading(0f)
             // Versioned folders first: a URL that never changes can't be served stale by a cache.
             val urls = SERVERS.map { it + offer.version + "/" + offer.file } + MIRRORS.map { it + offer.file } +
                 "https://github.com/Nelxi/ghostly-vpn/releases/download/v${offer.version}/${offer.file}"
+            var nextNetworkCheck = 0L
             val path = try {
                 platform.downloadVerified(urls, offer.sha256, offer.size) { p ->
-                    _step.value = if (p >= 1f) UpdateStep.Verifying else UpdateStep.Downloading(p)
+                    if (pausedVersion == offer.version) throw kotlinx.coroutines.CancellationException("Update paused by user")
+                    if (auto && p < 1f && nowMs() >= nextNetworkCheck) {
+                        nextNetworkCheck = nowMs() + 500
+                        if (!autoDownloadAllowed()) throw kotlinx.coroutines.CancellationException("Automatic update network changed")
+                    }
+                    // The transport reports each chunk for cancellation, the UI only needs whole percent steps.
+                    _step.value = if (p >= 1f) UpdateStep.Verifying else UpdateStep.Downloading((p * 100).toInt() / 100f)
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 _step.value = UpdateStep.Idle
@@ -192,6 +216,7 @@ class Updater(
                 _step.value = UpdateStep.Failed(e.message ?: tr("Не удалось запустить установку"))
             }
         } finally {
+            downloadingVersion = null
             busy.unlock()
         }
         if (handedOver) {
@@ -208,6 +233,8 @@ class Updater(
     }
 
     companion object {
+        fun autoNetworkAllowed(desktop: Boolean, wifiOnly: Boolean, network: app.ghostly.core.vpn.NetType): Boolean =
+            desktop || !wifiOnly || network == app.ghostly.core.vpn.NetType.WIFI || network == app.ghostly.core.vpn.NetType.ETHERNET
         // GitHub carries the same manifest with every release: updates are still seen where the site itself
         // doesn't open (a blocked address, a resolver stuck on an old one).
         private val MANIFESTS = listOf(

@@ -12,7 +12,7 @@ import pathlib
 import re
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-DIRS = ["shared/src/commonMain/kotlin", "androidApp/src/main/kotlin", "desktopApp/src/main/kotlin"]
+DIRS = ["shared/src/commonMain/kotlin", "shared/src/jvmCommonMain/kotlin", "androidApp/src/main/kotlin", "desktopApp/src/main/kotlin"]
 CYR = re.compile(r"[А-Яа-яЁё]")
 LIT = r'"((?:[^"\\]|\\.)*)"'
 

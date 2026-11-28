@@ -230,5 +230,30 @@ tasks.register<JavaExec>("shots") {
     providers.gradleProperty("only").orNull?.let { args(it.split(',')) }
     // -Psky=HH:MM[,rain|snow]: the lake at that time of day and weather (SkyClock.jvm.kt)
     providers.gradleProperty("sky").orNull?.let { systemProperty("ghostly.sky", it) }
-    jvmArgs("-Xmx1g")
+    jvmArgs("-Xmx512m")
+}
+
+tasks.register<JavaExec>("performancePreview") {
+    group = "verification"
+    description = "Measures frame pacing in an isolated desktop GPU window with fake VPN data"
+    mainClass.set("app.ghostly.shots.ShotsKt")
+    javaLauncher.set(javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(JavaVersion.current().majorVersion)) })
+    classpath = shots.runtimeClasspath
+    args("--performance", providers.gradleProperty("perfOutput").orElse(layout.buildDirectory.dir("performance").get().asFile.absolutePath).get())
+    args(providers.gradleProperty("perfSeconds").orElse("25").get())
+    systemProperty("ghostly.sky", "22:00")
+    providers.gradleProperty("perfApi").orNull?.let { systemProperty("skiko.renderApi", it) }
+    jvmArgs("-Xmx512m")
+    providers.gradleProperty("perfJfr").orNull?.let {
+        jvmArgs("-XX:StartFlightRecording=settings=profile,filename=$it,dumponexit=true")
+    }
+}
+
+tasks.register<JavaExec>("accessoryPreview") {
+    group = "verification"
+    mainClass.set("app.ghostly.shots.ShotsKt")
+    javaLauncher.set(javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(JavaVersion.current().majorVersion)) })
+    classpath = shots.runtimeClasspath
+    args("--accessories", layout.buildDirectory.file("shots/accessories.png").get().asFile.absolutePath)
+    jvmArgs("-Xmx512m")
 }

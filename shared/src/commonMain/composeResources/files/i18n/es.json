@@ -877,5 +877,19 @@
  "Добавить приложение": "Añadir aplicación",
  "Путь к файлу .exe": "Ruta al archivo .exe",
  "Укажи полный путь к существующему файлу .exe.": "Introduce la ruta completa a un archivo .exe existente.",
- "Выбрать файл": "Elegir archivo"
+ "Выбрать файл": "Elegir archivo",
+ "Что нового": "Novedades",
+ "Автообновление только по Wi-Fi": "Actualización automática solo por Wi-Fi",
+ "На мобильном интернете можно скачать обновление вручную": "Con datos móviles puedes descargar la actualización manualmente",
+ "Скопировать диагностику": "Copiar diagnóstico",
+ "Версия, сеть и состояние VPN — без ссылок подписки и ключей": "Versión, red y estado de la VPN — sin enlaces de suscripción ni claves",
+ "Диагностика скопирована": "Diagnóstico copiado",
+ "Выбрано: {0}": "Seleccionados: {0}",
+ "Выбрать все": "Seleccionar todo",
+ "Снять выделение": "Quitar selección",
+ "Ctrl — выбрать несколько, Shift — диапазон": "Ctrl — selección múltiple, Mayús — seleccionar un rango",
+ "Сменить страну": "Cambiar país",
+ "Сменить сервер": "Cambiar servidor",
+ "Выключить": "Desactivar",
+ "Скопировать адреса": "Copiar direcciones"
 }
