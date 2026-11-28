@@ -230,7 +230,7 @@ tasks.register<JavaExec>("shots") {
     providers.gradleProperty("only").orNull?.let { args(it.split(',')) }
     // -Psky=HH:MM[,rain|snow]: the lake at that time of day and weather (SkyClock.jvm.kt)
     providers.gradleProperty("sky").orNull?.let { systemProperty("ghostly.sky", it) }
-    jvmArgs("-Xmx1g")
+    jvmArgs("-Xmx512m")
 }
 
 tasks.register<JavaExec>("performancePreview") {
@@ -247,4 +247,13 @@ tasks.register<JavaExec>("performancePreview") {
     providers.gradleProperty("perfJfr").orNull?.let {
         jvmArgs("-XX:StartFlightRecording=settings=profile,filename=$it,dumponexit=true")
     }
+}
+
+tasks.register<JavaExec>("accessoryPreview") {
+    group = "verification"
+    mainClass.set("app.ghostly.shots.ShotsKt")
+    javaLauncher.set(javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(JavaVersion.current().majorVersion)) })
+    classpath = shots.runtimeClasspath
+    args("--accessories", layout.buildDirectory.file("shots/accessories.png").get().asFile.absolutePath)
+    jvmArgs("-Xmx512m")
 }

@@ -877,5 +877,19 @@
  "Добавить приложение": "Ilova qo‘shish",
  "Путь к файлу .exe": ".exe fayliga yo‘l",
  "Укажи полный путь к существующему файлу .exe.": "Mavjud .exe faylining to‘liq yo‘lini kiriting.",
- "Выбрать файл": "Faylni tanlash"
+ "Выбрать файл": "Faylni tanlash",
+ "Что нового": "Yangiliklar",
+ "Автообновление только по Wi-Fi": "Faqat Wi-Fi orqali avtomatik yangilash",
+ "На мобильном интернете можно скачать обновление вручную": "Mobil internetda yangilanishni qo‘lda yuklab olishingiz mumkin",
+ "Скопировать диагностику": "Diagnostikani nusxalash",
+ "Версия, сеть и состояние VPN — без ссылок подписки и ключей": "Versiya, tarmoq va VPN holati — obuna havolalari va kalitlarsiz",
+ "Диагностика скопирована": "Diagnostika nusxalandi",
+ "Выбрано: {0}": "Tanlangan: {0}",
+ "Выбрать все": "Hammasini tanlash",
+ "Снять выделение": "Tanlovni bekor qilish",
+ "Ctrl — выбрать несколько, Shift — диапазон": "Ctrl — bir nechtasini, Shift — oraliqni tanlash",
+ "Сменить страну": "Mamlakatni almashtirish",
+ "Сменить сервер": "Serverni almashtirish",
+ "Выключить": "O‘chirish",
+ "Скопировать адреса": "Manzillarni nusxalash"
 }

@@ -124,6 +124,17 @@ fun Server.section(): ServerSection? = countryFlag()?.let { ServerSection(it, is
 
 fun Server.countryFlag(): String? = FLAG_ANYWHERE.find(name)?.value
 
+private val SEARCH_SPACE = Regex("\\s+")
+
+/** Search the labels users see in country headers too; several words narrow the result together. */
+fun Server.matchesQuery(query: String): Boolean {
+    if (query.isBlank()) return true
+    val flag = countryFlag()
+    val code = flag?.flagCodePoints()?.take(2)?.map { ('A'.code + it - 0x1F1E6).toChar() }?.joinToString("")
+    val text = listOfNotNull(name, protocol, transport, security, host, code, code?.let { COUNTRY_NAMES[it] }, flag?.let(::countryName), if (isWhitelist) "LTE" else null).joinToString(" ")
+    return query.trim().split(SEARCH_SPACE).all { text.contains(it, ignoreCase = true) }
+}
+
 /** Under an «LTE» header the rows don't repeat it: "LTE · Резерв" → "Резерв". */
 fun ServerTitle.withoutLte(): ServerTitle {
     if (!title.equals("LTE", ignoreCase = true) || subtitle == null) return this

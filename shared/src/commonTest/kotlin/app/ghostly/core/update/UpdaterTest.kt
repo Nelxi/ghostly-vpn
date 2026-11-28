@@ -41,6 +41,7 @@ class UpdaterTest {
         override suspend fun downloadVerified(urls: List<String>, sha256: String, size: Long, onProgress: (Float) -> Unit): String {
             downloads++
             download()
+            onProgress(0.5f)
             onProgress(1f)
             return "update.apk"
         }
@@ -57,7 +58,8 @@ class UpdaterTest {
         val platform = FakePlatform()
         var stored: InstallTry? = null
         var now = 1_800_000_000_000L
-        val updater = Updater(platform, lastTry = { stored }, saveTry = { stored = it }, nowMs = { now }) { false }
+        var networkAllowed = true
+        val updater = Updater(platform, lastTry = { stored }, saveTry = { stored = it }, nowMs = { now }, autoDownloadAllowed = { networkAllowed }) { false }
         val offer = UpdateOffer("1.1.0", "Ghostly-Android.apk", "00", 10)
 
         /** One turn of the background loop, as GhostlyController does it. */
@@ -67,6 +69,65 @@ class UpdaterTest {
     }
 
     private val hour = 3600_000L
+
+    @Test
+    fun cellularWaitsButManualDownloadStillWorks() = runTest {
+        val r = Rig()
+        r.networkAllowed = false
+        r.tick()
+        assertEquals(0, r.platform.downloads)
+        r.updater.install(r.offer)
+        assertEquals(1, r.platform.launches)
+    }
+
+    @Test
+    fun pauseKeepsTheOfferFromAutomaticallyRestartingAndManualTapResumes() = runTest {
+        val r = Rig()
+        r.platform.download = { r.updater.pauseDownload() }
+        try { r.tick() } catch (_: kotlinx.coroutines.CancellationException) { }
+        assertEquals(0, r.platform.launches)
+        assertEquals(UpdateStep.Idle, r.updater.step.value)
+        assertFalse(r.updater.mayAutoDownload(r.offer.version))
+        assertFalse(r.updater.gaveUp(r.offer.version))
+        r.platform.download = {}
+        r.updater.install(r.offer)
+        assertEquals(1, r.platform.launches)
+    }
+
+    @Test
+    fun automaticNetworkPolicyTreatsUnknownMobileNetworksConservatively() {
+        val mobile = app.ghostly.core.vpn.NetType.CELLULAR
+        val unknown = app.ghostly.core.vpn.NetType.UNKNOWN
+        assertFalse(Updater.autoNetworkAllowed(false, true, mobile))
+        assertFalse(Updater.autoNetworkAllowed(false, true, unknown))
+        assertTrue(Updater.autoNetworkAllowed(false, true, app.ghostly.core.vpn.NetType.WIFI))
+        assertTrue(Updater.autoNetworkAllowed(false, true, app.ghostly.core.vpn.NetType.ETHERNET))
+        assertTrue(Updater.autoNetworkAllowed(false, false, mobile))
+        assertTrue(Updater.autoNetworkAllowed(true, true, unknown))
+    }
+
+    @Test
+    fun losingWifiPausesWithoutConsumingFailureRetries() = runTest {
+        val r = Rig()
+        r.platform.download = { r.networkAllowed = false }
+        try { r.tick() } catch (_: kotlinx.coroutines.CancellationException) { }
+        assertEquals(0, r.platform.launches)
+        assertEquals(UpdateStep.Idle, r.updater.step.value)
+        assertFalse(r.updater.gaveUp(r.offer.version))
+        r.networkAllowed = true
+        r.platform.download = {}
+        r.tick()
+        assertEquals(1, r.platform.launches)
+    }
+
+    @Test
+    fun olderManifestsRemainReadableAndPlatformNotesAreOptional() {
+        val old = app.ghostly.core.JsonX.decodeFromString(ReleaseManifest.serializer(), """{"version":"1.2.0","files":{"Ghostly-Android.apk":{"sha256":"abc","version":"1.1.0"}}}""")
+        assertEquals("1.1.0", old.files.getValue("Ghostly-Android.apk").version)
+        assertTrue(old.files.getValue("Ghostly-Android.apk").notes.isEmpty())
+        val fresh = app.ghostly.core.JsonX.decodeFromString(ReleaseManifest.serializer(), """{"version":"1.2.0","files":{"Ghostly-Android.apk":{"sha256":"abc","notes":["Faster scene"]}}}""")
+        assertEquals(listOf("Faster scene"), fresh.files.getValue("Ghostly-Android.apk").notes)
+    }
 
     @Test
     fun aVersionIsHandedOverOnceAndThenLeftAlone() = runTest {

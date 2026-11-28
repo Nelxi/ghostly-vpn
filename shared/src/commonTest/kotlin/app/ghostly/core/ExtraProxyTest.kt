@@ -78,4 +78,17 @@ class ExtraProxyTest {
         assertNotNull(XrayConfigBuilder.proxyOutbound(other))
         assertNull(XrayConfigBuilder.proxyOutbound(other.copy(protocol = "balancer")))
     }
+
+    @Test
+    fun settingsPersistBindingsWithoutDuplicatingProviderCredentials() {
+        val x = ExtraProxy("binding", port = 11080, profileId = "p1", serverName = "Germany", outbound = XrayConfigBuilder.proxyOutbound(other))
+        val encoded = JsonX.encodeToString(AppSettings.serializer(), AppSettings(extraProxies = listOf(x)))
+        assertTrue(encoded.contains("Germany"))
+        assertTrue(!encoded.contains("11111111-2222-3333-4444-555555555555"))
+        assertNull(JsonX.decodeFromString(AppSettings.serializer(), encoded).extraProxies.single().outbound)
+        val legacy = """{"extraProxies":[{"id":"binding","port":11080,"profileId":"p1","serverName":"Germany","outbound":{"id":"provider-secret"}}]}"""
+        val migrated = JsonX.decodeFromString(AppSettings.serializer(), legacy)
+        assertEquals("Germany", migrated.extraProxies.single().serverName)
+        assertTrue(!JsonX.encodeToString(AppSettings.serializer(), migrated).contains("provider-secret"))
+    }
 }

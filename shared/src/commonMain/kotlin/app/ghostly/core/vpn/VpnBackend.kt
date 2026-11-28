@@ -184,6 +184,9 @@ interface PlatformInfo {
     /** The physical network under the tunnel (drives white-list decisions). */
     fun networkType(): NetType = NetType.UNKNOWN
 
+    /** Network this app actually downloads through; do not infer it from an unused Wi-Fi adapter. */
+    fun updateNetworkType(): NetType = networkType()
+
     /** This device's address in the local network (Wi-Fi/Ethernet), for sharing the proxy. */
     fun lanAddress(): String? = null
 

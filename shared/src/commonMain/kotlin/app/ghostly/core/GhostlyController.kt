@@ -16,6 +16,7 @@ import app.ghostly.core.vpn.NetType
 import app.ghostly.core.vpn.PlatformInfo
 import app.ghostly.core.vpn.VpnBackend
 import app.ghostly.core.vpn.VpnState
+import app.ghostly.core.vpn.tunnelSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -123,6 +124,9 @@ class GhostlyController(
         platform,
         lastTry = { updateTry },
         saveTry = { updateTry = it; saveUi() },
+        autoDownloadAllowed = {
+            app.ghostly.core.update.Updater.autoNetworkAllowed(platform.isDesktop, _settings.value.autoUpdateWifiOnly, platform.updateNetworkType())
+        },
     ) { v -> v == dismissedUpdate }
 
     private val updateWake = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
@@ -135,6 +139,11 @@ class GhostlyController(
     /** The log of the last run of [core] (Xray or mihomo), newest lines last; null when empty. */
     suspend fun coreLogs(core: app.ghostly.core.model.CoreType): String? =
         (backend as? app.ghostly.core.mihomo.DualCoreBackend)?.coreLogs(core) ?: backend.coreLogs()
+
+    fun copyDiagnostics() {
+        platform.copyToClipboard(supportReport(platform, settings.value, state.value))
+        toast(tr("Диагностика скопирована"))
+    }
 
     /** Copies (or shares) the core's log for a support message, headed with what support asks first. */
     fun exportLogs(core: app.ghostly.core.model.CoreType, share: Boolean) {
@@ -270,9 +279,12 @@ class GhostlyController(
 
     /** Every (re)connect goes through here: one at a time, remembering what the tunnel was built from. */
     private suspend fun connectTo(server: Server) =
-        applier.connect(server.id to tunnelAffecting(_settings.value)) {
+        applier.connectSnapshot({
+            val settings = _settings.value
+            (server.id to tunnelAffecting(settings)) to settings
+        }) { settings ->
             connectStarted = server to now()
-            backend.connect(server, _settings.value)
+            backend.connect(server, settings)
         }
 
     /** The connect in progress and when it began: its outcome goes into the quality reports. */
@@ -311,6 +323,9 @@ class GhostlyController(
         if (_settings.value.proxyUser.isBlank() || _settings.value.proxyPass.isBlank()) {
             updateSettings { it.copy(proxyUser = it.proxyUser.ifBlank { randomUser() }, proxyPass = it.proxyPass.ifBlank { randomPassword() }) }
         }
+        // Extra proxy bindings are durable; their provider credentials only live in the protected profiles.
+        syncExtraProxies()
+        if (_settings.value.extraProxies.isNotEmpty()) store.save(SETTINGS, AppSettings.serializer(), _settings.value)
         scope.launch {
             backend.state.collect { s ->
                 when (s) {
@@ -352,7 +367,7 @@ class GhostlyController(
                     }
                     // Hands-off updates: fetch, verify SHA-256, install (desktop relaunches and reconnects).
                     // Only when the installer can really be shown, and a bounded number of times per version.
-                    if (offer != null && s.autoInstallUpdates && platform.canAutoInstall() && updater.mayAutoInstall(offer.version)) {
+                    if (offer != null && s.autoInstallUpdates && platform.canAutoInstall() && updater.mayAutoDownload(offer.version)) {
                         _events.emit(tr("Вышла Ghostly {0} — скачиваю и ставлю сама ♡", offer.version))
                         runCatching { updater.install(offer, auto = true) }
                     }
@@ -1633,17 +1648,11 @@ class GhostlyController(
             refreshAll()
         }
         // Also while a reconnect is still running: the applier lands on whatever was picked last.
-        if (tunnelAffecting(before) != tunnelAffecting(after)) applier.request()
+        if (tunnelAffecting(before) != tunnelAffecting(after)) applier.request(quietMs = SETTINGS_SETTLE_MS)
     }
 
     /** Settings that only change the look don't require a reconnect. */
-    private fun tunnelAffecting(s: AppSettings) = s.copy(
-        accent = AppSettings().accent, haptics = true, reduceMotion = false, language = "",
-        autoUpdateSubs = true, autoConnect = false, startOnBoot = false, pingUrl = "",
-        hapticStrength = 0f, monet = false, blockCheck = false, sounds = false, soundVolume = 0f, stageMode = false,
-        snow = true, tcpTipDismissed = false, wallpaperAccent = false, customAccent = 0,
-        pingMethod = app.ghostly.core.model.PingMethod.PROXY_GET, mihomoPingMethod = app.ghostly.core.model.PingMethod.PROXY_GET,
-    )
+    private fun tunnelAffecting(s: AppSettings) = s.tunnelSettings()
 
     private var lastHover = 0L
 
@@ -1756,8 +1765,32 @@ class GhostlyController(
     fun removeExtraProxy(id: String) = updateSettings { s -> s.copy(extraProxies = s.extraProxies.filterNot { it.id == id }) }
 
     fun bindExtraProxy(id: String, serverId: String) {
-        val server = server(serverId) ?: return
-        updateExtraProxy(id) { bound(it, server) }
+        bindExtraProxies(setOf(id), serverId)
+    }
+
+    /** One settings transaction for a whole selection: one persistence write and one delayed apply. */
+    fun bindExtraProxies(ids: Set<String>, serverId: String) {
+        val target = extraProxyServers().firstOrNull { it.id == serverId } ?: return
+        updateSettings { s -> s.copy(extraProxies = s.extraProxies.map { if (it.id in ids) bound(it, target) else it }) }
+    }
+
+    fun bindExtraProxyCountry(ids: Set<String>, flag: String) {
+        val candidates = extraProxyServers().filter { it.name.contains(flag) }
+        if (candidates.isEmpty()) return
+        updateSettings { s -> s.copy(extraProxies = s.extraProxies.map { x ->
+            if (x.id !in ids) x else {
+                val old = extraProxyServer(x)
+                val target = candidates.minWithOrNull(compareBy<Server>(
+                    { it.isWhitelist != (old?.isWhitelist ?: false) },
+                    { it.protocol != old?.protocol }, { it.transport != old?.transport }, { it.security != old?.security },
+                ))
+                bound(x, target)
+            }
+        }) }
+    }
+
+    fun enableExtraProxies(ids: Set<String>, enabled: Boolean) = updateSettings { s ->
+        s.copy(extraProxies = s.extraProxies.map { if (it.id in ids) it.copy(enabled = enabled) else it })
     }
 
     private fun bound(x: app.ghostly.core.model.ExtraProxy, server: Server?) = x.copy(
@@ -1800,6 +1833,7 @@ class GhostlyController(
         private const val FIRST_GUARD_DELAY_MS = 1_500L
         /** Quiet time after the last mode/server tap before the tunnel is rebuilt. */
         private const val APPLY_DEBOUNCE_MS = 350L
+        private const val SETTINGS_SETTLE_MS = 900L
 
         /** Failover: one batch of candidates is measured for at most this long (a dead one times out). */
         private const val FAILOVER_BATCH_MS = 15_000L

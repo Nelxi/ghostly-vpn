@@ -52,6 +52,7 @@ fun UpdateBanner(controller: GhostlyController, modifier: Modifier = Modifier, c
     val step by controller.updater.step.collectAsState()
     AnimatedVisibility(offer != null, modifier, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
         val o = offer ?: return@AnimatedVisibility
+        var notesExpanded by remember(o.version) { androidx.compose.runtime.mutableStateOf(false) }
         val busy = step is UpdateStep.Downloading || step is UpdateStep.Verifying || step is UpdateStep.Installing
         Column(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(if (compact) app.ghostly.ui.components.Radius.tile else app.ghostly.ui.components.Radius.card))
@@ -89,9 +90,17 @@ fun UpdateBanner(controller: GhostlyController, modifier: Modifier = Modifier, c
                 }
             }
             val s = step
+            if (o.notes.isNotEmpty()) {
+                Text(
+                    tr("Что нового"), style = MaterialTheme.typography.labelLarge, color = c.accent,
+                    modifier = Modifier.clickable { notesExpanded = !notesExpanded }.padding(vertical = 8.dp),
+                )
+                if (notesExpanded) Text(o.notes.joinToString("\n\n") { "• $it" }, style = MaterialTheme.typography.bodySmall, color = c.ink2)
+            }
             if (s is UpdateStep.Downloading) {
                 Spacer(Modifier.height(10.dp))
                 GlowBar(s.progress, c.accent)
+                SoftButton(tr("Отменить"), { controller.updater.pauseDownload() }, Modifier.fillMaxWidth())
             } else if (!busy) {
                 Spacer(Modifier.height(10.dp))
                 AccentButton(

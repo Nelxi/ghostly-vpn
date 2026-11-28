@@ -384,6 +384,18 @@ class AndroidPlatform(private val context: Context) : PlatformInfo {
         }
     }.getOrDefault(app.ghostly.core.vpn.NetType.UNKNOWN)
 
+    override fun updateNetworkType(): app.ghostly.core.vpn.NetType = runCatching {
+        val cm = context.getSystemService(android.net.ConnectivityManager::class.java)
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return@runCatching app.ghostly.core.vpn.NetType.UNKNOWN
+        when {
+            caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) -> app.ghostly.core.vpn.NetType.UNKNOWN
+            caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) -> app.ghostly.core.vpn.NetType.WIFI
+            caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET) -> app.ghostly.core.vpn.NetType.ETHERNET
+            caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) -> app.ghostly.core.vpn.NetType.CELLULAR
+            else -> app.ghostly.core.vpn.NetType.UNKNOWN
+        }
+    }.getOrDefault(app.ghostly.core.vpn.NetType.UNKNOWN)
+
     override fun utcOffsetMinutes(): Int = java.util.TimeZone.getDefault().getOffset(System.currentTimeMillis()) / 60_000
 
     // The Play build updates only through Google Play (store policy).

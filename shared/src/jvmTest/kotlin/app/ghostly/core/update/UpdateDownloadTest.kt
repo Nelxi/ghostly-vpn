@@ -59,7 +59,7 @@ class UpdateDownloadTest {
                 val from = if (ranges && range != null) range.removePrefix("bytes=").substringBefore('-').toInt() else 0
                 val data = file.copyOfRange(from, file.size)
                 if (from > 0) ex.responseHeaders.add("Content-Range", "bytes $from-${file.size - 1}/${file.size}")
-                ex.sendResponseHeaders(if (from > 0) 206 else 200, data.size.toLong())
+                ex.sendResponseHeaders(if (from > 0) 206 else 200, if (path.startsWith("/chunked")) 0 else data.size.toLong())
                 val cut = cutAfter
                 cutAfter = -1
                 val n = if (cut in 0 until data.size) cut else data.size
@@ -120,6 +120,29 @@ class UpdateDownloadTest {
         // The bar starts where the first try ended, not at zero.
         assertTrue(seen.first() >= kept.toFloat() / body.size - 0.02f, "first ${seen.first()}")
         assertEquals(body.size.toLong(), site.served.get())
+    }
+
+    @Test
+    fun cancelledDownloadKeepsItsPartAndDoesNotStartAnotherMirror() {
+        assertFailsWith<kotlinx.coroutines.CancellationException> {
+            fetch(site.base + "/dl/app.apk", site.base + "/other/app.apk") { throw kotlinx.coroutines.CancellationException("pause") }
+        }
+        assertEquals(1, site.requests.size)
+        assertFalse(target.exists())
+        val kept = part.length()
+        assertTrue(kept in 1 until body.size.toLong())
+        fetch(site.base + "/dl/app.apk")
+        assertEquals("/dl/app.apk bytes=$kept-", site.requests.last())
+        assertContentEquals(body, target.readBytes())
+    }
+
+    @Test
+    fun unknownLengthTransferCanBePausedBeforeItFinishes() {
+        assertFailsWith<kotlinx.coroutines.CancellationException> {
+            runBlocking { downloadVerifiedTo(target, listOf(site.base + "/chunked/app.apk"), sha, 0) { throw kotlinx.coroutines.CancellationException("pause") } }
+        }
+        assertFalse(target.exists())
+        assertTrue(part.length() in 1 until body.size.toLong())
     }
 
     @Test

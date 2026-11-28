@@ -2,7 +2,9 @@ package app.ghostly.core.vpn
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -28,8 +30,9 @@ class TunnelApplier<S>(
     private val reapply: suspend () -> Unit,
 ) {
     private val lock = Mutex()
-    private val requests = Channel<Unit>(Channel.CONFLATED)
-    private var force = false
+    private val requests = Channel<Long>(Channel.CONFLATED)
+    private val forcedGeneration = MutableStateFlow(0L)
+    private var appliedForce = 0L
 
     /** What the tunnel was last built from (null: nothing yet). */
     var applied: S? = null
@@ -39,28 +42,38 @@ class TunnelApplier<S>(
         scope.launch {
             for (r in requests) {
                 // Wait for a quiet moment: every new request during the pause starts it over.
-                do delay(debounceMs) while (requests.tryReceive().isSuccess)
+                var quiet = r
+                while (true) {
+                    val next = withTimeoutOrNull(quiet) { requests.receiveCatching().getOrNull() } ?: break
+                    quiet = maxOf(quiet, next)
+                }
                 if (!live()) {
-                    force = false
+                    appliedForce = forcedGeneration.value
                     continue
                 }
-                if (!force && desired() == applied) continue
-                force = false
+                val generation = forcedGeneration.value
+                if (generation == appliedForce && desired() == applied) continue
                 reapply()
+                appliedForce = generation
             }
         }
     }
 
     /** The tunnel should follow the current state; [force]: even if it looks the same (new provider config). */
-    fun request(force: Boolean = false) {
-        if (force) this.force = true
-        requests.trySend(Unit)
+    fun request(force: Boolean = false, quietMs: Long = debounceMs) {
+        if (force) forcedGeneration.update { it + 1 }
+        requests.trySend(quietMs.coerceAtLeast(1))
     }
 
     /** Runs a (re)connect exclusively and records [state] as what the tunnel is built from. */
     suspend fun <T> connect(state: S, block: suspend () -> T): T = lock.withLock {
-        applied = state
-        block()
+        block().also { applied = state }
+    }
+
+    /** Take the config after acquiring the connect lock, so queued work cannot record an older key. */
+    suspend fun <V, T> connectSnapshot(snapshot: () -> Pair<S, V>, block: suspend (V) -> T): T = lock.withLock {
+        val (key, value) = snapshot()
+        block(value).also { applied = key }
     }
 
     /** A change applied in place (no reconnect), e.g. a mihomo selector moved. */

@@ -86,6 +86,7 @@ import app.ghostly.core.model.Server
 import app.ghostly.core.mihomo.ProxyGroupInfo
 import app.ghostly.ui.Format
 import app.ghostly.ui.countryFlag
+import app.ghostly.ui.matchesQuery
 import app.ghostly.ui.components.GhostMark
 import app.ghostly.ui.components.IconBubble
 import app.ghostly.ui.components.PingPill
@@ -161,7 +162,7 @@ private fun ServersList(
     // Rows animate in once; after that (scrolling back, recycling) they just appear.
     val seen = remember { HashSet<String>() }
 
-    fun matches(s: Server) = query.isBlank() || s.name.contains(query.trim(), ignoreCase = true) || s.protocol.contains(query.trim(), true)
+    fun matches(s: Server) = s.matchesQuery(query)
     fun sorted(list: List<Server>): List<Server> = when (sort) {
         Sort.LIST -> list
         Sort.NAME -> list.sortedBy { it.name.lowercase() }
